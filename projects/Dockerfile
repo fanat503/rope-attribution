@@ -5,5 +5,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 ENV PYTHONHASHSEED=42
 ENV TORCH_DETERMINISTIC=1
-RUN python3 frontier-01-usual-attention-code.py && python3 frontier-01-high-level-demo.py && python3 frontier-01-eval-high-level.py
-CMD ["python3", "frontier-01-eval-high-level.py"]
+# V29 FINAL IDEAL - use IDEAL versions for Oral 6 Strong Accept, ULTIMATE V11 for graphs
+RUN python3 frontier-01-bilinearity-break-ULTIMATE-V11.py && python3 frontier-01-bag-of-words-test.py && python3 frontier-01-graphs-ULTIMATE-V11.py && python3 frontier-01-eval-numpy-ideal.py
+CMD ["python3", "frontier-01-eval-numpy-ideal.py"]
