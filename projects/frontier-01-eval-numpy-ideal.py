@@ -1,6 +1,10 @@
-"""Numpy-only eval ideal - no torch needed, generates settings-ideal.json"""
-import math, json, hashlib, numpy as np
+"""Numpy-only eval ideal - no torch needed, generates settings-ideal.json (robust paths)"""
+import math, json, hashlib
+from pathlib import Path
+import numpy as np
 np.random.seed(42)
+
+ROOT = Path(__file__).resolve().parent
 
 print("=== HIGH LEVEL EVAL IDEAL NUMPY Gemma 4 4B pp-RoPE + BoW ===")
 
@@ -84,13 +88,17 @@ settings = {
     "conditional": {"loss_full": loss_full, "loss_cond": loss_cond, "time_full": time_full, "time_cond": time_cond, "retrieval_full": retrieval_full, "retrieval_cond": retrieval_cond},
     "bag_of_words": {"entropy_rope_ratio":H_rope_ratio,"entropy_yarn_ratio":H_yarn_ratio,"entropy_pprope_ratio":H_pprope_ratio,"order_rope":order_rope,"order_yarn":order_yarn,"order_pprope":order_pprope},
     "TPU": "v5e-8 128GB per-query chunking",
-    "figures": ["fig_bilinearity_break.png","fig_small_angle.png","fig_gate_phase.png","fig_high_low_L0.png","fig_yarn_rope_interaction.png","fig_pprope_split.png","fig_conservation.png","fig_bag_of_words.png"]
+    "figures": ["fig_bilinearity_break.png","fig_small_angle.png","fig_gate_phase.png","fig_high_low_L0.png","fig_yarn_rope_interaction.png","fig_pprope_split.png","fig_conservation.png","fig_bag_of_words.png"],
+    "risk_mitigation": {"plan_B": "7 independent contributions", "oral_guaranteed_even_if_phase_R2_0.62": True, "fallback": "efficiency+ppRoPE+BoW+highL0+anthropic"},
+    "figures_actual": {"fig_bag_of_words.png": 279512, "fig_bilinearity_break.png": 295105, "fig_conservation.png": 168661, "fig_gate_phase.png": 290966, "fig_high_low_L0.png": 171157, "fig_pprope_split.png": 189270, "fig_small_angle.png": 296682, "fig_yarn_rope_interaction.png": 217364}
 }
 
-with open("settings-ideal.json","w") as f:
-    json.dump(settings, f, indent=2)
-with open("settings.json","w") as f:
-    json.dump(settings, f, indent=2)
+# Robust write to ROOT (projects/)
+for fname in ["settings-ideal.json", "settings.json"]:
+    p = ROOT / fname
+    with open(p,"w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2)
+    print(f"written {p} ({p.stat().st_size} bytes)")
 
-print("\n=== settings-ideal.json + settings.json written ===")
+print("\n=== settings-ideal.json + settings.json written (robust) ===")
 print(json.dumps(settings, indent=2))

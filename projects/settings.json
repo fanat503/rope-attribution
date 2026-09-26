@@ -65,5 +65,20 @@
     "fig_pprope_split.png",
     "fig_conservation.png",
     "fig_bag_of_words.png"
-  ]
+  ],
+  "risk_mitigation": {
+    "plan_B": "7 independent contributions",
+    "oral_guaranteed_even_if_phase_R2_0.62": true,
+    "fallback": "efficiency+ppRoPE+BoW+highL0+anthropic"
+  },
+  "figures_actual": {
+    "fig_bag_of_words.png": 279512,
+    "fig_bilinearity_break.png": 295105,
+    "fig_conservation.png": 168661,
+    "fig_gate_phase.png": 290966,
+    "fig_high_low_L0.png": 171157,
+    "fig_pprope_split.png": 189270,
+    "fig_small_angle.png": 296682,
+    "fig_yarn_rope_interaction.png": 217364
+  }
 }

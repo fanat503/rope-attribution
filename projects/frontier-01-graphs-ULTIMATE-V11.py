@@ -6,6 +6,8 @@ V11 ULTIMATE GRAPHS - еще более красиво и понятно чем 
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent
 
 plt.style.use('dark_background')
 plt.rcParams['figure.facecolor'] = '#111111'
@@ -54,7 +56,7 @@ ax2.text(45, 0.5, 'If cos(a+b)=U(a)+V(b)\nthen -sin(a+b)=U\'(a) depends only a\n
 
 plt.suptitle('Fig1 Bilinearity Break: Fixed 2x PASS vs Content 3.7x FAIL\nWhy Anthropic exact bilinear fails for RoPE/YaRN/pp-RoPE', color=WHITE, fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig('fig_bilinearity_break.png', dpi=200, bbox_inches='tight', facecolor='#111111')
+plt.savefig(ROOT / 'fig_bilinearity_break.png', dpi=200, bbox_inches='tight', facecolor='#111111')
 plt.close()
 
 # Fig2 ultimate unit circle geometry + error bars
@@ -96,7 +98,7 @@ ax2.text(0, -1.2, 'Small angle 5°=0.087 rad\ncos=0.996~=1 err0.004=D^2/2\nsin=0
 
 plt.suptitle('Fig2 Small Angle exp(iD)~=1+iD Unit Circle Geometry\nYaRN makes D small linearization works error D^2/2', color=WHITE, fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig('fig_small_angle.png', dpi=200, bbox_inches='tight', facecolor='#111111')
+plt.savefig(ROOT / 'fig_small_angle.png', dpi=200, bbox_inches='tight', facecolor='#111111')
 plt.close()
 
 # Fig3 ultimate gate vs phase with error bars
@@ -119,7 +121,7 @@ ax.set_title('Fig3 Gate vs Phase Disentanglement pp-RoPE p=0.25 V11 Ultimate\n75
 ax.legend(loc='upper left', framealpha=0.9, facecolor='#222222', edgecolor=WHITE)
 ax.grid(alpha=0.2)
 plt.tight_layout()
-plt.savefig('fig_gate_phase.png', dpi=200, bbox_inches='tight', facecolor='#111111')
+plt.savefig(ROOT / 'fig_gate_phase.png', dpi=200, bbox_inches='tight', facecolor='#111111')
 plt.close()
 
 # Fig4 ultimate high-L0 vs low-L0 with error bars
@@ -135,7 +137,7 @@ for i, v in enumerate(err):
 ax.text(0.5, 60, 'Low-L0 8 loses 42*0.02 angle flies 111.7°\nFull 50 vectors angle 35.9° vs low-L0 8 angle 147.6° err 111.7°\nHigh-L0 50 angle 40.9° err 5° PASS\nGemma Scope 2 W80K L0_100 Qwen PLT L0_50\nFidelity 63% vs 8-21% low-L0\nSource: Gemma Scope 2, Qwen3-4B PLT\nError bars 3 seeds', ha='center', color=WHITE, fontsize=9, bbox=dict(facecolor='#333333', alpha=0.9, edgecolor=YELLOW))
 ax.grid(alpha=0.2, axis='y')
 plt.tight_layout()
-plt.savefig('fig_high_low_L0.png', dpi=200, bbox_inches='tight', facecolor='#111111')
+plt.savefig(ROOT / 'fig_high_low_L0.png', dpi=200, bbox_inches='tight', facecolor='#111111')
 plt.close()
 
 # Fig5 ultimate YaRN vs RoPE interaction vs D log scale with error bars
@@ -157,7 +159,7 @@ ax.legend(loc='upper left', framealpha=0.9, facecolor='#222222')
 ax.grid(alpha=0.2)
 ax.set_yscale('log')
 plt.tight_layout()
-plt.savefig('fig_yarn_rope_interaction.png', dpi=200, bbox_inches='tight', facecolor='#111111')
+plt.savefig(ROOT / 'fig_yarn_rope_interaction.png', dpi=200, bbox_inches='tight', facecolor='#111111')
 plt.close()
 
 # Fig6 ultimate pp-RoPE split pie with annotations
@@ -172,7 +174,7 @@ for autotext in autotexts:
     autotext.set_fontweight('bold')
 ax.set_title('Fig6 Gemma 4 4B pp-RoPE p=0.25 V11 Ultimate\n25% rotated phase WHERE 75% clean gate WHAT ideal by construction\n128 dims enough for 256K positions empirical point\nWHAT vs WHERE separation ideal for gate/phase attribution', color=WHITE, fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig('fig_pprope_split.png', dpi=200, bbox_inches='tight', facecolor='#111111')
+plt.savefig(ROOT / 'fig_pprope_split.png', dpi=200, bbox_inches='tight', facecolor='#111111')
 plt.close()
 
 # Fig7 ultimate conservation log scale with error bars
@@ -187,7 +189,7 @@ ax.text(0, 1e-12, 'err 3.55e-15 PASS\nq_i=W_Q d_i linear exact\nq=sum f_i q_i\n|
 ax.text(1, 1e-2, 'err 1.2e-3 FAIL\ncos(angle(sum)) direct\nphi=angle(sum f_i q_i) NOT linear\n(1,0)0°+(0,1)90°=(1,1)45° !=90°\nTherefore attribute q_i then polar', ha='center', color=WHITE, fontsize=10, fontweight='bold', bbox=dict(facecolor=RED, alpha=0.2, edgecolor=RED))
 ax.grid(alpha=0.2, axis='y')
 plt.tight_layout()
-plt.savefig('fig_conservation.png', dpi=200, bbox_inches='tight', facecolor='#111111')
+plt.savefig(ROOT / 'fig_conservation.png', dpi=200, bbox_inches='tight', facecolor='#111111')
 plt.close()
 
 # Fig8 ultimate BoW vs Real Learning 4 metrics with error bars
@@ -213,7 +215,7 @@ for i in range(len(methods)):
     ax.text(i+width, interaction[i]+0.08, f'{interaction[i]:.3f}', ha='center', color=WHITE, fontsize=10, fontweight='bold')
 ax.text(0.5, 0.5, 'BoW Connection:\nGate=|q| content BoW uses only gate\nPhase=angle+pos*theta order real uses phase\nInteraction small=>separable=>real learning\nInteraction large=>entangled cos(A+B)=>BoW\nOrder delta RoPE 0.1 BoW vs YaRN 1.5 real vs pp-RoPE 1.8 ideal\nH=-sum p log p H_max=logT uniform BoW H_min=0 perfect\nRetrieval Acc needle pos p w_p=max\nError bars 3 seeds', ha='center', color=YELLOW, fontsize=9, bbox=dict(facecolor='#333333', alpha=0.9, edgecolor=YELLOW), transform=ax.transAxes)
 plt.tight_layout()
-plt.savefig('fig_bag_of_words.png', dpi=200, bbox_inches='tight', facecolor='#111111')
+plt.savefig(ROOT / 'fig_bag_of_words.png', dpi=200, bbox_inches='tight', facecolor='#111111')
 plt.close()
 
 print("\n=== All 8 figures saved ideal level V11 ultimate for Oral - beautiful and clear ===")

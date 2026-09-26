@@ -73,9 +73,9 @@ D=0.1 rad: cos=0.995 vs1 err0.005 sin=0.0998 vs0.1 err0.00016 PASS YaRN base 500
 D=1 rad: cos=0.54 vs1 err0.46 sin=0.84 vs1 err0.16 FAIL.
 D=1.57 rad=90°: cos=0 vs1 err1 sin=1 vs1.57 err0.57 FAIL 8192 RoPE.
 
-YaRN: theta_i = base^{-2i/d}, base 10k->500k в 50 раз меньше, D=delta*theta в 50 раз меньше, линеаризация работает, interaction small 0.089 vs RoPE large 0.8 at 8192.
+YaRN: theta_i = base^{-2i/d}, base 10k->500k. При i=0 theta_0=1 unchanged (high-freq keep), при i=d/2 theta=1/base low-freq 50× меньше (1/10k→1/500k). Средний эффект: D=delta*theta для низких частот в 50 раз меньше, для высоких без изменения. Линеаризация работает для low-freq где D был большим, interaction small 0.089 vs RoPE large 0.8 at 8192.
 
-Источник: YaRN paper piecewise scaling high-freq keep unchanged local discrimination low-freq linear interpolation + temperature scaling, requires 10x less tokens 2.5x less steps.
+Источник: YaRN paper piecewise scaling high-freq keep unchanged local discrimination low-freq linear interpolation + temperature scaling, requires 10x less tokens 2.5x less steps. Связаться с YaRN author Bowen Peng: non-uniform freq scaling low vs high.
 
 ---
 
@@ -151,7 +151,7 @@ Interaction = total_wo - gate_only - phase_only + baseline = mag_q mag_k [cos(ph
 
 При малом D cosD~=1 sinD~=D, interaction ~= - D sinA * delta_mag? Оценивается как O(D^2) и O(D * delta).
 
-Поэтому YaRN base 500k theta small D small interaction 0.089 vs RoPE base 10k D large at 8192 D~1.57 interaction 0.8 large fails.
+Поэтому YaRN base 500k low-freq theta small D small interaction 0.089 vs RoPE base 10k D large at 8192 D~1.57 interaction 0.8 large fails (high-freq unchanged но там D и так мал delta*1 small; проблема именно low-freq дальних позиций).
 
 Числа: D=0.1 inter 0.005 PASS, D=1.57 inter 1.23 FAIL.
 
