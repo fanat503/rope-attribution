@@ -3,22 +3,29 @@ Kaggle 2xT4 - Gemma 4 4B pp-RoPE p=0.25 RoPE+YaRN Phi ideal
 2xT4 16GB each, Gemma-2-2B CLT 2.5M 5GB fits or Gemma-3 4B 10GB fits or Gemma 4 4B 10GB if available
 Backend TransformerLens fast, per-query chunking 1.5 PFLOP avoid
 """
+
 # Kaggle setup:
 # !pip install -q transformer-lens torch --index-url https://download.pytorch.org/whl/cpu
 # !pip install -q nnsight  # if Gemma 4 4B via nnsight
 
-import torch, math, json, hashlib
+import torch
 from transformer_lens import HookedTransformer
 
 print("=== Kaggle 2xT4 Gemma 4 4B Ideal ===")
 
 # 1. Load model - choose available: gemma-2-2b, gemma-3-4b, or gemma-4-4b via nnsight
 # For Kaggle 2xT4 we use gemma-2-2b as proxy for Gemma 4 4B pp-RoPE method same RoPE+YaRN
-model_name = "gemma-2-2b"  # or "gemma-3-4b" if available, or "google/gemma-4-4b" via nnsight
+model_name = (
+    "gemma-2-2b"  # or "gemma-3-4b" if available, or "google/gemma-4-4b" via nnsight
+)
 try:
-    model = HookedTransformer.from_pretrained(model_name, device="cuda" if torch.cuda.is_available() else "cpu", dtype=torch.float16)
+    model = HookedTransformer.from_pretrained(
+        model_name,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        dtype=torch.float16,
+    )
     print(f"Loaded {model_name} {model.cfg.n_layers}L {model.cfg.d_model} dim")
-except Exception as e:
+except Exception as e:  # noqa: BLE001
     print(f"Failed load {model_name} {e}, using synthetic demo for Kaggle check")
     model = None
 
@@ -67,6 +74,10 @@ except Exception as e:
 # 25% dims rotated phase 75% clean content gate by construction ideal for gate/phase attribution
 # RoPE local base 10k vs pp-RoPE global base 1M 5:1 local:global KV sharing 18/42
 
-print("Kaggle 2xT4 steps ready - run collect_for_seed per-query chunking, SAE high-L0 50, phase_gate_interaction per token-pair")
-print("Next: contact YaRN author non-uniform freq scaling low vs high why base 500k and interaction pp-RoPE p=0.25")
+print(
+    "Kaggle 2xT4 steps ready - run collect_for_seed per-query chunking, SAE high-L0 50, phase_gate_interaction per token-pair"
+)
+print(
+    "Next: contact YaRN author non-uniform freq scaling low vs high why base 500k and interaction pp-RoPE p=0.25"
+)
 print("=== Kaggle 2xT4 Ideal Ready ===")

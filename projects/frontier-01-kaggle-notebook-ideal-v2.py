@@ -244,4 +244,6 @@ print("All ideal level ready for Oral NeurIPS 6 Strong Accept top 2-3% after rea
 
 print("Kaggle Notebook Ideal v2 - 11 cells ready")
 print("Copy cells 1-11 to Kaggle New Notebook T4 x2 Internet ON, Run All 3h <12h")
-print("Files generated: 8 PNG 200 dpi + settings-ideal.json config_hash 9bd59cac dataset_hash 848bb0b0")
+print(
+    "Files generated: 8 PNG 200 dpi + settings-ideal.json config_hash 9bd59cac dataset_hash 848bb0b0"
+)

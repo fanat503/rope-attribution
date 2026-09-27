@@ -2,9 +2,10 @@
 # Все комментарии на русском, код English
 # Запускается на Kaggle, на dummy чекпоинте в этом окружении — только импорт
 
-import torch
+
 import numpy as np
-from typing import Dict, List
+import torch
+
 
 # ========= 1. ERROR TEST: conservation <1e-10 =========
 def test_conservation_error(model, q, k, theta_q, theta_k, m, b_sal, b_dist):
@@ -21,7 +22,9 @@ def test_conservation_error(model, q, k, theta_q, theta_k, m, b_sal, b_dist):
     # total = phase_only+gate_only+interaction+b_sal+b_dist
     # diff = s_OLD_MODEL - s_base
     # err = |total - diff| должен <1e-10 на fp64
-    raise NotImplementedError("реализуй как в scaffold.py, но на реальных тензорах из модели")
+    raise NotImplementedError(
+        "реализуй как в scaffold.py, но на реальных тензорах из модели"
+    )
 
 
 # ========= 2. GATES CORRELATION TEST =========
@@ -31,7 +34,6 @@ def collect_gates_for_correlation(model, dataloader, layer=6, n_examples=100):
     В model.py gates: gate_k, gate_v, gate_d, gate_sal, angle_q (theta)
     Сохраняем per token.
     """
-    all_gates = {"gate_k": [], "gate_v": [], "gate_d": [], "gate_sal": [], "theta": []}
     # for batch in dataloader (n_examples):
     #   x = ln1(resid_pre) [B,T,1024]
     #   gate_k = tanh(W_gate_k(x)) [B,T,H]
@@ -43,16 +45,17 @@ def collect_gates_for_correlation(model, dataloader, layer=6, n_examples=100):
     # return dict of np arrays [N_tokens]
     raise NotImplementedError
 
-def correlation_matrix(gates: Dict[str, np.ndarray]):
+
+def correlation_matrix(gates: dict[str, np.ndarray]):
     """
-    gates: dict name -> [N] 
+    gates: dict name -> [N]
     Считаем corr matrix 5x5
     Если corr(gate_k, theta) >0.8 => entangled, пишем в пост честно.
     Если <0.3 => disentangled.
     """
     names = list(gates.keys())
-    data = np.stack([gates[n] for n in names], axis=0) # [5,N]
-    corr = np.corrcoef(data) # [5,5]
+    data = np.stack([gates[n] for n in names], axis=0)  # [5,N]
+    corr = np.corrcoef(data)  # [5,5]
     return names, corr
 
 
@@ -69,23 +72,24 @@ def collect_hooks_n_examples(model, dataloader, layer=6, n=100):
     #   tokens [B,512]
     #   hook: model.transformer.h[layer].ln_1.register_forward_hook(save x_i)
     #   logits, etc = model(tokens)
-    #   phase = ... из model.transformer.h[layer].attn.last_angle_q_abs_mean? 
+    #   phase = ... из model.transformer.h[layer].attn.last_angle_q_abs_mean?
     #   Лучше: raw_angles_q = einsum("btd,hdk->bhtk", x_float, W_phase_q) -> theta
     #   margin = log(p_target/p_foil) как раньше через topk
     #   torch.save({"x": x_i.half().cpu(), "phase": phase.cpu(), "margin": margin.cpu(), "gates": gates}, f"batch_{i}.pt")
     raise NotImplementedError
+
 
 def topk_features_in_phase(W_phase, W_dec, f_active, topk=10):
     """
     W_phase: [D_head//2, D_model] или [D_model, D_head//2] — проверь shape в model.py: [n_head, n_embd, head_dim//2]
     W_dec: [n_dict, D_model] — d_k направления SAE
     f_active: [n_dict] sparse, 20-30 ненулевых на токен
-    
+
     Как получить topk:
     1. Для каждого активного k: contrib_k = f_k * ||W_phase * d_k||  или точнее f_k * (W_phase * d_k) -> [D_head//2] -> norm
     2. Ранжируешь contrib_k по убыванию
     3. topk = argsort(contrib_k)[-10:]
-    
+
     Если phase выдается как скаляр per token (mean angle), то:
     theta_token = mean(W_phase * x_i) ~ sum f_k*(W_phase*d_k) mean
     """
@@ -99,18 +103,21 @@ def topk_features_in_phase(W_phase, W_dec, f_active, topk=10):
 class SAE(torch.nn.Module):
     def __init__(self, d_model=1024, n_dict=10000, topk=30):
         super().__init__()
-        self.W_enc = torch.nn.Parameter(torch.randn(d_model, n_dict)*0.01)
-        self.W_dec = torch.nn.Parameter(torch.randn(n_dict, d_model)*0.01)
+        self.W_enc = torch.nn.Parameter(torch.randn(d_model, n_dict) * 0.01)
+        self.W_dec = torch.nn.Parameter(torch.randn(n_dict, d_model) * 0.01)
         self.topk = topk
         # Нормируем W_dec строки на 1
-    def encode(self, x): # x [B, D]
-        f = torch.relu(x @ self.W_enc) # [B, n_dict]
+
+    def encode(self, x):  # x [B, D]
+        f = torch.relu(x @ self.W_enc)  # [B, n_dict]
         # topk sparsity
         topk_val, topk_idx = torch.topk(f, self.topk, dim=-1)
         f_sparse = torch.zeros_like(f).scatter_(-1, topk_idx, topk_val)
         return f_sparse
-    def decode(self, f): # f [B, n_dict]
-        return f @ self.W_dec # [B, D] = sum f_k*d_k
+
+    def decode(self, f):  # f [B, n_dict]
+        return f @ self.W_dec  # [B, D] = sum f_k*d_k
+
 
 def train_sae_streaming(sae, dataloader_files, steps=100000):
     """
@@ -128,7 +135,7 @@ def steer_with_feature(x, d_k, alpha=1.0, remove=False):
     d_k: [D] - направление фичи из W_dec
     alpha: сколько добавить
     remove: если True -> x - f*d_k, если False -> x + alpha*d_k
-    
+
     Для проверки:
     - x_new = x - f_k*d_k -> theta должен упасть
     - x_new = x + 1.0*d_k в не-коде -> theta должен вырасти (counterfactual)
@@ -141,13 +148,7 @@ def steer_with_feature(x, d_k, alpha=1.0, remove=False):
 
 
 # ========= BIG FUNCTION: объединяет все =========
-def run_full_pipeline_before_post(
-    model,
-    dataloader,
-    sae,
-    layer=6,
-    n_examples=100
-):
+def run_full_pipeline_before_post(model, dataloader, sae, layer=6, n_examples=100):
     """
     Одна большая функция которая при готовых SAE и модели делает все проверки до поста.
     Возвращает dict с результатами для вставки в LessWrong.
@@ -189,6 +190,7 @@ def run_full_pipeline_before_post(
     # results["conditional"] = {"loss_full": X, "loss_cond": X+0.0001, "time_full": Y, "time_cond": 0.1*Y}
 
     return results
+
 
 # Чеклист что должно быть < порога до поста:
 # - conservation_error <1e-10
