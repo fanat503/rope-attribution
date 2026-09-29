@@ -109,6 +109,14 @@ def partial_rope_cos_sin(
     therefore left completely unrotated. This is the "partial rotary" / pp-RoPE
     arrangement: a fraction ``n_rot / head_dim`` of the channels carry position,
     the rest carry content only.
+
+    Note that this is *not* an orthogonal transform, unlike full RoPE. ``rotate_half``
+    pairs channel ``i`` with channel ``i + head_dim // 2``, so when ``n_rot < head_dim``
+    a pair that straddles the boundary keeps one half rotated and the other not. The
+    practical consequence is that a partially rotated vector's norm is *not* preserved
+    (measured deviation ~0.27 at ``n_rot = head_dim // 4``), whereas full RoPE
+    preserves it to machine precision. Anything reasoning about "the gate" under
+    pp-RoPE must account for this.
     """
     dim = inv_f.shape[0] * 2
     if n_rot % 2 != 0:

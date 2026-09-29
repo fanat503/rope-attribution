@@ -90,10 +90,7 @@ def score_relative(
     q_hat: np.ndarray, k_hat: np.ndarray, inv_f: np.ndarray, delta: int
 ) -> float:
     """Brute-force relative-frame score ``q_hat . R_delta k_hat``."""
-    if delta < 0:
-        cos, sin = rope_cos_sin(np.array([0, -delta]), inv_f)
-    else:
-        cos, sin = rope_cos_sin(np.array([0, delta]), inv_f)
+    cos, sin = rope_cos_sin(np.array([0, delta]), inv_f)
     k_rot = apply_rope(k_hat[None, :], cos[1:2], sin[1:2])[0]
     q_rot = apply_rope(q_hat[None, :], cos[0:1], sin[0:1])[0]
     return float(q_rot @ k_rot)
