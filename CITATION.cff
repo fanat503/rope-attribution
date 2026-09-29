@@ -2,15 +2,16 @@
 #
 # The `authors:` list below is deliberately EMPTY. It must not be guessed.
 #
-# Reason: this repository does not state its author anywhere authoritative.
+# Reason: this repository does not state an author anywhere authoritative.
 #   - `LICENSE` is the unmodified Apache-2.0 text and its appendix still reads
 #     "Copyright [yyyy] [name of copyright owner]", i.e. no holder is named.
 #   - `README.md` names no author.
-#   - `rope-attribution-anthropic.patch` (an unapplied diff) contains a proposed
-#     `@misc` block with `author={fanat503}` and `url={.../fanat503/rope-attribution}`,
-#     but the same file also contains `git config user.name "fanat503"` in one
-#     place and `user.name = "Vitebsk Research"` in another. Two conflicting
-#     candidates, neither authoritative -> guessing would be worse than a gap.
+#   - The only signal is the GitHub account that owns the repository
+#     (github.com/fanat503/rope-attribution). That is a handle, not a person,
+#     and a legal attribution needs a real name.
+# An earlier revision of this file cited two conflicting candidates ("fanat503"
+# and "Vitebsk Research") from a now-removed self-referential patch; that file
+# has been deleted, and neither candidate was ever authoritative.
 #
 # ACTION REQUIRED before tagging a release or publishing:
 #   1. Replace `authors: []` below with the real author list, e.g.
@@ -18,8 +19,10 @@
 #          - family-names: "<family name>"
 #            given-names: "<given name>"
 #            orcid: "https://orcid.org/0000-0000-0000-0000"
-#   2. Delete this comment block.
-#   3. Re-run a CFF validator; `authors` is a required field, so the file will
+#   2. Fill in the same name in the `LICENSE` appendix, which is still the
+#      unfilled Apache-2.0 boilerplate.
+#   3. Delete this comment block.
+#   4. Re-run a CFF validator; `authors` is a required field, so the file will
 #      not pass validation until it is non-empty.
 #
 # A placeholder name was deliberately NOT inserted: a wrong attribution in a
@@ -34,7 +37,7 @@ message: >-
   preferred-citation, and also the YaRN paper, given below under references.
   Please also cite this repository itself once the author list above has been
   filled in.
-title: "Программа подготовки к AI research"
+title: "Attributing RoPE: exact score attribution, and what actually limits it"
 authors: []
 license: Apache-2.0
 preferred-citation:
