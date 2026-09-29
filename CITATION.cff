@@ -1,0 +1,75 @@
+# TODO(author) — MUST BE FILLED IN BEFORE RELEASE
+#
+# The `authors:` list below is deliberately EMPTY. It must not be guessed.
+#
+# Reason: this repository does not state its author anywhere authoritative.
+#   - `LICENSE` is the unmodified Apache-2.0 text and its appendix still reads
+#     "Copyright [yyyy] [name of copyright owner]", i.e. no holder is named.
+#   - `README.md` names no author.
+#   - `rope-attribution-anthropic.patch` (an unapplied diff) contains a proposed
+#     `@misc` block with `author={fanat503}` and `url={.../fanat503/rope-attribution}`,
+#     but the same file also contains `git config user.name "fanat503"` in one
+#     place and `user.name = "Vitebsk Research"` in another. Two conflicting
+#     candidates, neither authoritative -> guessing would be worse than a gap.
+#
+# ACTION REQUIRED before tagging a release or publishing:
+#   1. Replace `authors: []` below with the real author list, e.g.
+#        authors:
+#          - family-names: "<family name>"
+#            given-names: "<given name>"
+#            orcid: "https://orcid.org/0000-0000-0000-0000"
+#   2. Delete this comment block.
+#   3. Re-run a CFF validator; `authors` is a required field, so the file will
+#      not pass validation until it is non-empty.
+#
+# A placeholder name was deliberately NOT inserted: a wrong attribution in a
+# legal document is worse than a missing one that fails validation loudly.
+
+cff-version: 1.2.0
+type: software
+message: >-
+  If you use the reference implementations, experiments, or documents in this
+  repository, please cite the RoFormer paper, which introduces the rotary
+  position embedding the work is built on and is given below under
+  preferred-citation, and also the YaRN paper, given below under references.
+  Please also cite this repository itself once the author list above has been
+  filled in.
+title: "Программа подготовки к AI research"
+authors: []
+license: Apache-2.0
+preferred-citation:
+  type: article
+  title: "RoFormer: Enhanced Transformer with Rotary Position Embedding"
+  authors:
+    - family-names: Su
+      given-names: Jianlin
+    - family-names: Lu
+      given-names: Yu
+    - family-names: Pan
+      given-names: Shengfeng
+    - family-names: Murtadha
+      given-names: Ahmed
+    - family-names: Wen
+      given-names: Bo
+    - family-names: Liu
+      given-names: Yunfeng
+  journal: "arXiv preprint arXiv:2104.09864"
+  year: 2021
+  doi: "10.48550/arXiv.2104.09864"
+  url: "https://arxiv.org/abs/2104.09864"
+references:
+  - type: article
+    title: "YaRN: Efficient Context Window Extension of Large Language Models"
+    authors:
+      - family-names: Peng
+        given-names: Bowen
+      - family-names: Quesnelle
+        given-names: Jeffrey
+      - family-names: Fan
+        given-names: Honglu
+      - family-names: Shippole
+        given-names: Enrico
+    journal: "arXiv preprint arXiv:2309.00071"
+    year: 2023
+    doi: "10.48550/arXiv.2309.00071"
+    url: "https://arxiv.org/abs/2309.00071"

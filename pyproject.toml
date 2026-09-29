@@ -1,0 +1,97 @@
+[build-system]
+# setuptools >= 77 is required for PEP 639 support: the SPDX `license` string and
+# the `license-files` key below are only understood from that version on.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rope-attribution"
+version = "0.1.0"
+description = "Attribution of rotary position embeddings (RoPE, YaRN, partial-RoPE) for mechanistic-interpretability work on LLM attention."
+requires-python = ">=3.10"
+
+# SPDX identifier, taken from the LICENSE file: it is the verbatim, unmodified
+# Apache License 2.0 (body, "END OF TERMS AND CONDITIONS", and the standard
+# appendix), and NOTICE.md independently records it as `Apache-2.0`.
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+
+# `authors` is deliberately absent. LICENSE line 189 still reads
+# "Copyright [yyyy] [name of copyright owner]" - the appendix placeholder was
+# never filled in - and CITATION.cff carries an empty `authors: []` with a note
+# that two conflicting candidates appear in rope-attribution-anthropic.patch
+# (fanat503 vs "Vitebsk Research") and that neither is authoritative. No holder
+# is invented here. Fill this in together with CITATION.cff before a release.
+#
+# `readme` is deliberately absent too: README.md documents a Russian
+# "Программа подготовки к AI research" curriculum and does not describe this
+# package, so publishing it as the long description would misrepresent it.
+
+# The library itself only needs numpy. The GPU experiment stack (torch,
+# transformer-lens, nnsight, transformers, ...) stays in
+# projects/requirements.txt and is deliberately not duplicated here.
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+# Used by the figure-producing exploration scripts, never by the library or the
+# test suite.
+plots = ["matplotlib>=3.7"]
+dev = ["pytest>=7.0", "ruff"]
+
+[tool.setuptools]
+# The only real package in this repository lives at projects/rope_attribution,
+# i.e. one level below the project root. Naming it explicitly (instead of
+# relying on flat-layout auto-discovery, which would also try to treat
+# projects/ as a package) plus the package-dir mapping below is what makes
+# `pip install -e .` expose `import rope_attribution`.
+packages = ["rope_attribution"]
+
+[tool.setuptools.package-dir]
+rope_attribution = "projects/rope_attribution"
+
+[tool.pytest.ini_options]
+# `pythonpath` needs pytest >= 7. It is what lets `pytest` be run from the
+# repository root with no PYTHONPATH set by hand.
+testpaths = ["tests"]
+pythonpath = ["projects"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+# Lint scope: the code this repository is actively maintaining, and nothing else.
+#
+# Deliberately out of scope, by decision and not by accident:
+#   * projects/frontier-01-*.py  - 31 tracked one-off experiment scripts. They
+#     are a frozen archive of GPU work. Under this exact rule set they produce
+#     2 findings (E402 x2); enabling E501 as well takes it to 544, because those
+#     files contain lines up to 209 characters. Linting them would be a
+#     reformatting project, not a packaging change, and they are not owned by
+#     the change that introduced this file.
+#   * verify_rope*.py at the repository root - manual numerical-check scripts
+#     that print results for a human to read. They are not part of the package.
+#
+# Re-run with a wider `include` once the archive is retired.
+include = ["projects/rope_attribution/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+# Conservative, all of it verified to run clean over the scoped files:
+#   E4/E7/E9 - ruff's stock defaults (imports, statements, syntax)
+#   F        - pyflakes: undefined names, unused imports
+#   I        - import sorting
+#   B        - bugbear: real bug classes
+#   UP       - pyupgrade, for the py310 target
+#   SIM      - flake8-simplify
+#   RET      - flake8-return
+#   RUF100   - unused noqa directives
+# Deliberately not enabled: D (docstrings), ANN (annotations), COM/format
+# rules, and PT (pytest style) - all of which would impose house style that
+# this codebase does not currently follow.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "SIM", "RET", "RUF100"]
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py re-exports the public API of rope.py. It has no __all__ of its
+# own, so pyflakes reports every re-exported name as an unused import. This is
+# the standard exception for a re-exporting __init__.py; it silences F401
+# only, and only in this one file.
+"projects/rope_attribution/__init__.py" = ["F401"]
