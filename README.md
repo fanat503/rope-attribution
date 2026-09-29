@@ -1,31 +1,207 @@
-# Программа подготовки к AI research
+# Attributing RoPE: exact score attribution, and what actually limits it
 
-Персональная программа на 20–30 часов в неделю для подготовки к frontier AI research. Главная специализация — mechanistic interpretability; поддерживающая специализация — LLM systems.
+This repository studies how attention scores are attributed to features when
+positions are encoded with rotary embeddings. It contains a from-scratch
+implementation of RoPE, YaRN and partial RoPE, and a set of experiments whose
+every reported number is computed at run time.
 
-## Языковое правило
+There is an earlier body of exploratory work under `projects/frontier-01-*`.
+**Some of those scripts print illustrative constants rather than computing
+measurements.** See [Legacy material](#legacy-material) before citing anything
+from them. The code under `projects/rope_attribution/` is the maintained
+implementation and is the only part of this repository that should be relied on.
 
-- Объяснения, задания, обратная связь и учебные документы пишутся по-русски.
-- Английскими остаются технические термины, имена papers, API, libraries, variables, code и formulas.
+## What is computed
 
-## Файлы
+```
+projects/rope_attribution/
+  rope.py         RoPE, YaRN, partial RoPE (numpy, float64)
+  experiments.py  seven measured experiments
+  figures.py      the figure set, every value computed at run time
+tests/            1102 tests
+figures/          nine figures, each with a CSV sidecar
+results/          measurements.json
+```
 
-- `ROADMAP_RU.md` — программа, система тестирования, план первых 12 недель, 24-месячная project ladder и research workflow.
-- `lessons/lesson-01-kv-cache-decode.md` — первый учебный блок по KV cache, shapes и causal semantics.
-- `lessons/lesson-02-q-projection-and-fusion.md` — получение `q_t` и production fusion; delayed verification ожидается.
-- `lessons/lesson-03-kv-memory-mha-gqa-mqa.md` — KV memory accounting и introduction MHA/GQA/MQA; checkpoint выявил axis confusion.
-- `lessons/lesson-04-gqa-axes-and-sharing.md` — GQA axes и sharing; understood, delayed numerical verification pending.
-- `lessons/lesson-05-contiguous-kv-fragmentation.md` — приостановлен: первая версия перегружена английской терминологией.
-- `lessons/lesson-05a-three-memory-quantities.md` — текущий короткий урок: место с данными, отданное и действительно свободное место.
-- `diagnostics/diagnostic-00.md` — расширенный diagnostic; временно отложен до освоения базовых блоков.
-- `templates/weekly-research-log.md` — evidence, experiments, ошибки, retention и mastery gates.
-- `student-state.md` — подтверждённый baseline и текущий педагогический режим.
-- `progress.csv` — трекер первого квартала.
+Reproduce everything:
 
-## Что делать сейчас
+```bash
+pip install -e . && pip install -r requirements-dev.txt
+pytest -q                              # 1102 tests
+python -m projects.rope_attribution.experiments   # prints the report, rewrites results/
+python -m projects.rope_attribution.figures       # rewrites figures/
+```
 
-1. Открыть `lessons/lesson-05a-three-memory-quantities.md`.
-2. Разобрать только три русских понятия: место с данными, отданное место и действительно свободное место.
-3. Ответить на одну проверку четырьмя числами.
-4. Только после понимания дать русское название первому виду потерь памяти.
+## The setting
 
-К расширенному `diagnostic-00.md` возвращаемся после foundational remediation, а не продолжаем его сейчас вслепую.
+Work in the relative frame: subtract the query position from both query and key.
+Because the rotation is orthogonal, `R_m^T R_m = I`, so
+
+```
+q_relative      = R_m^T (R_m q_hat) = q_hat
+k_relative(n)   = R_m^T (R_n k_hat) = R_{n-m} k_hat
+score(m, n)     = q_hat . R_{n-m} k_hat          (depends only on delta = n - m)
+```
+
+Group the head into rotary pairs `(k, k + d/2)` and put `D_k = delta * inv_freq[k]`.
+Expanding the rotated key against the unrotated query gives an exact closed form
+per pair, with `A_k`, `B_k` fixed and only the angle depending on distance:
+
+```
+A_k = q_hat[k]  *k_hat[k]  + q_hat[k+d/2] *k_hat[k+d/2]      "aligned",  position-free
+B_k = q_hat[k+d/2]*k_hat[k] - q_hat[k] *k_hat[k+d/2]          "crossed",  carries position
+c_k(delta) = A_k cos(D_k) + B_k sin(D_k) = R_k cos(D_k - psi_k)
+```
+
+`R_k = hypot(A_k, B_k)` is a single sinusoid in distance: an amplitude that does
+not depend on `delta` at all, and a phase that advances exactly linearly in it.
+A pair is completely position-blind precisely when `B_k = 0`.
+
+## Results
+
+All measured at `dim = 64`, `base = 10000`, `scale = 32`. Full values in
+`results/measurements.json`; the figures are in `figures/`.
+
+**The structural properties hold exactly.**
+
+| property | measured |
+|---|---|
+| relative-position property (42 position pairs) | `3.4e-14` |
+| norm preservation, query and key | `1.8e-15` |
+| bilinearity in content, 35 score checks | `7.4e-16` |
+| per-pair closed form vs brute force | `3.6e-15` |
+| feature additivity, `score == sum_ij f_i g_j A_ij(delta)` | `3.6e-14` |
+
+**Attribution is exact, but position-conditional.** With `x = sum_i f_i d_i` and
+random `W_Q`, `W_K`, the score decomposes additively into per-feature-pair terms
+`A_ij(delta)` to `3.6e-14`. But `A_ij` depends on the distance, so a single
+feature's contribution is a *function of distance*, not a scalar: its magnitude
+varies by 43x across the measured grid in `experiments.py` and by up to 920x
+across the finer grid in `figures/fig09`. This, not a failure of bilinearity, is
+the real obstacle to position-free feature attribution under RoPE
+(`figures/fig09_position_conditional_attribution.png`).
+
+**YaRN does not shrink the largest angle, and does not come from a bigger base.**
+`max|D_k|` is *identical* for plain RoPE and YaRN at every distance measured
+(difference `0.0`, 54 distances) — YaRN deliberately leaves the fastest channel
+untouched, so `D = 1 rad per token` there is unchanged. What YaRN does change is
+the bulk of the spectrum, and with it the fraction of channels that can be
+linearized:
+
+| `delta` | scheme | `max|D_k|` | `median|D_k|` | fraction linearizable |
+|---:|---|---:|---:|---:|
+| 512 | RoPE base 10k | 512 | 5.97 | `0.0625` |
+| 512 | YaRN | 512 | 2.67 | `0.3438` |
+| 512 | position interpolation | 16 | 0.19 | `0.4375` |
+| 4096 | RoPE base 10k | 4096 | 47.79 | `0.0000` |
+| 4096 | YaRN | 4096 | 21.34 | `0.2188` |
+
+So the linearization `cos D -> 1 - D^2/2`, `sin D -> D` degrades to nothing for
+plain RoPE by `delta = 4096` and retains a fifth of the channels under YaRN. The
+honest limit of the story: the amplitude-weighted error is still enormous for
+every scheme (ratio RoPE:YaRN of `0.997` at `delta = 4096`), because the handful
+of fast channels dominate it. Linearization of the *whole* head is not rescued by
+any of these methods; what YaRN buys is a larger linearizable majority
+(`figures/fig03`, `figures/fig04`, `figures/fig05`).
+
+**Partial RoPE yields an exactly position-free sub-score.** At `p = 0.25` the
+unrotated 75% of channels contribute a sub-score whose spread across distance is
+exactly `0.0`, while the rotated quarter varies by `12.03`. This is a clean
+separation of a bilinear, position-independent term from the position-carrying
+one (`figures/fig07`). Note that partial rotation is *not* orthogonal, so the norm
+is not preserved as it is for full RoPE (deviation `0.27`); reasoning about "the
+gate" under pp-RoPE has to account for that.
+
+**YaRN's magnitude term is a temperature.** `mscale = 0.1 * ln(factor) + 1`
+(`1.3466` at `scale = 32`) multiplies all logits, pulling attention entropy from
+`H/ln T = 0.923` to `0.865` (`figures/fig08`).
+
+## Correcting the earlier drafts
+
+Two claims in the legacy documents do not survive measurement, and the difference
+matters for the mechanism:
+
+- **"RoPE breaks bilinearity (3.7x instead of 2x)."** For a fixed position pair,
+  RoPE attention is exactly bilinear; doubling the query doubles the score, to
+  `7.4e-16` relative error. The legacy demo reached 3.7x by changing the scoring
+  function between its two cases, not by exhibiting nonlinearity in one. The
+  non-additivity in attention comes from the softmax downstream of the score,
+  which is where a real obstruction still lives.
+- **"YaRN works by raising the base from 10000 to 500000."** That is plain
+  position interpolation, a different method. YaRN keeps `base = 10000` and ramps
+  per frequency — short-wavelength channels keep their inverse frequency,
+  long-wavelength channels are divided by `scale`, blended linearly in between —
+  then rescales by `mscale`. In the reference implementation at `scale = 32`,
+  9 of 32 pairs are bit-for-bit unchanged and 21 of 32 differ from uniform
+  interpolation. Both `yarn` and `position_interpolation` are computed in
+  `experiments.method_spectrum` so the two can be compared directly.
+
+## Figures
+
+| figure | what it shows |
+|---|---|
+| `fig01_frequency_ladder` | the frequency ladder; YaRN's ramp against plain RoPE and interpolation |
+| `fig02_angle_spectrum` | per-channel `\|D_k\|` for RoPE and YaRN at several distances |
+| `fig03_max_vs_median_angle` | max angle unchanged by YaRN, median angle reduced |
+| `fig04_linearizable_fraction` | fraction of channels admitting the linearization, vs distance |
+| `fig05_linearization_error` | amplitude-weighted and per-pair linearization error |
+| `fig06_pair_exact_vs_linear` | exact vs linearized per-pair contribution, and where they part |
+| `fig07_partial_rope` | the exactly position-free sub-score under partial RoPE |
+| `fig08_mscale_entropy` | attention entropy against scale, with and without `mscale` |
+| `fig09_position_conditional_attribution` | per-feature contribution against distance |
+
+Each figure ships the plotted data as a CSV beside it, and `figures/README.md`
+records which function produced it and its headline number.
+
+## Provenance
+
+`rope.py` is an independent implementation. The inverse-frequency ladder and the
+split-half `rotate_half` convention follow `transformers`
+(`models/llama/modeling_llama.py`); the YaRN ramp (`find_correction_dim`,
+`find_correction_range`, `linear_ramp_mask`) and `get_mscale` are transcribed from
+the authors' own reference implementation
+(`scaled_rope/LlamaYaRNScaledRotaryEmbedding.py` in `jquesnelle/yarn`).
+
+This repository contains **no third-party source code** — there is no vendored
+tree, and `NOTICE.md` records the greps that establish it. See `NOTICE.md`,
+`projects/ATTRIBUTION.md` and `CITATION.cff`.
+
+RoPE: Su, Jianlin; Lu, Yu; Pan, Shengfeng; Murtadha, Ahmed; Wen, Bo; Liu, Yunfeng.
+"RoFormer: Enhanced Transformer with Rotary Position Embedding", 2021.
+<https://arxiv.org/abs/2104.09864>
+
+YaRN: Peng, Bowen; Quesnelle, Jeffrey; Fan, Honglu; Shippole, Enrico.
+"YaRN: Efficient Context Window Extension of Large Language Models", 2023.
+<https://arxiv.org/abs/2309.00071>
+
+## Scope and honesty
+
+The measurements here are on the *structure* of the score: exact identities and
+their numerical error, on synthetic projections. They are model-independent, and
+that is deliberate — the claims are claims about the position encoding, not about
+any particular trained network. They do not include trained sparse autoencoders,
+real model activations, or retrieval benchmarks. Claims of the form "the model
+retrieves the needle with accuracy 0.7" are not measured anywhere in this
+repository and should not be attributed to it.
+
+## Legacy material
+
+`projects/frontier-01-*.py` and `projects/frontier-01-*.md` are an earlier,
+frozen body of work kept for provenance. Known caveats:
+
+- several scripts **print hardcoded illustrative values** rather than computing
+  them — for example `frontier-01-bag-of-words-test.py` assigns retrieval
+  accuracies as literals and computes "interaction" as `D**2 / 2` by definition;
+- `frontier-01-graphs-ULTIMATE-V11.py` plots literal lists;
+- the `projects/fig_*.png` files from that era were plots of those literals and
+  have been removed for that reason; they are recoverable from git history at
+  `310bf2c`;
+- the documents disagree with each other and, in the two cases listed above, with
+  the measurements here. Where they disagree, the measurements win.
+
+Do not cite the legacy documents. Cite `projects/rope_attribution/` and
+`results/measurements.json`.
+
+## License
+
+Apache-2.0. See `LICENSE`, `NOTICE.md`, `CITATION.cff`.
