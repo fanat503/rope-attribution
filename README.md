@@ -18,7 +18,7 @@ projects/rope_attribution/
   rope.py         RoPE, YaRN, partial RoPE (numpy, float64)
   experiments.py  seven measured experiments
   figures.py      the figure set, every value computed at run time
-tests/            1102 tests
+tests/            1184 tests
 figures/          nine figures, each with a CSV sidecar
 results/          measurements.json
 ```
@@ -27,7 +27,7 @@ Reproduce everything:
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                              # 1102 tests
+pytest -q                              # 1184 tests
 python -m projects.rope_attribution.experiments   # prints the report, rewrites results/
 python -m projects.rope_attribution.figures       # rewrites figures/
 ```

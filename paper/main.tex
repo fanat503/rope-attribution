@@ -15,16 +15,25 @@
 \documentclass[twocolumn]{article}
 
 % ---- review/preprint setup, self-contained (no .sty files required) ----
-\usepackage[preprint,letterpaper]{natbib}
-\usepackage[margin=1in]{geometry}
-\geometry{textwidth=5.5in, textheight=9in}
+\usepackage{natbib}
+% Geometry: give the package ONE non-contradictory specification. The
+% previous pair (\usepackage[margin=1in]{geometry} followed by
+% \geometry{textwidth=5.5in,textheight=9in}) made geometry emit
+%   "Over-specification in `h'-direction. `width' (397.485pt) is ignored"
+% and lay the document out at 6.5in wide, silently discarding the declared
+% 5.5in. textheight=9in on letterpaper reproduces the intended 1in top and
+% bottom margins; the 5.5in block is then centred (1.5in left/right).
+\usepackage[letterpaper,textwidth=5.5in,textheight=9in]{geometry}
 \setlength{\columnsep}{0.25in}
 \usepackage{amsmath,amssymb,amsthm,bm}
 \usepackage{graphicx}
 \usepackage{booktabs}
 
+% natbib already defines \bibsep as a *length* (it is used as
+% \setlength{\itemsep}{\bibsep} inside thebibliography), so widen that
+% register rather than trying to \newcommand it.
 \renewcommand{\bibname}{References}
-\newcommand{\bibsep}{\par\bigskip\hskip0pt}
+\setlength{\bibsep}{\bigskipamount}
 
 % ---- theorem environments ----
 \theoremstyle{plain}
@@ -216,8 +225,10 @@ head can be linearized.
 Let $d$ be an even head dimension and let $x_m \in \mathbb{R}^d$ be the
 pre-projection content at absolute position $m$. RoPE defines
 \begin{equation}
-  \invf_k = \mathrm{base}^{-2k/d}, \quad k = 0, \dots, \half - 1,
-  \qquad \mathrm{base} = 10000,
+  \begin{split}
+    \invf_k &= \mathrm{base}^{-2k/d},\; k = 0, \dots, \half - 1,\\
+    \mathrm{base} &= 10000 .
+  \end{split}
 \end{equation}
 and applies a block-diagonal rotation $\R_m$ whose $k$-th $2\times2$ block
 rotates by the angle $m \cdot \invf_k$. With $q = W_Q x_m$ and $k = W_K x_n$ the
@@ -236,9 +247,10 @@ frequency vector of length $\half$ drives all $d$ channels.
 The rotation matrices $\R_m$ are orthogonal, hence $\R_m^{\!\top}\R_m = I$.
 Factoring through the relative frame gives
 \begin{equation}
-  \R_m^{\!\top} \bigl(\R_n k\bigr) \;=\; \R_m^{\!\top}\R_n k \;=\; \R_{n-m} k,
-  \qquad
-  \R_m^{\!\top} \bigl(\R_m q\bigr) \;=\; q,
+  \begin{split}
+    \R_m^{\!\top} \bigl(\R_n k\bigr) \;=\; \R_m^{\!\top}\R_n k \;=\; \R_{n-m} k,\\
+    \R_m^{\!\top} \bigl(\R_m q\bigr) \;=\; q .
+  \end{split}
 \end{equation}
 and therefore
 \begin{equation}
@@ -270,19 +282,22 @@ Group the head into rotary pairs $(k, k + \half)$, so that $\R_{\delta}$ mixes
 exactly these two channels. In the split-half convention, the $k$-th block of
 $\R_{\delta}$ acts on $(q[k], q[k+\half])$ and $(k[k], k[k+\half])$ as
 \begin{equation}
-  \R_\delta^{(k)} \;=\;
-  \begin{pmatrix} \cos \D & -\sin \D \\ \sin \D & \cos \D \end{pmatrix},
-  \qquad \D = \delta \invf_k,
+  \begin{split}
+    \R_\delta^{(k)} \;=\;
+    \begin{pmatrix} \cos \D & -\sin \D \\ \sin \D & \cos \D \end{pmatrix},
+    \\[-1pt]
+    \qquad \D = \delta \invf_k .
+  \end{split}
 \end{equation}
 with the same $\D$ on both diagonals. Expanding $q^{\!\top}\R_{\delta}k$ over
 that block and collecting terms gives, exactly,
 \begin{align}
   \Ak &= q[k]\,k[k] \;+\; q[k+\half]\,k[k+\half] \label{eq:A}\\
   \Bk &= q[k+\half]\,k[k] \;-\; q[k]\,k[k+\half] \label{eq:B}\\
-  c_k(\delta) &= \Ak \cos \D + \Bk \sin \D
-  \;=\; \Rk \cos(\D - \psik), \quad
-  \Rk = \operatorname{hypot}(\Ak, \Bk),\quad
-  \psik = \operatorname{atan2}(\Bk, \Ak),
+  c_k(\delta) &= \Ak \cos\D + \Bk \sin\D \\
+  &= \Rk\cos(\D - \psik), \\
+  \Rk &= \operatorname{hypot}(\Ak, \Bk), \\
+  \psik &= \operatorname{atan2}(\Bk, \Ak).
 \end{align}
 and the score is $s(\delta) = \sum_{k < \half} c_k(\delta)$. The two
 coefficients are therefore fixed by the content vectors alone, and the whole of
@@ -340,13 +355,27 @@ The frequency ladder of Figure~\ref{fig:ladder} makes the asymmetry explicit.
 Under \yarn\ at $s = 32$, the fastest $9$ of the $32$ rotary pairs have inverse
 frequencies \emph{bit-for-bit identical} to plain RoPE, and the slowest pair is
 slowed by exactly a factor of $32.00$. The scheme is thus not a uniform
-rescaling at all: it is a ramp that leaves a third of the spectrum untouched.
+rescaling at all: it is a ramp that leaves $9$ of $32$ entries untouched.
 Position interpolation, by contrast, differs from RoPE in all $32$ entries.
 
 Position interpolation \citep{chen2023positionalinterp} instead divides
-positions by $s$ uniformly, which is algebraically equivalent to replacing
-$\mathrm{base}$ by $\mathrm{base}\cdot s$. Raising $\mathrm{base}$ from $10000$
-to $500000$ is therefore the same scheme at $s = 50$. We nonetheless measure all
+positions by $s$ uniformly. It is worth being precise that this is
+\emph{not} the same scheme as raising $\mathrm{base}$. Dividing positions
+divides every entry by $s$, whereas raising $\mathrm{base}$ to
+$\mathrm{base}\cdot s$ multiplies entry $k$ by $s^{-2k/d}$:
+\[
+  \mathrm{inv\_freq}_k \;\mapsto\; \mathrm{base}^{-2k/d}\,s^{-1}
+  \qquad\text{versus}\qquad
+  \mathrm{base}^{-2k/d}\,s^{-2k/d}.
+\]
+The two agree only where $2k/d = 1$, that is at $k = d/2$, which lies outside
+the ladder $k = 0,\dots,d/2-1$. They therefore never coincide on any channel.
+The sharpest instance is the fastest channel: $\theta_0 = \mathrm{base}^{0} = 1$
+for \emph{every} base, so raising the base from $10000$ to $500000$ leaves
+$\theta_0$, and hence $\max_k |D_k|$, completely unchanged, while dividing
+positions by $s$ divides it. This is exactly what our table shows: at
+$\delta = 512$ position interpolation reaches $\max_k|D_k| = 16$ and the
+$\mathrm{base} = 500000$ ladder still sits at $512$. We nonetheless measure all
 four as separate rows, because they are frequently conflated.
 
 % =====================================================================
@@ -356,7 +385,8 @@ All measurements come from a from-scratch float64 NumPy implementation,
 regenerated by a single entry point and written to
 \texttt{results/measurements.json}. We use $d = 64$, $\mathrm{base} = 10000$,
 extension factor $s = 32$, and pre-extension context $2048$, unless a table
-says otherwise. Two grids are used and are kept distinct throughout: a
+says otherwise. Two grids are used in the structural and scheme-comparison
+tables and are kept distinct throughout: a
 $5$-point grid $\{1, 64, 512, 2048, 4096\}$ for the structural and
 scheme-comparison tables, and a $54$-point log-spaced integer grid from $1$ to
 $8192$ for the figures. Every quantity carries its grid with it, so numbers
@@ -450,7 +480,10 @@ position encoding.
 \subsection{Exactness, measured}
 \label{sec:exact}
 
-\begin{table}[t]
+% table* spans both columns: at \columnwidth the three-column body is
+% ~78pt too wide and runs into the margin. Layout-only change; no content
+% is added, removed or reworded.
+\begin{table*}[t]
   \centering
   \caption{Structural properties of RoPE, measured. Residuals are
     max-absolute unless marked otherwise. All are at the float64 roundoff
@@ -476,7 +509,7 @@ position encoding.
     feature additivity, $54$-pt grid & $4.974\times10^{-14}$ & fig09 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 Table~\ref{tab:exact} establishes the first half of R1. The relative-position
 property holds to $3.4\times10^{-14}$, the orthogonality behind
@@ -569,7 +602,7 @@ The practical reading: an additive attribution $\sum_{ij} f_i g_j A_{ij}$ with
 $A_{ij}$ free of position is not merely an approximation --- it is a
 mis-specification. It cannot represent the measured curves for any constant
 $A_{ij}$, because the error it would incur is of the order of the swing itself,
-some $14$ orders of magnitude above the additivity residual. The correct object
+some $16$ orders of magnitude above the additivity residual. The correct object
 is per-feature and per-distance, which we define concretely in
 Section~\ref{sec:wellposed}. Whether that object is useful in practice is a
 question about downstream circuits, and is outside what we measure.
@@ -581,15 +614,20 @@ attribution'' is otherwise an instruction without a definition. For a query
 feature $i$ and a key feature $j$ at relative distance $\delta$, define the
 $2\times 2$ coefficients
 \begin{equation}
-  A_{ij}^{(k)}(\delta) \;=\; \cos\D_k\, A_{ij}^{A}[k] \;+\; \sin\D_k\, A_{ij}^{B}[k],
-  \qquad k < \half ,
+  \begin{split}
+    A_{ij}^{(k)}(\delta) \;=\;
+    \cos\D\, A_{ij}^{A}[k] \;+\; \sin\D\, A_{ij}^{B}[k],\\
+    \qquad k < \half ,
+  \end{split}
 \end{equation}
 where $A_{ij}^{A}[k]$ and $A_{ij}^{B}[k]$ are formed from
 $A_{ij} = q_i^{\!\top}k_j$ by the same split-half grouping as
 Equations~\ref{eq:A}--\ref{eq:B}. Then
 \begin{equation}
-  A_{ij}(\delta) \;=\; \sum_{k < \half} A_{ij}^{(k)}(\delta)
-  \;=\; \sum_{k < \half} R_k^{ij} \cos\bigl(\D_k - \psik^{ij}\bigr),
+  \begin{split}
+    A_{ij}(\delta) \;=\; \sum_{k < \half} A_{ij}^{(k)}(\delta)\\
+    \;=\; \sum_{k < \half} R_k^{ij} \cos\bigl(\D - \psik^{ij}\bigr),
+  \end{split}
   \label{eq:perpair}
 \end{equation}
 so the well-posed attribution object is not a $1\times1$ coefficient $A_{ij}$
@@ -633,7 +671,10 @@ channel contributes exactly $1\rad$ per token under both schemes. Any
 reasoning that says ``\yarn\ damps the large angles'' is wrong about the largest
 one.
 
-\begin{table}[t]
+% table* spans both columns: six columns of numerics do not fit a
+% single \columnwidth. Layout-only change; the rows and the caption are
+% untouched.
+\begin{table*}[t]
   \centering
   \caption{The four position-encoding schemes on the $5$-point distance grid,
     $d = 64$, $\mathrm{base} = 10^{4}$, extension factor $s = 32$, pre-extension
@@ -674,7 +715,7 @@ one.
       & $0.1875\ (6/32)$ & $1.77\!\times\!10^{5}$ \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 \paragraph{The median angle falls, and the linearizable fraction rises.}
 $\operatorname{median}_k|\D|$ for \yarn\ is a constant $0.4464\times$ that of
@@ -857,7 +898,7 @@ still have no position-free attribution, which is the situation under full
 context'' and ``we need position-free feature attribution'' --- are addressing
 different problems, and a method that answers one does not answer the other.
 What \yarn\ does is extend the distance range over which a majority of channels
-can be linearized, from $2/32$ to $11/32$ at $\delta \approx 861$. What it does
+can be linearized, from $0/32$ to $11/32$ at $\delta \approx 861$. What it does
 not do is make the worst channel linearizable, and the worst channel is what
 determines whether the head as a whole can be treated as linear.
 
@@ -953,8 +994,10 @@ non-uniform extension. \ropetheory\ \citep{barbero2024roundandround} analyses
 RoPE's frequency content from an optimization perspective, complementing the
 spectrum measurements of Section~\ref{sec:context}; we do not compare with or
 reproduce their results. Finally, we note explicitly that the ``raise
-$\mathrm{base}$ from $10000$ to $500000$'' recipe is not \yarn: it is
-position interpolation at $s = 50$, and we measure it separately as
+$\mathrm{base}$ from $10000$ to $500000$'' recipe is not \yarn, and is also not
+position interpolation: raising the base multiplies channel $k$ by
+$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
+$\max_k|\D|$ untouched. We measure it separately as
 \texttt{base\_500k\_legacy\_claim} for that reason.
 
 \paragraph{Feature-level attribution and circuit discovery.}
@@ -1032,8 +1075,9 @@ comes from changing what is being measured --- typically comparing a score
 against an attention output, which involves the softmax. The second is that
 ``YaRN works by raising the base from $10000$ to $500000$''. It does not.
 \yarn\ keeps the base and ramps per frequency, leaving the fastest $9$ of $32$
-pairs bit-for-bit unchanged; the base-raising recipe is position interpolation
-at $s = 50$, which is a different scheme and appears as its own row in
+pairs bit-for-bit unchanged; the base-raising recipe is a distinct scheme again,
+since it rescales channel $k$ by $s^{-2k/d}$ rather than by $s^{-1}$, and
+appears as its own row in
 Table~\ref{tab:spectrum}. Both corrections push the same way: toward
 disentangling the position encoding from the operations people attribute to it.
 
@@ -1053,9 +1097,14 @@ $s = 32$, pre-extension context $2048$, $T = 256$ keys; from
 \texttt{figures/README.md}.
 
 \paragraph{Claims and their source files.}
-\begin{center}
+% Full-width float: this three-column audit table is ~216pt wider than a
+% single \columnwidth. Layout-only; every row is unchanged.
+\begin{table*}[t]
+\centering
+\caption{Provenance of every literal quoted in the paper.}
+\label{tab:provenance}
 \footnotesize
-\setlength{\tabcolsep}{3.4pt}
+\setlength{\tabcolsep}{1.9pt}
 \begin{tabular}{lll}
 \toprule
 paper location & value(s) & file and key \\
@@ -1072,7 +1121,7 @@ Sec.~\ref{sec:context} & Tab.~\ref{tab:spectrum} & \texttt{measurements.json :: 
  & $1225.06$, $\delta = 3$ & \texttt{fig05}, \texttt{fig06} CSVs \\
 Sec.~\ref{sec:context} & $9$ of $32$, $32.00\times$ & \texttt{fig01} CSV, unchanged-pair count \\
  & $52.42$, $23.40$ & \texttt{fig02} CSV, \texttt{abs\_angle\_rad} \\
-Sec.~\ref{sec:exact} & $0.9526294617$, $2.3046990967$ & \texttt{fig06} CSV, \texttt{amplitude\_R\_k} \\
+Sec.~\ref{sec:exact} & $0.9526294618$, $2.3046990967$ & \texttt{fig06} CSV, \texttt{amplitude\_R\_k} \\
  & $-0.9525$, $-1.0607$, $0.1136$, $4.3\!\times\!10^{-6}$ & \texttt{fig06} CSV \\
 Sec.~\ref{sec:background} & $9$ of $32$ bit-for-bit & \texttt{fig01} CSV, column 3 vs column 1 \\
 Sec.~\ref{sec:partial} & $0.0$, $12.03$, $22.56$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
@@ -1083,7 +1132,7 @@ Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entro
  & $0.8383$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
 \bottomrule
 \end{tabular}
-\end{center}
+\end{table*}
 
 \paragraph{Derived quantities and their derivations.} The fixed median-angle
 ratio quoted above is a ratio of medians at fixed $\delta$; it is constant across
@@ -1091,9 +1140,10 @@ distances because \yarn's ramp is a fixed per-channel rescaling and $\D$ is
 linear in $\delta$ for every channel. Fractions converted to counts out of $32$
 are exact, since the denominator is $\half = 32$ pairs and every fraction is a
 multiple of $1/32$. Error ratios are quotients of two entries of the same CSV at
-the same $\delta$. The ``$14$ orders of magnitude'' comparison in
+the same $\delta$. The ``$16$ orders of magnitude'' comparison in
 Section~\ref{sec:cond} divides a swing of order $10^{2}$--$10^{3}$ by the
-$5.0\times10^{-14}$ additivity residual. The $1.5\times10^{14}$ factor in
+$5.0\times10^{-14}$ additivity residual: $920.04/4.974\times10^{-14}
+\approx 1.85\times10^{16}$. The $1.5\times10^{14}$ factor in
 Section~\ref{sec:partial} divides $0.2663$ by $1.776\times10^{-15}$. The ``less
 than $0.4\%$'' claim in Section~\ref{sec:context} is $1 - 0.996840$. The
 ``roughly $1000\times$'' comparison divides
