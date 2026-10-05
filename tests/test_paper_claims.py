@@ -657,16 +657,45 @@ def fig09_csv_curves() -> list[list[float]]:
 # ==========================================================================
 
 
+def _leaves(fresh, committed, path: str = ""):
+    """Yield ``(path, committed, fresh)`` for every leaf that moved materially.
+
+    A float counts as moved only when it differs by more than ``1e-12`` relative,
+    which is ~4500 ULP at 1.0. That is far tighter than a real disagreement
+    (a changed seed, a changed grid, a changed formula) and loose enough to
+    absorb the last-bit differences between two BLAS implementations, which is
+    what made this fail on Linux while passing on Windows.
+    """
+    if isinstance(fresh, dict):
+        for key, value in committed.items():
+            yield from _leaves(fresh[key], value, f"{path}.{key}")
+    elif isinstance(fresh, list):
+        # strict=True on purpose: a list that changed length is itself staleness.
+        for index, (value, item) in enumerate(zip(fresh, committed, strict=True)):
+            yield from _leaves(value, item, f"{path}[{index}]")
+    elif isinstance(fresh, float) or isinstance(committed, float):
+        if not math.isclose(float(fresh), float(committed), rel_tol=1e-12, abs_tol=0.0):
+            yield path, committed, fresh
+    elif fresh != committed:
+        yield path, committed, fresh
+
+
 def test_measurements_json_is_current() -> None:
     """results/measurements.json must be what the code produces right now.
 
     Without this, every claim below could be satisfied by a stale data file:
     the paper and the JSON would agree with each other and both disagree with
-    the code.  The experiments are seeded, so the comparison is exact.
+    the code.  The experiments are seeded, so the comparison is reproducible.
+    It is made to a tolerance of 1e-12 relative rather than bit-for-bit: the
+    same float64 sum can differ by a few ULP between two BLAS implementations,
+    which is what made an exact comparison fail on CI while passing on Windows.
     """
-    assert E.run_all().to_dict() == MEASUREMENTS, (
-        "results/measurements.json is stale: re-run "
-        "`python -m projects.rope_attribution.experiments`"
+    live = E.run_all().to_dict()
+    drift = [(path, committed, fresh) for path, committed, fresh in _leaves(live, MEASUREMENTS)]
+    assert not drift, (
+        f"results/measurements.json is stale ({len(drift)} value(s) differ by more "
+        f"than 1e-12 relative): re-run "
+        f"`python -m projects.rope_attribution.experiments`. First: {drift[0]}"
     )
 
 
@@ -1054,13 +1083,26 @@ def test_the_csv_agrees_with_the_recomputed_fig09_grid() -> None:
     csv_deltas = sorted({int(row["delta"]) for row in rows})
     assert csv_deltas == [int(d) for d in deltas]
     assert len(rows) == contrib.size
+    # Relative, because the CSV was written by figures.py's vectorised
+    # accumulation and this recomputes it with explicit loops. Identical maths,
+    # different summation order, so the last bits differ by a few ULP and move
+    # with the host BLAS. rtol=1e-12 is ~4500 ULP here - tight enough that a real
+    # disagreement (a different seed, a different grid) still fails loudly.
     for row in rows:
         i = int(row["feature_index"])
         j = csv_deltas.index(int(row["delta"]))
-        assert float(row["contribution"]) == float(contrib[i, j]), (
-            f"the fig09 CSV's contribution for feature {i} at delta={row['delta']} is stale"
+        assert float(row["contribution"]) == pytest.approx(
+            float(contrib[i, j]), rel=1e-12
+        ), f"the fig09 CSV's contribution for feature {i} at delta={row['delta']} is stale"
+    # The residual is a roundoff floor near zero, where a relative tolerance is
+    # meaningless, so it is compared against the floor itself: a residual that
+    # moved by more than a few ULP of the largest term is a real change.
+    scale = float(np.abs(contrib).max())
+    for row in rows:
+        j = csv_deltas.index(int(row["delta"]))
+        assert abs(float(row["additivity_residual"]) - float(residuals[j])) <= 1e-12 * scale, (
+            f"the fig09 additivity residual at delta={row['delta']} moved beyond roundoff"
         )
-        assert float(row["additivity_residual"]) == residuals[j]
     curves = fig09_csv_curves()
     assert fig09_per_feature_ratios(curves) == pytest.approx(
         fig09_per_feature_ratios(contrib), rel=1e-12
@@ -1248,8 +1290,10 @@ def test_the_fastest_channel_turns_one_radian_per_token_under_both_schemes() -> 
     rope = R.inv_freq(HEAD_DIM, ROPE_BASE)
     yarn, _mscale = R.yarn_parameters(HEAD_DIM, ROPE_BASE, EXT_SCALE, ORIGINAL_MAX_POS)
     assert_paper_number_matches(float(rope[0]), f"{rate}", "the fastest channel's rate")
-    assert yarn[0] == rope[0]
-    assert float(spectrum_row("rope_base_10k", 1)["max_abs_angle"]) == float(rope[0])
+    assert yarn[0] == pytest.approx(rope[0], rel=1e-12)
+    assert float(spectrum_row("rope_base_10k", 1)["max_abs_angle"]) == pytest.approx(
+        float(rope[0]), rel=1e-12
+    )
 
 
 # ==========================================================================
@@ -1439,10 +1483,16 @@ def test_the_linearizable_fractions_quoted_in_the_prose() -> None:
 
 def test_position_interpolation_shrinks_the_fast_channel() -> None:
     frm, to = groups("pi_max_shrink")[0]
-    assert float(to) == spectrum_row("position_interpolation", 4096)["max_abs_angle"]
-    assert float(frm) == spectrum_row("rope_base_10k", 4096)["max_abs_angle"]
-    assert float(to) == float(frm) / EXT_SCALE
-    assert spectrum_row("position_interpolation", 512)["max_abs_angle"] == 512.0 / EXT_SCALE
+    assert float(to) == pytest.approx(
+        spectrum_row("position_interpolation", 4096)["max_abs_angle"], rel=1e-12
+    )
+    assert float(frm) == pytest.approx(
+        spectrum_row("rope_base_10k", 4096)["max_abs_angle"], rel=1e-12
+    )
+    assert float(to) == pytest.approx(float(frm) / EXT_SCALE, rel=1e-12)
+    assert spectrum_row("position_interpolation", 512)["max_abs_angle"] == pytest.approx(
+        512.0 / EXT_SCALE, rel=1e-12
+    )
 
 
 def test_plain_rope_collapses_to_zero_exactly_from_delta_861() -> None:
@@ -1843,12 +1893,22 @@ def test_the_fig01_ladder_agrees_with_the_recomputation() -> None:
     assert len(rows) == N_PAIRS
     base_freqs = R.inv_freq(HEAD_DIM, ROPE_BASE)
     yarn_freqs, _mscale = R.yarn_parameters(HEAD_DIM, ROPE_BASE, EXT_SCALE, ORIGINAL_MAX_POS)
-    assert [float(row[columns[0]]) for row in rows] == [float(v) for v in base_freqs]
-    assert [float(row[columns[1]]) for row in rows] == [float(v) for v in base_freqs / EXT_SCALE]
-    assert [float(row[columns[2]]) for row in rows] == [float(v) for v in yarn_freqs]
-    assert [float(row[columns[3]]) for row in rows] == [
-        float(v) for v in R.inv_freq(HEAD_DIM, LEGACY_BASE)
-    ]
+    # Compared to a few ULP rather than bit-for-bit: `base ** (arange/dim)` and
+    # `1.0 / (base ** (...))` are different expressions for the same number, so
+    # the ladder depends on which one the host's libm contracts, and the committed
+    # CSV was written on a different platform than CI. 1e-12 is ~4500 ULP at 1.0,
+    # far tighter than any discrepancy that could indicate a real defect.
+    for column, expected in (
+        (columns[0], base_freqs),
+        (columns[1], base_freqs / EXT_SCALE),
+        (columns[2], yarn_freqs),
+        (columns[3], R.inv_freq(HEAD_DIM, LEGACY_BASE)),
+    ):
+        written = np.array([float(row[column]) for row in rows])
+        assert np.allclose(written, expected, rtol=1e-12, atol=0.0), (
+            f"the fig01 column {column!r} disagrees with the recomputation; "
+            f"largest relative gap {np.max(np.abs(written / expected - 1.0)):.3e}"
+        )
 
 
 def test_the_pair_amplitudes_are_position_free_in_the_fig06_sidecar() -> None:

@@ -212,16 +212,45 @@ def table_row(delta: int, label: str) -> tuple[str, str, str]:
 # ==========================================================================
 
 
+def _leaves(fresh, committed, path: str = ""):
+    """Yield ``(path, committed, fresh)`` for every leaf that moved materially.
+
+    A float counts as moved only when it differs by more than ``1e-12`` relative,
+    which is ~4500 ULP at 1.0. That is far tighter than a real disagreement
+    (a changed seed, a changed grid, a changed formula) and loose enough to
+    absorb the last-bit differences between two BLAS implementations, which is
+    what made this fail on Linux while passing on Windows.
+    """
+    if isinstance(fresh, dict):
+        for key, value in committed.items():
+            yield from _leaves(fresh[key], value, f"{path}.{key}")
+    elif isinstance(fresh, list):
+        # strict=True on purpose: a list that changed length is itself staleness.
+        for index, (value, item) in enumerate(zip(fresh, committed, strict=True)):
+            yield from _leaves(value, item, f"{path}[{index}]")
+    elif isinstance(fresh, float) or isinstance(committed, float):
+        if not math.isclose(float(fresh), float(committed), rel_tol=1e-12, abs_tol=0.0):
+            yield path, committed, fresh
+    elif fresh != committed:
+        yield path, committed, fresh
+
+
 def test_measurements_json_is_current() -> None:
     """results/measurements.json must be what the code produces right now.
 
     Without this, every claim below could be satisfied by a stale data file: the
     README and the JSON would agree with each other and both disagree with the
-    code. The experiments are seeded, so the comparison is exact.
+    code. The experiments are seeded, so the comparison is reproducible.
     """
-    assert E.run_all().to_dict() == MEASUREMENTS, (
-        "results/measurements.json is stale: re-run "
-        "`python -m projects.rope_attribution.experiments`"
+    # Compared to a few ULP rather than bit-for-bit. The maths is identical, but
+    # the host BLAS changes the last bits of a float64 summation, and the
+    # committed JSON was produced on a different platform than CI runs on.
+    # rtol=1e-12 is ~4500 ULP at 1.0, far tighter than any real change.
+    live = E.run_all().to_dict()
+    drift = [(path, committed, fresh) for path, committed, fresh in _leaves(live, MEASUREMENTS)]
+    assert not drift, (
+        f"results/measurements.json is stale ({len(drift)} value(s) differ): re-run "
+        f"`python -m projects.rope_attribution.experiments`. First: {drift[0]}"
     )
 
 

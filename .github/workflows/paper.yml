@@ -32,8 +32,11 @@ jobs:
       # The document is self-contained: figures resolve by relative path and are
       # \IfFileExists-guarded, so a missing figure degrades to a labelled box
       # rather than failing the build. --keep-logs gives us main.log to inspect.
+      # tectonic will not create the output directory itself.
       - name: Compile
-        run: tectonic -X compile --outdir paper/build --keep-logs paper/main.tex
+        run: |
+          mkdir -p paper/build
+          tectonic -X compile --outdir paper/build --keep-logs paper/main.tex
 
       - name: Fail on a LaTeX error or an unresolved reference
         run: |
