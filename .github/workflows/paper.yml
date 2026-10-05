@@ -53,28 +53,44 @@ jobs:
           fi
           grep -E 'Output written' "$log"
 
-      # Guards the silent-failure mode where \IfFileExists swallows every
-      # figure and the PDF still builds.
+      # Guards the silent failure where \IfFileExists swallows every figure and the
+      # PDF still builds. Two checks, because they catch different things:
+      #   1. the placeholder string must be absent, which means no figure fell back;
+      #   2. the PDF must carry at least nine raster images, which means the figures
+      #      really were embedded.
+      # Deliberately NOT checking for the figure file names in the extracted text:
+      # \includegraphics paths are not typeset, so the names never appear there and
+      # such a check would always fail. Each figure's \caption IS typeset, so the
+      # caption text is what identifies it.
       - name: Assert the figures were actually included
         run: |
           set -euo pipefail
           pip install --quiet pypdf
-          text=$(python - <<'PY'
+          python - <<'PY'
           from pypdf import PdfReader
-          r = PdfReader("paper/build/main.pdf")
-          print("\n".join(p.extract_text() or "" for p in r.pages))
+
+          reader = PdfReader("paper/build/main.pdf")
+          pages = len(reader.pages)
+          text = "\n".join(page.extract_text() or "" for page in reader.pages)
+          images = sum(len(page.images) for page in reader.pages)
+
+          print(f"pages={pages} embedded_images={images}")
+
+          if "figure file absent at build time" in text:
+              raise SystemExit("::error::a figure fell back to its \\IfFileExists placeholder")
+
+          # One raster image per figure; allow slack for any logo or rule.
+          if images < 9:
+              raise SystemExit(
+                  f"::error::expected at least 9 embedded images, found {images}; "
+                  "a figure is probably missing"
+              )
+          # Every figure typesets a "Figure N:" caption; nine figures means nine.
+          captions = text.count("Figure ")
+          if captions < 9:
+              raise SystemExit(f"::error::expected 9 figure captions, found {captions}")
+          print("all nine figures present")
           PY
-          )
-          echo "pages: $(python -c 'from pypdf import PdfReader;print(len(PdfReader("paper/build/main.pdf").pages))')"
-          if grep -q "figure file absent at build time" <<<"$text"; then
-            echo "::error::a figure fell back to its placeholder - the PNGs are missing"; exit 1
-          fi
-          for f in fig01_frequency_ladder fig02_angle_spectrum fig03_max_vs_median_angle \
-                   fig04_linearizable_fraction fig05_linearization_error fig06_pair_exact_vs_linear \
-                   fig07_partial_rope fig08_mscale_entropy fig09_position_conditional_attribution; do
-            grep -q "$f" <<<"$text" || { echo "::error::$f not referenced in the PDF"; exit 1; }
-          done
-          echo "all nine figures present"
 
       - uses: actions/upload-artifact@v4
         with:

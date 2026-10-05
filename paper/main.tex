@@ -768,6 +768,14 @@ The fastest channel turns a full revolution per token, so it is out of the
 linear regime within three tokens of separation and stays out. No amount of
 ramping the slow tail repairs a channel that is wrong that soon.
 
+\paperfigure{fig05_linearization_error}{%
+  Amplitude-weighted and per-pair linearization error against relative distance,
+  all four schemes, log scale. The curves for RoPE and \yarn\ sit almost on top
+  of one another even though their median angles differ by more than a factor of
+  two: the error is dominated by the handful of fast channels both schemes leave
+  untouched. See Section~\ref{sec:context}.%
+}{fig:error}
+
 \paperfigure{fig06_pair_exact_vs_linear}{%
   Exact per-pair contribution against its first-order Taylor form, for five
   selected rotary pairs, under RoPE and \yarn. The fastest pair's normalized
@@ -786,8 +794,8 @@ linear regime. This is the whole of Section~\ref{sec:context} in two numbers:
 the linearization fails for the fast channels first, and \yarn does not change
 which channels those are.
 
-The amplitude-weighted view is the decisive guard on this conclusion, and it is
-where the optimistic reading dies. At $\delta = 8192$ the amplitude-weighted
+Figure~\ref{fig:error} is the decisive guard on this conclusion, and it is where
+the optimistic reading dies. At $\delta = 8192$ the amplitude-weighted
 error is $1.24572\times10^{6}$ for RoPE and $1.24179\times10^{6}$ for \yarn\,
 a ratio of $0.996840$: \yarn\ buys less than $0.4\%$ on this measure. The
 per-pair RMS ratio is $0.999977$, i.e.\ no meaningful change. The reason is
