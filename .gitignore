@@ -6,3 +6,6 @@ __pycache__/
 .pytest_cache/
 /build/
 /dist/
+
+# LaTeX build output; CI produces paper/build/main.pdf as an artifact.
+paper/build/

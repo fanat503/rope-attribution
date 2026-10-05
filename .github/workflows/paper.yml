@@ -1,0 +1,79 @@
+name: paper
+
+on:
+  push:
+    paths: ["paper/**", "figures/**", "build_tools/**"]
+  pull_request:
+    paths: ["paper/**", "figures/**", "build_tools/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paper-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: compile paper
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tectonic
+        run: |
+          version=0.15.0
+          url="https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${version}/tectonic-${version}-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL "$url" | tar xz
+          sudo mv tectonic /usr/local/bin/tectonic
+          tectonic --version
+
+      # The document is self-contained: figures resolve by relative path and are
+      # \IfFileExists-guarded, so a missing figure degrades to a labelled box
+      # rather than failing the build. --keep-logs gives us main.log to inspect.
+      - name: Compile
+        run: tectonic -X compile --outdir paper/build --keep-logs paper/main.tex
+
+      - name: Fail on a LaTeX error or an unresolved reference
+        run: |
+          set -euo pipefail
+          log=paper/build/main.log
+          echo "::group::log summary"
+          grep -E '^!|Undefined control sequence|Emergency stop|Citation .* undefined|Reference .* undefined' "$log" || true
+          echo "::endgroup::"
+          if grep -qE '^!|Undefined control sequence|Emergency stop' "$log"; then
+            echo "::error::LaTeX reported an error"; exit 1
+          fi
+          if grep -qE 'Citation .* undefined|Reference .* undefined' "$log"; then
+            echo "::error::unresolved citation or reference"; exit 1
+          fi
+          grep -E 'Output written' "$log"
+
+      # Guards the silent-failure mode where \IfFileExists swallows every
+      # figure and the PDF still builds.
+      - name: Assert the figures were actually included
+        run: |
+          set -euo pipefail
+          pip install --quiet pypdf
+          text=$(python - <<'PY'
+          from pypdf import PdfReader
+          r = PdfReader("paper/build/main.pdf")
+          print("\n".join(p.extract_text() or "" for p in r.pages))
+          PY
+          )
+          echo "pages: $(python -c 'from pypdf import PdfReader;print(len(PdfReader("paper/build/main.pdf").pages))')"
+          if grep -q "figure file absent at build time" <<<"$text"; then
+            echo "::error::a figure fell back to its placeholder - the PNGs are missing"; exit 1
+          fi
+          for f in fig01_frequency_ladder fig02_angle_spectrum fig03_max_vs_median_angle \
+                   fig04_linearizable_fraction fig05_linearization_error fig06_pair_exact_vs_linear \
+                   fig07_partial_rope fig08_mscale_entropy fig09_position_conditional_attribution; do
+            grep -q "$f" <<<"$text" || { echo "::error::$f not referenced in the PDF"; exit 1; }
+          done
+          echo "all nine figures present"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper-pdf
+          path: paper/build/main.pdf
