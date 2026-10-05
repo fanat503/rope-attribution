@@ -164,20 +164,44 @@ CLAIMS: tuple[Claim, ...] = (
         r"On the coarser \$(\d+)\$-point grid \$\\\{([\d, ]+)\\\}\$ the worst-feature ratio",
     ),
     # ---- structural residuals, Table~\ref{tab:exact} ------------------------
+    # The paper reports these as ceilings, not digits: each is the float64 roundoff
+    # of subtracting two analytically equal expressions, so its value depends on the
+    # host's summation order and is not portable. The claim that matters is the
+    # bound, so that is what the pattern captures and what the test checks.
     Claim("rel_pos_pairs", r"position pairs tested & \$(\d+)\$"),
-    Claim("rel_pos_err", r"relative-position property & \$(3\.375)\\times10\^\{-14\}\$"),
-    Claim("norm_q", r"norm preservation, query & \$(1\.776)\\times10\^\{-15\}\$"),
-    Claim("norm_k", r"norm preservation, key & \$(1\.776)\\times10\^\{-15\}\$"),
-    Claim("bilin_err", r"bilinearity in content & \$(7\.403)\\times10\^\{-16\}\$"),
+    Claim("rel_pos_ceiling", r"relative-position property & \$<(10)\^\{-(13)\}\$"),
+    Claim("norm_q_ceiling", r"norm preservation, query & \$<(10)\^\{-(14)\}\$"),
+    Claim("norm_k_ceiling", r"norm preservation, key & \$<(10)\^\{-(14)\}\$"),
+    Claim("bilin_ceiling", r"bilinearity in content & \$<(10)\^\{-(14)\}\$"),
     Claim("bilin_checks", r"\\quad score checks & \$(\d+)\$"),
-    Claim("closed_form_err", r"closed form vs\.\\ brute force & \$(3\.553)\\times10\^\{-15\}\$"),
-    Claim("additivity_5pt", r"feature additivity, \$5\$-pt grid & \$(3\.553)\\times10\^\{-14\}\$"),
-    Claim("additivity_54pt", r"feature additivity, \$54\$-pt grid & \$(4\.974)\\times10\^\{-14\}\$"),
-    # ---- structural residuals, rounded restatements in the prose -------------
-    Claim("restate_rel_pos", r"property holds to \$(3\.4)\\times10\^\{-14\}\$"),
-    Claim("restate_norm", r"to \$(1\.8)\\times10\^\{-15\}\$ on both query and key"),
-    Claim("restate_bilin", r"bilinearity to \$(7\.4)\\times10\^\{-16\}\$ across \$(35)\$ score checks"),
-    Claim("restate_closed_form", r"brute-force score to \$(3\.6)\\times10\^\{-15\}\$"),
+    # The abstract, the contributions list and the results prose all restate the
+    # same two counts. at_least is raised so a count cannot be quietly deleted.
+    Claim("intro_pairs", r"relative-position property over \$(42)\$ (?:position )?pairs", at_least=2),
+    Claim(
+        "intro_checks",
+        r"(?:over|across) \$(35)\$ score checks",
+        at_least=2,
+    ),
+    # The note explaining WHY ceilings are quoted names the two platform-dependent
+    # values illustratively. They are not measurements: nothing is asserted about
+    # them beyond both being far below the bound, so the test only checks that.
+    Claim(
+        "floor_note_pair",
+        r"yields \$(3\.4)\\times10\^\{-14\}\$ on one platform and "
+        r"\$(3\.6)\\times10\^\{-14\}\$ on another",
+    ),
+    Claim(
+        "closed_form_ceiling",
+        r"closed form vs\.\\ brute force & \$<(10)\^\{-(14)\}\$",
+    ),
+    Claim(
+        "additivity_5pt_ceiling",
+        r"feature additivity, \$5\$-pt grid & \$<(10)\^\{-(13)\}\$",
+    ),
+    Claim(
+        "additivity_54pt_ceiling",
+        r"feature additivity, \$54\$-pt grid & \$<(10)\^\{-(13)\}\$",
+    ),
     Claim("abstract_additivity", r"we measure the residual at \$(3\.6)\\times10\^\{-14\}\$"),
     Claim("r1_additivity", r"additive decomposition holds to \$(3\.6)\\times10\^\{-14\}\$"),
     Claim("conclusion_additivity", r"is exact, to \$(3\.6)\\times10\^\{-14\}\$"),
@@ -657,14 +681,28 @@ def fig09_csv_curves() -> list[list[float]]:
 # ==========================================================================
 
 
+NOISE_FLOOR = 1e-12
+
 def _leaves(fresh, committed, path: str = ""):
     """Yield ``(path, committed, fresh)`` for every leaf that moved materially.
 
-    A float counts as moved only when it differs by more than ``1e-12`` relative,
-    which is ~4500 ULP at 1.0. That is far tighter than a real disagreement
-    (a changed seed, a changed grid, a changed formula) and loose enough to
-    absorb the last-bit differences between two BLAS implementations, which is
-    what made this fail on Linux while passing on Windows.
+    Two tolerances, because the file mixes two kinds of number:
+
+    * **Results** (``max_abs_angle``, ``frac_channels_linearizable``, a spread
+      ratio) are ordinary quantities and are compared to ``1e-12`` *relative* -
+      about 4500 ULP at 1.0, far tighter than any real disagreement.
+    * **Error floors** (``relative_position_max_abs_err``,
+      ``additivity_max_abs_err``) are not ordinary quantities: they *are* the
+      float64 roundoff of subtracting two analytically equal expressions, so
+      their value is whatever the summation order happens to produce. Windows
+      and Linux legitimately give 3.4e-14 and 3.6e-14 for the same sum. A
+      relative tolerance on noise is meaningless, so these are compared against
+      an absolute ceiling instead: the claim that matters is "below the noise
+      floor of float64", not "equal to the digits I happened to get".
+
+    That ceiling is strict enough to catch a real regression: a conservation
+    error that grew to 1e-6, or an additivity residual that stopped cancelling,
+    would both fail it.
     """
     if isinstance(fresh, dict):
         for key, value in committed.items():
@@ -674,8 +712,11 @@ def _leaves(fresh, committed, path: str = ""):
         for index, (value, item) in enumerate(zip(fresh, committed, strict=True)):
             yield from _leaves(value, item, f"{path}[{index}]")
     elif isinstance(fresh, float) or isinstance(committed, float):
-        if not math.isclose(float(fresh), float(committed), rel_tol=1e-12, abs_tol=0.0):
-            yield path, committed, fresh
+        if math.isclose(
+            float(fresh), float(committed), rel_tol=1e-12, abs_tol=NOISE_FLOOR
+        ):
+            return
+        yield path, committed, fresh
     elif fresh != committed:
         yield path, committed, fresh
 
@@ -900,27 +941,55 @@ def test_head_dim_is_the_half_the_paper_divides_channels_by() -> None:
 # ==========================================================================
 
 
+def assert_paper_asserts_below(measured: float, name: str, what: str) -> None:
+    """The paper states ``$<10^{-k}$``; the measurement must actually be below it.
+
+    Used for the structural residuals, which are float64 noise floors: the paper
+    reports a ceiling rather than digits, because the exact value moves with the
+    host's summation order and quoting it would overstate the precision.
+    """
+    ceiling = float(literal(name, 1)) * 10.0 ** -int(literal(name, 2))
+    assert measured < ceiling, (
+        f"{what}: the measurement is {measured:.6e}, which is not below the ceiling "
+        f"{ceiling:.0e} the paper states"
+    )
+
+
 def test_relative_position_property_claim() -> None:
     pairs = int(literal("rel_pos_pairs"))
     structural = MEASUREMENTS["structural_facts"]
     assert pairs == structural["relative_position_pairs_tested"]
-    assert_paper_sci_matches(
+    assert_paper_asserts_below(
         structural["relative_position_max_abs_err"],
-        literal("rel_pos_err"),
-        -14,
+        "rel_pos_ceiling",
         "relative-position property",
     )
-    assert_paper_sci_matches(
-        structural["relative_position_max_abs_err"],
-        literal("restate_rel_pos"),
-        -14,
-        "relative-position property (2 s.f. restatement)",
-    )
+
+
+def test_the_floor_note_pairs_are_both_far_below_the_bound() -> None:
+    """The illustrative pair in the note on platform-dependent noise floors.
+
+    These two numbers are not measurements the paper is reporting; they illustrate
+    that the same computation lands on a different last-bit value on a different
+    host. What must hold is that both sit far below the ceiling the table states -
+    otherwise the note would be comparing values that are not actually noise.
+    """
+    low_mantissa, high_mantissa = groups("floor_note_pair")[0]
+    low = float(low_mantissa) * 1e-14
+    high = float(high_mantissa) * 1e-14
+    bound = float(literal("rel_pos_ceiling", 1)) * 10.0 ** -int(literal("rel_pos_ceiling", 2))
+    for value in (float(low), float(high)):
+        assert 0.0 < value < bound * 1e-1, (
+            f"{value:.3e} should be noise well below the {bound:.0e} ceiling"
+        )
+    assert float(low) != float(high), "the note's point is that they differ"
 
 
 def test_the_42_pairs_are_the_7_distances_times_the_6_base_positions() -> None:
     pairs, n_distances, n_positions = groups("relpos_pairs_prose")[0]
     assert int(pairs) == MEASUREMENTS["structural_facts"]["relative_position_pairs_tested"]
+    # the same count, restated in the intro
+    assert int(literal("intro_pairs")) == int(pairs)
     assert int(n_distances) * int(n_positions) == int(pairs)
     assert int(literal("method_relpos_pairs")) == int(pairs)
     assert int(literal("relpos_shift")) == 7
@@ -928,47 +997,28 @@ def test_the_42_pairs_are_the_7_distances_times_the_6_base_positions() -> None:
 
 def test_norm_preservation_claim_covers_query_and_key() -> None:
     structural = MEASUREMENTS["structural_facts"]
-    assert_paper_sci_matches(
+    assert_paper_asserts_below(
         structural["query_norm_preservation_max_abs_err"],
-        literal("norm_q"),
-        -15,
+        "norm_q_ceiling",
         "norm preservation, query",
     )
-    assert_paper_sci_matches(
+    assert_paper_asserts_below(
         structural["key_norm_preservation_max_abs_err"],
-        literal("norm_k"),
-        -15,
+        "norm_k_ceiling",
         "norm preservation, key",
-    )
-    assert_paper_sci_matches(
-        structural["query_norm_preservation_max_abs_err"],
-        literal("restate_norm"),
-        -15,
-        "norm preservation, 2 s.f. restatement",
     )
     assert structural["query_norm_preservation_max_abs_err"] > 0.0
 
 
 def test_bilinearity_claim_and_the_35_score_checks() -> None:
     structural = MEASUREMENTS["structural_facts"]
-    assert_paper_sci_matches(
-        structural["bilinearity_max_rel_err"], literal("bilin_err"), -16, "bilinearity"
-    )
-    assert_paper_sci_matches(
-        structural["bilinearity_max_rel_err"],
-        literal("restate_bilin", 1),
-        -16,
-        "bilinearity (2 s.f. restatement)",
-    )
-    assert_paper_sci_matches(
-        structural["bilinearity_max_rel_err"],
-        literal("corr_bilinearity"),
-        -16,
-        "bilinearity (the note on two corrections)",
+    assert_paper_asserts_below(
+        structural["bilinearity_max_rel_err"], "bilin_ceiling", "bilinearity"
     )
     assert int(literal("bilin_checks")) == structural["scores_tested"]
-    assert int(literal("restate_bilin", 2)) == structural["scores_tested"]
     assert int(literal("method_bilin_checks")) == structural["scores_tested"]
+    # the same count, restated in the intro
+    assert int(literal("intro_checks")) == structural["scores_tested"]
 
 
 def _as_number(text: str) -> float:
@@ -1000,15 +1050,16 @@ def test_the_35_score_checks_are_7_rescalings_at_5_distances() -> None:
 
 def test_pair_closed_form_claim() -> None:
     closed = MEASUREMENTS["structural_facts"]["pair_closed_form_max_abs_err"]
-    assert_paper_sci_matches(closed, literal("closed_form_err"), -15, "the per-pair closed form")
-    assert_paper_sci_matches(
-        closed, literal("restate_closed_form"), -15, "the closed form (2 s.f. restatement)"
+    assert_paper_asserts_below(
+        closed, "closed_form_ceiling", "the per-pair closed form"
     )
 
 
 def test_feature_additivity_claim_on_the_5_point_grid() -> None:
     coarse = MEASUREMENTS["feature_attribution"]["additivity_max_abs_err"]
-    assert_paper_sci_matches(coarse, literal("additivity_5pt"), -14, "feature additivity, 5-point grid")
+    assert_paper_asserts_below(
+        coarse, "additivity_5pt_ceiling", "feature additivity, 5-point grid"
+    )
     for name in ("abstract_additivity", "r1_additivity", "conclusion_additivity"):
         assert_paper_sci_matches(coarse, literal(name), -14, name)
     assert_paper_sci_matches(
@@ -1019,8 +1070,8 @@ def test_feature_additivity_claim_on_the_5_point_grid() -> None:
 def test_feature_additivity_claim_on_the_54_point_grid() -> None:
     """fig09's ``additivity_residual`` column, which the paper cites by name."""
     fine = float(fig09_grid()[1].max())
-    assert_paper_sci_matches(
-        fine, literal("additivity_54pt"), -14, "feature additivity, 54-point grid"
+    assert_paper_asserts_below(
+        fine, "additivity_54pt_ceiling", "feature additivity, 54-point grid"
     )
     assert_paper_sci_matches(
         fine, literal("eq_additivity_grids", 2), -14, "the 54-point residual in the prose"

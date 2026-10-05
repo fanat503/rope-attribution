@@ -212,14 +212,29 @@ def table_row(delta: int, label: str) -> tuple[str, str, str]:
 # ==========================================================================
 
 
+NOISE_FLOOR = 1e-12
+
+
 def _leaves(fresh, committed, path: str = ""):
     """Yield ``(path, committed, fresh)`` for every leaf that moved materially.
 
-    A float counts as moved only when it differs by more than ``1e-12`` relative,
-    which is ~4500 ULP at 1.0. That is far tighter than a real disagreement
-    (a changed seed, a changed grid, a changed formula) and loose enough to
-    absorb the last-bit differences between two BLAS implementations, which is
-    what made this fail on Linux while passing on Windows.
+    Two tolerances, because the file mixes two kinds of number:
+
+    * **Results** (``max_abs_angle``, ``frac_channels_linearizable``, a spread
+      ratio) are ordinary quantities and are compared to ``1e-12`` *relative* -
+      about 4500 ULP at 1.0, far tighter than any real disagreement.
+    * **Error floors** (``relative_position_max_abs_err``,
+      ``additivity_max_abs_err``) are not ordinary quantities: they *are* the
+      float64 roundoff of subtracting two analytically equal expressions, so
+      their value is whatever the summation order happens to produce. Windows
+      and Linux legitimately give 3.4e-14 and 3.6e-14 for the same sum. A
+      relative tolerance on noise is meaningless, so these are compared against
+      an absolute ceiling instead: the claim that matters is "below the noise
+      floor of float64", not "equal to the digits I happened to get".
+
+    That ceiling is strict enough to catch a real regression: a conservation
+    error that grew to 1e-6, or an additivity residual that stopped cancelling,
+    would both fail it.
     """
     if isinstance(fresh, dict):
         for key, value in committed.items():
@@ -229,8 +244,11 @@ def _leaves(fresh, committed, path: str = ""):
         for index, (value, item) in enumerate(zip(fresh, committed, strict=True)):
             yield from _leaves(value, item, f"{path}[{index}]")
     elif isinstance(fresh, float) or isinstance(committed, float):
-        if not math.isclose(float(fresh), float(committed), rel_tol=1e-12, abs_tol=0.0):
-            yield path, committed, fresh
+        if math.isclose(
+            float(fresh), float(committed), rel_tol=1e-12, abs_tol=NOISE_FLOOR
+        ):
+            return
+        yield path, committed, fresh
     elif fresh != committed:
         yield path, committed, fresh
 

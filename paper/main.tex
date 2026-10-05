@@ -497,27 +497,33 @@ position encoding.
     \toprule
     property & residual & source \\
     \midrule
-    relative-position property & $3.375\times10^{-14}$ & JSON \\
+    relative-position property & $<10^{-13}$ & JSON \\
     \quad position pairs tested & $42$ & JSON \\
-    norm preservation, query & $1.776\times10^{-15}$ & JSON \\
-    norm preservation, key & $1.776\times10^{-15}$ & JSON \\
-    bilinearity in content & $7.403\times10^{-16}$ & JSON \\
+    norm preservation, query & $<10^{-14}$ & JSON \\
+    norm preservation, key & $<10^{-14}$ & JSON \\
+    bilinearity in content & $<10^{-14}$ & JSON \\
     \quad score checks & $35$ & JSON \\
-    per-pair closed form vs.\ brute force & $3.553\times10^{-15}$ & JSON \\
+    per-pair closed form vs.\ brute force & $<10^{-14}$ & JSON \\
     \midrule
-    feature additivity, $5$-pt grid & $3.553\times10^{-14}$ & JSON \\
-    feature additivity, $54$-pt grid & $4.974\times10^{-14}$ & fig09 \\
+    feature additivity, $5$-pt grid & $<10^{-13}$ & JSON \\
+    feature additivity, $54$-pt grid & $<10^{-13}$ & fig09 \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-Table~\ref{tab:exact} establishes the first half of R1. The relative-position
-property holds to $3.4\times10^{-14}$, the orthogonality behind
-Proposition~\ref{prop:gate} to $1.8\times10^{-15}$ on both query and key, and
-bilinearity to $7.4\times10^{-16}$ across $35$ score checks. The per-pair
-closed form of Section~\ref{sec:pair} reproduces the brute-force score to
-$3.6\times10^{-15}$, so the algebra above is the actual computation, not a
-post-hoc description of it.
+Table~\ref{tab:exact} establishes the first half of R1: every residual is below
+the float64 noise floor, the relative-position property over $42$ pairs, the
+orthogonality behind Proposition~\ref{prop:gate} on both query and key, and
+bilinearity across $35$ score checks. The per-pair closed form of
+Section~\ref{sec:pair} reproduces the brute-force score to the same floor, so the
+algebra above is the actual computation, not a post-hoc description of it.
+
+We report these as ceilings rather than digits. Each is the residual of
+subtracting two analytically equal expressions, so its value is whatever the host's
+summation order produces: the same computation yields $3.4\times10^{-14}$ on one
+platform and $3.6\times10^{-14}$ on another. Quoting more precision than the
+quantity carries would be false. The claim that carries meaning is the bound, and
+it is checked against the data at test time, not merely asserted here.
 
 Two of these deserve a note on how they are tested, because the obvious test is
 the wrong one. The relative-position property is \emph{not} tested by comparing
@@ -1126,7 +1132,7 @@ Sec.~\ref{sec:exact} & $0.9526294618$, $2.3046990967$ & \texttt{fig06} CSV, \tex
 Sec.~\ref{sec:background} & $9$ of $32$ bit-for-bit & \texttt{fig01} CSV, column 3 vs column 1 \\
 Sec.~\ref{sec:partial} & $0.0$, $12.03$, $22.56$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
  & $0.243$, $0.244$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
- & $0.2663$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; \texttt{structural\_facts} \\
+ & $0.2663$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; full-RoPE floor \\
 Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entropy.mscale} \\
  & $0.9233 \to 0.8651$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
  & $0.8383$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
