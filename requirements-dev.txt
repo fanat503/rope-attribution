@@ -1,0 +1,20 @@
+# Development and CI dependencies for the rope_attribution package, CPU only.
+#
+# Deliberately kept separate from projects/requirements.txt. That file pins the
+# GPU experiment stack (torch, transformer-lens, nnsight, transformers, ...)
+# with exact versions that were used for a specific set of research runs. It is
+# not what you install to work on, test or lint this package: pulling it in
+# would drag in multi-gigabyte CUDA wheels and pin numpy to 1.26.4, which would
+# mask the >=1.26 range the project actually declares in pyproject.toml.
+#
+# The split mirrors the `dev` optional-dependency group in pyproject.toml; keep
+# the two in sync if you add a tool here.
+#
+# numpy is not repeated below: it is a hard runtime dependency of the package
+# itself (see [project].dependencies) and arrives via `pip install -e .`.
+#
+# Lower bounds only. Exact versions are pinned in projects/requirements.txt for
+# the frozen GPU archive; for the library, a floor that matches the declared
+# support range is the honest constraint. CI runs on Python 3.10 and 3.11.
+pytest>=7.0
+ruff

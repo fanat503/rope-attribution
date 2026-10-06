@@ -1,0 +1,25 @@
+# Extra dependencies for projects/rope_attribution/real_model.py ONLY.
+#
+# The library itself, the rest of the package and the rest of the test suite need
+# numpy alone (see [project].dependencies in pyproject.toml). real_model.py
+# repeats the structural measurements of experiments.py on a real pretrained
+# checkpoint, which needs a tensor library and a model hub. Neither is a runtime
+# dependency of rope.py or experiments.py, and neither is imported at module
+# import time - real_model.py resolves both with importlib.util.find_spec and
+# exposes REAL_MODEL_AVAILABLE so the test suite skips cleanly without them.
+#
+# Install torch CPU-only. Do NOT install a CUDA build: the default PyPI wheel
+# pulls in several hundred megabytes of driver libraries this measurement does
+# not need, and the whole point of the run is one-shot CPU inference.
+#
+#     pip install --index-url https://download.pytorch.org/whl/cpu torch
+#     pip install -r real_model_requirements.txt
+#
+# The three checkpoints in real_model.DEFAULT_MODEL_IDS are ~0.2-0.5 GB each and
+# are downloaded on first use into the huggingface_hub cache, not vendored here.
+#
+# torch is installed from the CPU index above rather than listed below, because
+# pinning it here would make pip resolve the CUDA wheel from PyPI on a machine
+# where the CPU index was not passed on the command line.
+transformers>=4.40
+safetensors>=0.4

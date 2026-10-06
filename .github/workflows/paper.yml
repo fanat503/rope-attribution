@@ -1,0 +1,98 @@
+name: paper
+
+on:
+  push:
+    paths: ["paper/**", "figures/**", "build_tools/**"]
+  pull_request:
+    paths: ["paper/**", "figures/**", "build_tools/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paper-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: compile paper
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tectonic
+        run: |
+          version=0.15.0
+          url="https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${version}/tectonic-${version}-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL "$url" | tar xz
+          sudo mv tectonic /usr/local/bin/tectonic
+          tectonic --version
+
+      # The document is self-contained: figures resolve by relative path and are
+      # \IfFileExists-guarded, so a missing figure degrades to a labelled box
+      # rather than failing the build. --keep-logs gives us main.log to inspect.
+      # tectonic will not create the output directory itself.
+      - name: Compile
+        run: |
+          mkdir -p paper/build
+          tectonic -X compile --outdir paper/build --keep-logs paper/main.tex
+
+      - name: Fail on a LaTeX error or an unresolved reference
+        run: |
+          set -euo pipefail
+          log=paper/build/main.log
+          echo "::group::log summary"
+          grep -E '^!|Undefined control sequence|Emergency stop|Citation .* undefined|Reference .* undefined' "$log" || true
+          echo "::endgroup::"
+          if grep -qE '^!|Undefined control sequence|Emergency stop' "$log"; then
+            echo "::error::LaTeX reported an error"; exit 1
+          fi
+          if grep -qE 'Citation .* undefined|Reference .* undefined' "$log"; then
+            echo "::error::unresolved citation or reference"; exit 1
+          fi
+          grep -E 'Output written' "$log"
+
+      # Guards the silent failure where \IfFileExists swallows every figure and the
+      # PDF still builds. Two checks, because they catch different things:
+      #   1. the placeholder string must be absent, which means no figure fell back;
+      #   2. the PDF must carry at least nine raster images, which means the figures
+      #      really were embedded.
+      # Deliberately NOT checking for the figure file names in the extracted text:
+      # \includegraphics paths are not typeset, so the names never appear there and
+      # such a check would always fail. Each figure's \caption IS typeset, so the
+      # caption text is what identifies it.
+      - name: Assert the figures were actually included
+        run: |
+          set -euo pipefail
+          pip install --quiet pypdf
+          python - <<'PY'
+          from pypdf import PdfReader
+
+          reader = PdfReader("paper/build/main.pdf")
+          pages = len(reader.pages)
+          text = "\n".join(page.extract_text() or "" for page in reader.pages)
+          images = sum(len(page.images) for page in reader.pages)
+
+          print(f"pages={pages} embedded_images={images}")
+
+          if "figure file absent at build time" in text:
+              raise SystemExit("::error::a figure fell back to its \\IfFileExists placeholder")
+
+          # One raster image per figure; allow slack for any logo or rule.
+          if images < 9:
+              raise SystemExit(
+                  f"::error::expected at least 9 embedded images, found {images}; "
+                  "a figure is probably missing"
+              )
+          # Every figure typesets a "Figure N:" caption; nine figures means nine.
+          captions = text.count("Figure ")
+          if captions < 9:
+              raise SystemExit(f"::error::expected 9 figure captions, found {captions}")
+          print("all nine figures present")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper-pdf
+          path: paper/build/main.pdf

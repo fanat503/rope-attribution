@@ -1,3 +1,11 @@
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+/build/
+/dist/
+
+# LaTeX build output; CI produces paper/build/main.pdf as an artifact.
+paper/build/

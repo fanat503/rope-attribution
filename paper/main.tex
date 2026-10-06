@@ -1,0 +1,1184 @@
+% =====================================================================
+%  Attributing RoPE: exact score attribution, and what actually limits it
+%
+%  Self-contained NeurIPS-format preprint (two-column review layout).
+%  Build:  pdflatex main && bibtex main && pdflatex main && pdflatex main
+%
+%  EVERY quantitative claim in this paper is traceable to one of:
+%    results/measurements.json   (canonical, committed)
+%    figures/figNN_*.csv          (CSV sidecar of the plotted array)
+%  The appendix section "Provenance of every number" carries the audit.
+%
+%  Figures are included by relative path and guarded with \IfFileExists
+%  so that the document still compiles with an empty ../figures/.
+% =====================================================================
+\documentclass[twocolumn]{article}
+
+% ---- review/preprint setup, self-contained (no .sty files required) ----
+\usepackage{natbib}
+% Geometry: give the package ONE non-contradictory specification. The
+% previous pair (\usepackage[margin=1in]{geometry} followed by
+% \geometry{textwidth=5.5in,textheight=9in}) made geometry emit
+%   "Over-specification in `h'-direction. `width' (397.485pt) is ignored"
+% and lay the document out at 6.5in wide, silently discarding the declared
+% 5.5in. textheight=9in on letterpaper reproduces the intended 1in top and
+% bottom margins; the 5.5in block is then centred (1.5in left/right).
+\usepackage[letterpaper,textwidth=5.5in,textheight=9in]{geometry}
+\setlength{\columnsep}{0.25in}
+\usepackage{amsmath,amssymb,amsthm,bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+% natbib already defines \bibsep as a *length* (it is used as
+% \setlength{\itemsep}{\bibsep} inside thebibliography), so widen that
+% register rather than trying to \newcommand it.
+\renewcommand{\bibname}{References}
+\setlength{\bibsep}{\bigskipamount}
+
+% ---- theorem environments ----
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% ---- figure guard: include if present, otherwise typeset a labelled box ----
+% \paperfigure{<file stem under ../figures/>}{<caption>}{<label>}
+\newcommand{\paperfigure}[3]{%
+  \begin{figure}[t]
+    \centering
+    \IfFileExists{../figures/#1.png}{%
+      % --- true branch: the PNG is on disk -------------------------
+      \includegraphics[width=\linewidth]{../figures/#1.png}%
+    }{%
+      % --- false branch: typeset a labelled placeholder -------------
+      \fbox{%
+        \parbox[c][3.2cm][c]{0.94\linewidth}{%
+          \centering
+          {\footnotesize\ttfamily ../figures/#1.png}\\[4pt]
+          {\footnotesize (figure file absent at build time; the CSV
+           sidecar in ../figures/ carries the plotted array)}%
+        }%
+      }%
+    }%
+    \caption{#2}%
+    \label{#3}%
+  \end{figure}%
+}%
+
+% ---- inline helpers ----
+\newcommand{\rope}{\textsc{rope}}
+\newcommand{\yarn}{\textsc{yarn}}
+\newcommand{\pip}{\textsc{pp-rope}}
+% short handles used in Related Work only
+\newcommand{\alpibib}{\textsc{alibi}}
+\newcommand{\lengthxtrap}{\textsc{length-extrap.}}
+\newcommand{\longrope}{\textsc{longrope}}
+\newcommand{\ropetheory}{\textsc{round-and-round}}
+\newcommand{\R}{R}
+\newcommand{\invf}{\mathrm{inv\_freq}}
+\newcommand{\D}{\mathrm{D}_k}
+\newcommand{\Ak}{A_k}
+\newcommand{\Bk}{B_k}
+\newcommand{\Rk}{R_k}
+\newcommand{\psik}{\psi_k}
+\newcommand{\half}{d/2}
+\newcommand{\rad}{\mathrm{rad}}
+
+\title{\vspace{-2.5ex}%
+  \textbf{Attributing Rotary Position Embeddings: Exact Score Attribution,
+  and What Actually Limits It}%
+  \vspace{-1.5ex}}
+
+\author{}
+
+\begin{document}
+
+% With the twocolumn class option, article's \maketitle already spans both
+% columns; do not wrap it in another \twocolumn.
+\maketitle
+
+\begin{abstract}
+Rotary position embeddings (RoPE) \citep{su2021ropeformer} are the default
+positional encoding in most modern transformers, and interpretability work now
+routinely attributes attention scores to learned features using an additive
+decomposition. We take the structure of that decomposition seriously and ask a
+narrow question: \emph{exactly} what does RoPE do to it? Three things. First,
+for a fixed pair of positions, the RoPE attention score is exactly bilinear in
+the content vectors, so the additive feature decomposition
+$\mathrm{score} = \sum_{ij} f_i g_j A_{ij}(\delta)$ is exact, not approximate;
+we measure the residual at $3.6\times10^{-14}$. Because the rotary transform is
+orthogonal, the magnitude gate $|q|$ is exactly position-independent, which
+promotes the gate/phase split from heuristic to theorem. Second, the exactness
+does not extend to position-\emph{free} coefficients: $A_{ij}$ is a function of
+the relative distance $\delta$, and we measure one feature's contribution
+swinging by up to $920.04\times$ in magnitude across the distance grid while
+the total remains additive to $5.0\times10^{-14}$. A position-free per-feature
+attribution number is therefore not well-posed under RoPE; the per-feature,
+per-distance one is. Third, we measure what context extension actually buys.
+YaRN \citep{peng2023yarn} keeps $\mathrm{base} = 10000$ and ramps per frequency;
+consequently $\max_k|\D|$ is bit-identical to plain RoPE at every one of $54$
+tested distances, while the median angle falls by a constant factor of $0.4464$
+and the linearizable fraction rises. Position interpolation
+\citep{chen2023positionalinterp} and the common ``raise the base'' heuristic are
+measured as controls. The honest conclusion is that context extension buys a
+larger linearizable \emph{majority}, not a safe global linearization of the
+head, because a few fast channels dominate the error. Partial RoPE is the clean
+exception: at $p = 0.25$ the unrotated sub-score is position-free to exactly
+zero spread. All numbers here are computed from a from-scratch implementation;
+this is a structural characterization, and we state explicitly what it does not
+include.
+\end{abstract}
+
+% =====================================================================
+\section{Introduction}
+
+Feature-level attribution has become a working tool in mechanistic
+interpretability. Given a decomposition of an activation into a sum of learned
+features, one asks how much each feature contributed to a circuit's output.
+Applied to attention, this runs into a structural question that is usually
+glossed over: attention scores are computed between a query at one position and
+a key at another, and under a positional encoding, ``how much did feature $i$
+contribute'' is not obviously a scalar.
+
+Under RoPE it is not a scalar, and the reason is specific. In this paper we
+derive the score in the relative frame, where RoPE's orthogonality makes the
+query unrotated and the key rotated by $\R_{\delta}$, $\delta = n - m$.
+Expanding that inner product channel by channel yields an exact closed form: the
+head decomposes into $\half$ rotary pairs, each contributing a single sinusoid
+in $\delta$ whose amplitude is fixed by the content vectors and whose phase
+moves linearly with distance. The amplitude is a \emph{gate}; the phase is the
+whole of the position dependence. This is a cleaner object than the score
+itself, and it is exactly computable.
+
+Three results follow, and we state them as precisely as we can.
+
+\paragraph{R1: attribution is exact, and the gate/phase split is a theorem.}
+For a fixed position pair the score is exactly bilinear in $(q, k)$, so the
+additive decomposition holds to $3.6\times10^{-14}$. Moreover, because
+$\R_{\delta}$ is orthogonal, $|q|$ and $|k|$ are exactly
+position-independent. Any claim that RoPE corrupts bilinearity, or smears the
+gate with position, is false at the score level, and we measure it to be false
+rather than asserting it.
+
+\paragraph{R2: the real obstacle is position-conditionality, not bilinearity.}
+$A_{ij}$ depends on $\delta$. A single feature's contribution is a function of
+distance, not a number. We measure swings of up to $920.04\times$ across a
+$54$-point distance grid, against an additivity residual of
+$5.0\times10^{-14}$. The well-posed object under RoPE is a per-feature,
+per-distance attribution. A position-free scalar per feature is not.
+
+\paragraph{R3: context extension buys a majority, not a global linearization.}
+The common story is that RoPE's angles grow without bound and methods fix it by
+damping them. Measuring $\max_k |\D|$, $\operatorname{median}_k |\D|$ and the
+fraction of channels admitting $\cos \D \mapsto 1 - \D^2/2$,
+$\sin \D \mapsto \D$ across RoPE, \yarn, position interpolation and the
+``$\mathrm{base} = 500000$'' heuristic, we find $\max_k |\D|$ is
+\emph{identical} for RoPE and \yarn\ at every distance tested. \yarn\
+deliberately leaves the fastest channel alone. It lowers the median and raises
+the linearizable fraction, but the amplitude-weighted error ratio
+\yarn/RoPE is $0.99684$ at $\delta = 8192$. The fast channels dominate the
+error and \yarn\ does not touch them.
+
+\subsection{What we do not claim}
+
+This matters enough to state before the results.
+
+\begin{itemize}
+  \itemsep2pt
+  \item \textbf{There is no trained model here, and no real activations.} Every
+    measurement is made on synthetic query and key vectors drawn from a fixed
+    seed and projected through synthetic feature directions. We never load a
+    checkpoint.
+  \item \textbf{There is no sparse autoencoder anywhere in this work.} The
+    feature decomposition we attribute over is a synthetic construction with
+    $8$ random directions and non-negative coefficients, chosen to mimic the
+    shape of a sparse code, not learned from anything. It is a test fixture for
+    the algebra, not a model of a real feature set.
+  \item \textbf{There is no retrieval benchmark and no accuracy measurement.} We
+    report no perplexity, no needle-in-a-haystack score, no long-context
+    retrieval result. We cannot and do not report anything of the form ``the
+    model retrieves the needle with accuracy $0.7$'', because nothing like that
+    is measured. Where we compare RoPE and \yarn, we compare \emph{quantities of
+    the position encoding}: angles, linearizable fractions, error ratios.
+  \item \textbf{We do not claim any scheme is better in practice.} RoPE, \yarn\
+    and position interpolation are all in real use. Our table ranks them on
+    angle geometry only, and Section~\ref{sec:context} shows that a favourable
+    ranking on one axis does not transfer to the amplitude-weighted one.
+  \item \textbf{The conclusions are model-independent by construction.} That is
+    deliberate. They are claims about the structure of the score under a
+    particular positional encoding, and they would hold for any head using it.
+\end{itemize}
+
+The contribution, stated exactly: a correct, carefully measured characterization
+of what RoPE does to feature-level attention attribution, an identification of
+position-conditionality as the operative obstruction, and a measurement of the
+actual effect of context extension on the quantities that determine whether a
+head can be linearized.
+
+% =====================================================================
+\section{Background}
+\label{sec:background}
+
+\subsection{Rotary position embeddings}
+
+Let $d$ be an even head dimension and let $x_m \in \mathbb{R}^d$ be the
+pre-projection content at absolute position $m$. RoPE defines
+\begin{equation}
+  \begin{split}
+    \invf_k &= \mathrm{base}^{-2k/d},\; k = 0, \dots, \half - 1,\\
+    \mathrm{base} &= 10000 .
+  \end{split}
+\end{equation}
+and applies a block-diagonal rotation $\R_m$ whose $k$-th $2\times2$ block
+rotates by the angle $m \cdot \invf_k$. With $q = W_Q x_m$ and $k = W_K x_n$ the
+projections taken before rotation, the score at query position $m$ and key
+position $n$ is
+\begin{equation}
+  s(m,n) \;=\; \bigl(\R_m q\bigr)^{\!\top} \bigl(\R_n k\bigr).
+  \label{eq:rope}
+\end{equation}
+This is the formulation of \citet{su2021ropeformer}. Our implementation follows
+the split-half convention, pairing channel $i$ with $i + \half$, so that one
+frequency vector of length $\half$ drives all $d$ channels.
+
+\subsection{The relative frame}
+
+The rotation matrices $\R_m$ are orthogonal, hence $\R_m^{\!\top}\R_m = I$.
+Factoring through the relative frame gives
+\begin{equation}
+  \begin{split}
+    \R_m^{\!\top} \bigl(\R_n k\bigr) \;=\; \R_m^{\!\top}\R_n k \;=\; \R_{n-m} k,\\
+    \R_m^{\!\top} \bigl(\R_m q\bigr) \;=\; q .
+  \end{split}
+\end{equation}
+and therefore
+\begin{equation}
+  s(m,n) \;=\; q^{\!\top} \R_{\delta} k, \qquad \delta = n - m,
+  \label{eq:relative}
+\end{equation}
+which depends on the two absolute positions only through their difference,
+reducing the score of Equation~\ref{eq:rope} to a function of one number. This is
+the relative-position property, and it is what makes the rest of the paper
+possible: from here on, ``position'' means $\delta$ and nothing else.
+
+\begin{proposition}[The gate is position-free]
+\label{prop:gate}
+$\bigl|\R_{\delta} k\bigr| = \bigl|k\bigr|$ for all $\delta$. Consequently the
+magnitude of the query and of the key is exactly position-independent, and all
+position information in $s(\delta)$ is carried by the rotation angle alone.
+\end{proposition}
+
+Proposition~\ref{prop:gate} is the load-bearing statement for the gate/phase
+split used in sparse-feature interpretability: the ``gate'' $|q|$ is not an
+approximation of the position-free part, it is \emph{exactly} the
+position-free part, and the ``phase'' is the entire remainder. We measure the
+numerical residual of this orthogonality in Section~\ref{sec:exact}.
+
+\subsection{The per-pair closed form}
+\label{sec:pair}
+
+Group the head into rotary pairs $(k, k + \half)$, so that $\R_{\delta}$ mixes
+exactly these two channels. In the split-half convention, the $k$-th block of
+$\R_{\delta}$ acts on $(q[k], q[k+\half])$ and $(k[k], k[k+\half])$ as
+\begin{equation}
+  \begin{split}
+    \R_\delta^{(k)} \;=\;
+    \begin{pmatrix} \cos \D & -\sin \D \\ \sin \D & \cos \D \end{pmatrix},
+    \\[-1pt]
+    \qquad \D = \delta \invf_k .
+  \end{split}
+\end{equation}
+with the same $\D$ on both diagonals. Expanding $q^{\!\top}\R_{\delta}k$ over
+that block and collecting terms gives, exactly,
+\begin{align}
+  \Ak &= q[k]\,k[k] \;+\; q[k+\half]\,k[k+\half] \label{eq:A}\\
+  \Bk &= q[k+\half]\,k[k] \;-\; q[k]\,k[k+\half] \label{eq:B}\\
+  c_k(\delta) &= \Ak \cos\D + \Bk \sin\D \\
+  &= \Rk\cos(\D - \psik), \\
+  \Rk &= \operatorname{hypot}(\Ak, \Bk), \\
+  \psik &= \operatorname{atan2}(\Bk, \Ak).
+\end{align}
+and the score is $s(\delta) = \sum_{k < \half} c_k(\delta)$. The two
+coefficients are therefore fixed by the content vectors alone, and the whole of
+the $\delta$-dependence sits in the single angle $\D$.
+
+Note also what the closed form does \emph{not} depend on. $\Rk$ is a
+hypot of two products of content coordinates; it is the same number at
+$\delta = 1$ and at $\delta = 8192$. That is the content of
+Proposition~\ref{prop:blind}, and it is what lets us speak of a per-pair
+``gate'' at all. Two structural facts follow immediately, and both are exact
+rather than asymptotic.
+
+\begin{proposition}[Position-blindness]
+\label{prop:blind}
+The two coefficients $\Ak$ of Equation~\ref{eq:A} and $\Bk$ of
+Equation~\ref{eq:B} are functions of the content vectors only, and do not
+depend on $\delta$. Hence $\Rk$ and $\psik$ are position-independent, and the
+pair $k$ is completely position-blind if and only if $\Bk = 0$.
+\end{proposition}
+
+\begin{proposition}[Conditionality]
+\label{prop:cond}
+Because $c_k(\delta)$ is a non-constant sinusoid in general, a feature's
+contribution to the score is a function of $\delta$, unless every rotary pair
+that feature touches happens to satisfy $\Bk = 0$.
+\end{proposition}
+
+Proposition~\ref{prop:cond} is the whole of R2, stated before any measurement.
+Section~\ref{sec:cond} measures how large the effect is.
+
+\subsection{Context extension, and what \yarn\ actually does}
+
+\yarn\ \citep{peng2023yarn} extends context by leaving $\mathrm{base}$ alone and,
+per Equation~\ref{eq:mscale}, modifying the inverse frequencies per channel: short-wavelength (high-frequency)
+channels keep their $\invf$, long-wavelength (low-frequency) channels are
+divided by the extension factor $s$, and the two are blended linearly in
+between. It then multiplies all cosines and sines by a magnitude factor
+\begin{equation}
+  \mathrm{mscale} = 0.1 \ln s + 1 .
+  \label{eq:mscale}
+\end{equation}
+Note what is \emph{not} here: $\mathrm{base}$ is unchanged, and the fastest
+channel is explicitly left alone. This is the source of R3.
+
+\paperfigure{fig01_frequency_ladder}{%
+  Inverse frequency against rotary-pair index for the four schemes. RoPE is
+  the reference ladder; position interpolation divides every entry by $32$;
+  \yarn\ leaves the fastest $9$ of $32$ entries bit-for-bit identical to RoPE
+  and ramps only the slow tail down by exactly $32\times$; the
+  ``$\mathrm{base}=500000$'' ladder is a uniform reshaping. See
+  Section~\ref{sec:context}.%
+}{fig:ladder}
+
+The frequency ladder of Figure~\ref{fig:ladder} makes the asymmetry explicit.
+Under \yarn\ at $s = 32$, the fastest $9$ of the $32$ rotary pairs have inverse
+frequencies \emph{bit-for-bit identical} to plain RoPE, and the slowest pair is
+slowed by exactly a factor of $32.00$. The scheme is thus not a uniform
+rescaling at all: it is a ramp that leaves $9$ of $32$ entries untouched.
+Position interpolation, by contrast, differs from RoPE in all $32$ entries.
+
+Position interpolation \citep{chen2023positionalinterp} instead divides
+positions by $s$ uniformly. It is worth being precise that this is
+\emph{not} the same scheme as raising $\mathrm{base}$. Dividing positions
+divides every entry by $s$, whereas raising $\mathrm{base}$ to
+$\mathrm{base}\cdot s$ multiplies entry $k$ by $s^{-2k/d}$:
+\[
+  \mathrm{inv\_freq}_k \;\mapsto\; \mathrm{base}^{-2k/d}\,s^{-1}
+  \qquad\text{versus}\qquad
+  \mathrm{base}^{-2k/d}\,s^{-2k/d}.
+\]
+The two agree only where $2k/d = 1$, that is at $k = d/2$, which lies outside
+the ladder $k = 0,\dots,d/2-1$. They therefore never coincide on any channel.
+The sharpest instance is the fastest channel: $\theta_0 = \mathrm{base}^{0} = 1$
+for \emph{every} base, so raising the base from $10000$ to $500000$ leaves
+$\theta_0$, and hence $\max_k |D_k|$, completely unchanged, while dividing
+positions by $s$ divides it. This is exactly what our table shows: at
+$\delta = 512$ position interpolation reaches $\max_k|D_k| = 16$ and the
+$\mathrm{base} = 500000$ ladder still sits at $512$. We nonetheless measure all
+four as separate rows, because they are frequently conflated.
+
+% =====================================================================
+\section{Method}
+
+All measurements come from a from-scratch float64 NumPy implementation,
+regenerated by a single entry point and written to
+\texttt{results/measurements.json}. We use $d = 64$, $\mathrm{base} = 10000$,
+extension factor $s = 32$, and pre-extension context $2048$, unless a table
+says otherwise. Two grids are used in the structural and scheme-comparison
+tables and are kept distinct throughout: a
+$5$-point grid $\{1, 64, 512, 2048, 4096\}$ for the structural and
+scheme-comparison tables, and a $54$-point log-spaced integer grid from $1$ to
+$8192$ for the figures. Every quantity carries its grid with it, so numbers
+drawn from different grids are never compared as though they were the same.
+
+\paragraph{Measured quantities.}
+\begin{itemize}
+  \itemsep2pt
+  \item \textbf{Structural residuals.} Max absolute error of the
+    relative-position property over $42$ position pairs; max absolute error of
+    $\bigl\|\R_m q\bigr\| - \bigl\|q\bigr\|$ and
+    $\bigl\|\R_n k\bigr\| - \bigl\|k\bigr\|$; max relative error of bilinearity
+    over $35$ score checks; max absolute error of the per-pair closed form
+    against brute force.
+  \item \textbf{Feature additivity.} We build $q = \sum_i f_i d_i^{(q)}$ and
+    $k = \sum_j g_j d_j^{(k)}$ over $F = 8$ synthetic directions with
+    non-negative coefficients, project each summand independently, and check
+    $s(\delta) \stackrel{?}{=} \sum_{ij} A_{ij}(\delta)$ where
+    $A_{ij} = q_i^{\!\top}\R_{\delta}k_j$.
+  \item \textbf{Position-conditionality.} For each feature $i$, the ratio
+    $\max_\delta |c_i(\delta)| / \min_\delta |c_i(\delta)|$, restricted to
+    non-zero values.
+  \item \textbf{Linearization.} We replace $\cos \D$ by $1 - \D^2/2$ and
+    $\sin \D$ by $\D$, and measure the damage per pair, normalized by that
+    pair's own amplitude $\Rk$, plus the amplitude-weighted total. The per-pair
+    normalization is not a detail. The exact score is a sum of $\half$
+    sinusoids in $\delta$ that cancel; as a function of $\delta$ it passes
+    through zero repeatedly, so a total-score relative error
+    $\bigl|\hat s - s\bigr| / \bigl|s\bigr|$ diverges at those zeros for
+    reasons that have nothing to do with the quality of the approximation. Any
+    scheme that reports a total-score relative error under a linearization is,
+    at the least, reporting something dominated by cancellation. Normalizing by
+    $\Rk$ bounds the error by $1$ in units of the pair's own contribution,
+    which is a well-conditioned quantity: it is $0$ when the pair is exactly
+    linear and $1$ when the error is as large as the term being approximated.
+  \item \textbf{A ``linearizable'' channel} is one with $|\D| \le 0.1\rad$
+    throughout the grid. This is a definition, a dimensionful threshold, not a
+    measurement.
+  \item \textbf{Entropy.} Attention entropy $H/\ln T$ for one query against
+    $T = 256$ keys, with and without $\mathrm{mscale}$, over $18$ extension
+    factors.
+\end{itemize}
+
+\paragraph{Reproducibility.} Every figure ships the array it plotted as a CSV
+sidecar, so no claim in this paper is read off a pixel. Every number quoted
+below was extracted from those files programmatically, and the appendix records
+which file and key each one came from. The full audit is mechanical: each
+literal in the tables above is either an entry of
+\texttt{results/measurements.json}, an entry of a figure CSV, or an explicitly
+stated quotient of two such entries.
+
+% =====================================================================
+\section{Results}
+
+\subsection{Where the non-additivity actually is}
+\label{sec:softmax}
+
+Because exactness at the score level is the point most often gotten wrong in
+both directions, it is worth being precise about what the softmax does and does
+not destroy.
+
+Write the attention weight for key $n$ as
+\begin{equation}
+  a_n \;=\; \frac{\exp\!\bigl(s(\delta_n)/\sqrt{d}\bigr)}
+  {\sum_{n'} \exp\!\bigl(s(\delta_{n'})/\sqrt{d}\bigr)} .
+\end{equation}
+Two separate operations happen here. The first is the map $n \mapsto
+s(\delta_n)$, which by Equation~\ref{eq:additive} is exactly additive in the
+features: $s(\delta_n) = \sum_{ij} f_i g_j A_{ij}(\delta_n)$, with the
+$\delta_n$ fixed per key. The second is the normalization across $n$, and
+\emph{that} is what produces the coupling between keys. Two keys whose feature
+contributions are individually additive are not jointly additive after
+division, because the denominator sums over all of them.
+
+The practical consequence for attribution is a distinction we think is worth
+making sharply. A feature's contribution to the \emph{logits} is exactly
+additive and exactly position-conditional, and that is what this paper
+measures. A feature's contribution to the attention \emph{weights} is neither,
+and the error between the two is not small in general --- it grows as the
+number of keys grows and as the logit spread grows. So an additive attribution
+method applied to RoPE attention can be exactly right about the score and
+still be wrong about the weights, and if the object of study is the weights,
+the obstruction is the softmax rather than the position encoding.
+
+We deliberately do not quantify that second error. Doing so would require a
+choice of key set and of logit scale, and the resulting number would be a
+property of that choice rather than of RoPE. It is the clearest place where
+this paper stops, and it is a limit of the method rather than of the
+position encoding.
+
+\subsection{Exactness, measured}
+\label{sec:exact}
+
+% table* spans both columns: at \columnwidth the three-column body is
+% ~78pt too wide and runs into the margin. Layout-only change; no content
+% is added, removed or reworded.
+\begin{table*}[t]
+  \centering
+  \caption{Structural properties of RoPE, measured. Residuals are
+    max-absolute unless marked otherwise. All are at the float64 roundoff
+    floor, i.e.\ none is an approximation with a meaningful residual.
+    Source: \texttt{results/measurements.json} and
+    \texttt{figures/fig09}\allowbreak\emph{\_}\allowbreak
+    position-conditional CSV.}
+  \label{tab:exact}
+  \setlength{\tabcolsep}{4.5pt}
+  \begin{tabular}{lrl}
+    \toprule
+    property & residual & source \\
+    \midrule
+    relative-position property & $<10^{-13}$ & JSON \\
+    \quad position pairs tested & $42$ & JSON \\
+    norm preservation, query & $<10^{-14}$ & JSON \\
+    norm preservation, key & $<10^{-14}$ & JSON \\
+    bilinearity in content & $<10^{-14}$ & JSON \\
+    \quad score checks & $35$ & JSON \\
+    per-pair closed form vs.\ brute force & $<10^{-14}$ & JSON \\
+    \midrule
+    feature additivity, $5$-pt grid & $<10^{-13}$ & JSON \\
+    feature additivity, $54$-pt grid & $<10^{-13}$ & fig09 \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+Table~\ref{tab:exact} establishes the first half of R1: every residual is below
+the float64 noise floor, the relative-position property over $42$ pairs, the
+orthogonality behind Proposition~\ref{prop:gate} on both query and key, and
+bilinearity across $35$ score checks. The per-pair closed form of
+Section~\ref{sec:pair} reproduces the brute-force score to the same floor, so the
+algebra above is the actual computation, not a post-hoc description of it.
+
+We report these as ceilings rather than digits. Each is the residual of
+subtracting two analytically equal expressions, so its value is whatever the host's
+summation order produces: the same computation yields $3.4\times10^{-14}$ on one
+platform and $3.6\times10^{-14}$ on another. Quoting more precision than the
+quantity carries would be false. The claim that carries meaning is the bound, and
+it is checked against the data at test time, not merely asserted here.
+
+Two of these deserve a note on how they are tested, because the obvious test is
+the wrong one. The relative-position property is \emph{not} tested by comparing
+$s(i,j)$ against $s(i + c, j + c)$ with independent random content vectors at
+each position; that comparison asks whether the score depends on absolute
+position at all, which is a different and much stronger property, and one that
+RoPE does not have. We test the correct statement --- that shifting a
+\emph{fixed} pair of content vectors together by $7$ positions leaves their
+score unchanged --- over $42$ pairs spanning $7$ distances and $6$ base
+positions. Bilinearity is tested by rescaling one side by
+$\{0, 1, 2, -3, 7.5, 10^{-3}, 10^{3}\}$ at $5$ distances, giving the $35$
+score checks in the table.
+
+A concrete instance of the closed form makes the structure visible. The
+amplitude $\Rk$ of the fastest rotary pair, $k = 0$, takes the single value
+$0.9526294617807264$ at every one of the $54$ distances and under both \rope\ and
+\yarn\ --- one value, not fifty-four. That is
+Proposition~\ref{prop:blind} visible directly in the data: the amplitude is a
+property of the content vectors, and distance moves only the phase. For
+contrast, a mid-frequency pair $k = 12$ has amplitude $2.3046990966686227$
+under the same key and query, so amplitudes are not interchangeable across
+pairs either; each pair has its own gate, and each gate is distance-free.
+
+The additivity check is the one that matters for attribution. Writing
+$q = \sum_i f_i d_i^{(q)}$ and $k = \sum_j g_j d_j^{(k)}$ and expanding both
+before rotating, the score decomposes additively:
+\begin{equation}
+  s(\delta) \;=\; \sum_{i,j} f_i g_j
+  \underbrace{q_i^{\!\top}\R_{\delta}k_j}_{A_{ij}(\delta)} .
+  \label{eq:additive}
+\end{equation}
+Equation~\ref{eq:additive} holds to $3.6\times10^{-14}$ on the $5$-point grid
+and $5.0\times10^{-14}$ on the $54$-point grid. Additive attribution to a
+sparse-feature code is therefore \emph{exact} at the score level under RoPE, and
+any failure mode one wishes to attribute to RoPE's position encoding is not
+located here.
+
+The consequence for the interpretation of attention is worth stating plainly,
+because it is the opposite of a common claim. Attention weights are
+$\operatorname{softmax}_n\, s(m,n)/\sqrt{d}$, and the softmax is where
+non-additivity lives: bilinearity holds in the score and is destroyed by the
+normalization across $n$. Section~\ref{sec:softmax} separates the two operations
+and says what survives. We therefore do not claim that attention
+\emph{output} is additively attributable. It is not, and RoPE is not why.
+
+\subsection{Position-conditionality is the real obstruction}
+\label{sec:cond}
+Exact additivity does \emph{not} give position-free coefficients. In
+Equation~\ref{eq:additive}, $A_{ij}(\delta)$ carries an explicit $\delta$, even
+though the score it sums to depends on $\delta$ alone
+(Equation~\ref{eq:relative}). By
+Proposition~\ref{prop:cond}, a single feature's contribution
+$c_i(\delta) = \sum_j A_{ij}(\delta)$ is a function of distance, and by
+Proposition~\ref{prop:blind} it is position-free only if every pair it touches
+has $\Bk = 0$.
+
+\paperfigure{fig09_position_conditional_attribution}{%
+  Per-feature contribution against relative distance. Eight synthetic
+  features; each panel plots $c_i(\delta)$ against $\delta$ with the feature's
+  own mean as a dotted line. Features do not merely move --- they change
+  magnitude by up to $920.04\times$ across the grid. See
+  Section~\ref{sec:cond}.%
+}{fig:attrib}
+
+Figure~\ref{fig:attrib} measures the effect directly. With $F = 8$ features on
+the $54$-point distance grid, the ratio $\max_\delta|c_i| / \min_\delta|c_i|$
+takes the values $920.04$, $193.26$, $169.40$, $154.47$, $104.19$, $73.57$,
+$38.63$ and $35.52$ across the eight features. The median is $154.47$, and all
+eight exceed $35\times$. On the coarser $5$-point grid
+$\{1, 8, 32, 128, 512\}$ the worst-feature ratio is $43.05$; that is a statement
+about that grid's coarseness, not about the phenomenon, since the ratio grows
+with the number of distances sampled.
+
+These two numbers together are the central result. A single feature's
+attribution value is not a property of the feature; it is a property of
+\emph{(feature, distance)}. Holding the total additive to
+$5.0\times10^{-14}$ while individual components swing by $920\times$ shows
+that additivity and position-conditionality are independent phenomena, and that
+it is the second that obstructs position-free attribution.
+
+The practical reading: an additive attribution $\sum_{ij} f_i g_j A_{ij}$ with
+$A_{ij}$ free of position is not merely an approximation --- it is a
+mis-specification. It cannot represent the measured curves for any constant
+$A_{ij}$, because the error it would incur is of the order of the swing itself,
+some $16$ orders of magnitude above the additivity residual. The correct object
+is per-feature and per-distance, which we define concretely in
+Section~\ref{sec:wellposed}. Whether that object is useful in practice is a
+question about downstream circuits, and is outside what we measure.
+
+\subsection{What the well-posed object is}
+\label{sec:wellposed}
+It is worth being concrete about the replacement, because ``do per-distance
+attribution'' is otherwise an instruction without a definition. For a query
+feature $i$ and a key feature $j$ at relative distance $\delta$, define the
+$2\times 2$ coefficients
+\begin{equation}
+  \begin{split}
+    A_{ij}^{(k)}(\delta) \;=\;
+    \cos\D\, A_{ij}^{A}[k] \;+\; \sin\D\, A_{ij}^{B}[k],\\
+    \qquad k < \half ,
+  \end{split}
+\end{equation}
+where $A_{ij}^{A}[k]$ and $A_{ij}^{B}[k]$ are formed from
+$A_{ij} = q_i^{\!\top}k_j$ by the same split-half grouping as
+Equations~\ref{eq:A}--\ref{eq:B}. Then
+\begin{equation}
+  \begin{split}
+    A_{ij}(\delta) \;=\; \sum_{k < \half} A_{ij}^{(k)}(\delta)\\
+    \;=\; \sum_{k < \half} R_k^{ij} \cos\bigl(\D - \psik^{ij}\bigr),
+  \end{split}
+  \label{eq:perpair}
+\end{equation}
+so the well-posed attribution object is not a $1\times1$ coefficient $A_{ij}$
+but the $\delta$-indexed family
+$\bigl\{A_{ij}^{(0)}(\delta), \dots, A_{ij}^{(\half-1)}(\delta)\bigr\}$,
+together with the position-blind amplitudes $R_k^{ij}$. Equivalently, per
+feature, $c_i(\delta) = \sum_j g_j A_{ij}(\delta)$ is an explicit finite sum of
+$\half$ sinusoids in $\delta$ whose frequencies $\invf_k$ and amplitudes
+$R_k^{ij}$ are fixed by the content.
+
+Three properties of this object follow without further measurement. It is
+\emph{finite}: $\half$ terms, no summation over a learned dictionary. It is
+\emph{closed-form}: no fit, no optimization, no forward pass, since
+$R_k^{ij}$ and $\psik^{ij}$ come from $q_i$ and $k_j$ by
+Equations~\ref{eq:A}--\ref{eq:B}. And it is
+\emph{exact}, because Equation~\ref{eq:perpair} is an identity rather than an
+expansion. The cost is that it is a function, not a number, and any downstream
+use must decide what to do with a function --- which is precisely the design
+question we are not able to answer without a trained model.
+
+\subsection{What context extension fixes, and what it does not}
+\label{sec:context}
+\paperfigure{fig03_max_vs_median_angle}{%
+  Maximum (solid) and median (dashed) per-channel angle against relative
+  distance for all four schemes. The maximum angle is identical for RoPE and
+  \yarn\ at every distance; only the median moves. See
+  Section~\ref{sec:context}.%
+}{fig:maxmedian}
+
+Table~\ref{tab:spectrum} compares the four schemes on the $5$-point grid. Three
+things are visible.
+
+\paragraph{The maximum angle is not changed by \yarn.}
+$\max_k|\D|$ for RoPE and \yarn\ is equal at \emph{every} distance in the grid.
+At $\delta = 4096$ both are exactly $4096\rad$, and across all $54$ distances of
+the finer grid the largest disagreement is $0.000\times10^{0}\rad$
+(Figure~\ref{fig:maxmedian}). This is not
+an accident of rounding: \yarn's ramp is constructed to leave
+short-wavelength channels at their original inverse frequency, so the fastest
+channel contributes exactly $1\rad$ per token under both schemes. Any
+reasoning that says ``\yarn\ damps the large angles'' is wrong about the largest
+one.
+
+% table* spans both columns: six columns of numerics do not fit a
+% single \columnwidth. Layout-only change; the rows and the caption are
+% untouched.
+\begin{table*}[t]
+  \centering
+  \caption{The four position-encoding schemes on the $5$-point distance grid,
+    $d = 64$, $\mathrm{base} = 10^{4}$, extension factor $s = 32$, pre-extension
+    context $2048$. ``Linearizable'' is the fraction of rotary pairs with
+    $|\D| \le 0.1\rad$, with the exact count out of $\half = 32$ in brackets.
+    ``Amp-wtd err'' is the amplitude-weighted linearization error, normalized so
+    that $1$ would mean an error as large as the head's own total amplitude.
+    Source: \texttt{measurements.json}, key \texttt{method\_spectrum}.}
+  \label{tab:spectrum}
+  \setlength{\tabcolsep}{3.6pt}
+  \begin{tabular}{llrrrr}
+    \toprule
+    scheme & $\delta$ & $\max_k|\D|$ & $\mathrm{med}_k|\D|$
+      & linearizable & amp-wtd err \\
+    \midrule
+    RoPE, $\mathrm{base}=10^{4}$ & 512 & 512 & 5.97
+      & $0.0625\ (2/32)$ & $4.88\!\times\!10^{3}$ \\
+    RoPE, $\mathrm{base}=10^{4}$ & 2048 & 2048 & 23.90
+      & $0.0000\ (0/32)$ & $7.79\!\times\!10^{4}$ \\
+    RoPE, $\mathrm{base}=10^{4}$ & 4096 & 4096 & 47.79
+      & $0.0000\ (0/32)$ & $3.12\!\times\!10^{5}$ \\
+    \midrule
+    \yarn, $s=32$ & 512 & 512 & 2.67
+      & $0.3438\ (11/32)$ & $4.87\!\times\!10^{3}$ \\
+    \yarn, $s=32$ & 2048 & 2048 & 10.67
+      & $0.2812\ (9/32)$ & $7.77\!\times\!10^{4}$ \\
+    \yarn, $s=32$ & 4096 & 4096 & 21.34
+      & $0.2188\ (7/32)$ & $3.11\!\times\!10^{5}$ \\
+    \midrule
+    interpolation & 512 & 16 & 0.19
+      & $0.4375\ (14/32)$ & $5.26$ \\
+    interpolation & 4096 & 128 & 1.49
+      & $0.2188\ (7/32)$ & $3.08\!\times\!10^{2}$ \\
+    \midrule
+    $\mathrm{base}=5\!\times\!10^{5}$ & 512 & 512 & 0.91
+      & $0.3438\ (11/32)$ & $2.78\!\times\!10^{3}$ \\
+    $\mathrm{base}=5\!\times\!10^{5}$ & 4096 & 4096 & 7.26
+      & $0.1875\ (6/32)$ & $1.77\!\times\!10^{5}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\paragraph{The median angle falls, and the linearizable fraction rises.}
+$\operatorname{median}_k|\D|$ for \yarn\ is a constant $0.4464\times$ that of
+RoPE at every distance tested --- $2.67$ against $5.97\rad$ at $\delta = 512$,
+and $21.34$ against $47.79$ at $\delta = 4096$. A fixed ratio, not an
+improvement that grows with distance, because \yarn's ramp is a fixed
+per-channel rescaling and $\D$ is linear in $\delta$ for every channel.
+Figure~\ref{fig:spectrum} shows the per-channel form of this: at
+$\delta = 4493$ the median angle is $52.42\rad$ under RoPE against
+$23.40\rad$ under \yarn, and the two distributions have visibly different
+\emph{left} tails even though their right edges coincide exactly.
+Consequently the fraction of channels admitting $\cos \D \mapsto 1 - \D^2/2$,
+$\sin \D \mapsto \D$ rises from $0.0625$ to $0.3438$ at $\delta = 512$, and from
+$0.0000$ to $0.2188$ at $\delta = 4096$. The base-raising heuristic is a
+different row with different numbers again ($0.3438$ and $0.1875$), and
+position interpolation is the most favourable on this metric because it damps
+the fast channel too, at the cost of shrinking $\max_k|\D|$ from $4096$ to
+$128\rad$.
+
+\paperfigure{fig02_angle_spectrum}{%
+  Per-channel angle $|D_k|$ against pair index at eight distances, for RoPE
+  and for \yarn. The right-hand edge of both panels is identical; \yarn\ lowers
+  the bulk of the spectrum. See Section~\ref{sec:context}.%
+}{fig:spectrum}
+
+\paperfigure{fig04_linearizable_fraction}{%
+  Fraction of rotary pairs admitting the first-order linearization, against
+  relative distance, for all four schemes. Plain RoPE reaches zero; \yarn\ and
+  the other schemes retain a shrinking minority. See
+  Section~\ref{sec:context}.%
+}{fig:linearizable}
+
+\paragraph{Neither rescues a global linearization.}
+Figure~\ref{fig:linearizable} tracks this across the $54$-point grid. Plain
+RoPE retains no linearizable channel at all from $\delta = 861$ onward, where it
+is exactly $0.0000$ at every subsequent grid point, while \yarn\ retains
+$11/32$ there and $4/32$ at $\delta = 8192$. So \yarn\ does not rescue the
+linearization either; it lengthens the range over which a majority of channels
+can be linearized. The per-channel mechanism is in
+Figure~\ref{fig:pairs}: the fastest rotary pair's error reaches the size of its
+own contribution at $\delta = 3$, identically under RoPE and \yarn\ --- the same
+$\delta$, because \yarn\ does not touch that channel. Note how early that is.
+The fastest channel turns a full revolution per token, so it is out of the
+linear regime within three tokens of separation and stays out. No amount of
+ramping the slow tail repairs a channel that is wrong that soon.
+
+\paperfigure{fig05_linearization_error}{%
+  Amplitude-weighted and per-pair linearization error against relative distance,
+  all four schemes, log scale. The curves for RoPE and \yarn\ sit almost on top
+  of one another even though their median angles differ by more than a factor of
+  two: the error is dominated by the handful of fast channels both schemes leave
+  untouched. See Section~\ref{sec:context}.%
+}{fig:error}
+
+\paperfigure{fig06_pair_exact_vs_linear}{%
+  Exact per-pair contribution against its first-order Taylor form, for five
+  selected rotary pairs, under RoPE and \yarn. The fastest pair's normalized
+  error reaches $1$, meaning an error as large as the term itself, at
+  $\delta = 3$ under both schemes. See Section~\ref{sec:context}.%
+}{fig:pairs}
+
+The same figure localizes the damage. At $\delta = 1$ the fastest pair $k = 0$
+has an exact contribution of $-0.9525$ against a linearized value of
+$-1.0607$, a normalized error of $0.1136$; the mid-frequency pair $k = 12$ has
+normalized error $4.3\times10^{-6}$ at the same distance, roughly $26000$
+times smaller. By $\delta = 3$ the fastest pair's normalized error is
+$1.1099$ --- past $1$, meaning the approximation is now worse than simply
+deleting the term --- while the slower pairs are still comfortably inside the
+linear regime. This is the whole of Section~\ref{sec:context} in two numbers:
+the linearization fails for the fast channels first, and \yarn does not change
+which channels those are.
+
+Figure~\ref{fig:error} is the decisive guard on this conclusion, and it is where
+the optimistic reading dies. At $\delta = 8192$ the amplitude-weighted
+error is $1.24572\times10^{6}$ for RoPE and $1.24179\times10^{6}$ for \yarn\,
+a ratio of $0.996840$: \yarn\ buys less than $0.4\%$ on this measure. The
+per-pair RMS ratio is $0.999977$, i.e.\ no meaningful change. The reason is
+visible in the spectrum and follows from Proposition~\ref{prop:blind}: the error
+is dominated by the few fast channels, whose amplitudes are comparable to the
+slow channels' but whose angles are enormous, and \yarn\ scales those channels
+by exactly $1$. Position interpolation does better on this axis ($1225.06$ at
+$\delta = 8192$, roughly $1000\times$ below RoPE) precisely because it also
+shrinks the fast channel --- which is the same reason it compresses the whole
+spectrum into a regime a trained model does not natively use. That trade-off is
+a modelling question about trained models, and we do not measure it.
+
+\begin{remark}
+The correct summary of R3 is: context extension changes \emph{which channels}
+admit a linearization and \emph{when}, but does not change the fact that the
+worst channel is out of range. RoPE runs out of linearizable channels first;
+\yarn\ extends the range for the bulk. Neither makes the linearization of the
+whole head safe, and neither is a rescue for position-free attribution --- that
+failure is in R2, which no amount of angle damping addresses.
+\end{remark}
+
+\subsection{Partial RoPE gives an exactly position-free sub-score}
+\label{sec:partial}
+\pip\ rotates only a fraction $p = n_{\mathrm{rot}}/d$ of channels and leaves
+the rest untouched. The score then splits into an unrotated part and a rotated
+part, and the unrotated part is position-free by construction --- not
+approximately, but exactly, because no rotation is applied to it.
+
+\paperfigure{fig07_partial_rope}{%
+  Partial RoPE at $p = 0.25$: the rotated and unrotated sub-scores against
+  relative distance (left), and each sub-score's deviation from its own mean
+  (right). The clean sub-score is flat to the last bit; the rotated one
+  oscillates. See Section~\ref{sec:partial}.%
+}{fig:partial}
+
+Figure~\ref{fig:partial} shows the split. At $d = 64$ with
+$n_{\mathrm{rot}} = 16$: the unrotated sub-score's spread over the $5$-point
+grid is \emph{exactly} $0.0$, and over the finer $54$-point grid it
+is also exactly $0.0$ --- the plotted constant is $0.6857345646988313$ at every
+distance. The rotated sub-score, over those same grids, varies by $11.34$ and
+$24.20$ respectively. The clean part carries a mean magnitude share of the
+score of $0.302$ (JSON grid) and $0.187$ (figure grid), so this is a
+substantially weighted, genuinely position-free bilinear term.
+
+This is the one setting in which a position-free additive attribution is exactly
+correct, and it is correct because a quarter of the channels carry no position
+at all. That makes \pip\ the natural recommendation for feature-level
+attribution in a model that has it.
+
+\begin{remark}[$\pip$ preserves the norm too]
+There is a subtlety here that a natural implementation gets wrong. Partial
+rotary is orthogonal, and so preserves the norm exactly, as full RoPE does: we
+measure a deviation below the float64 noise floor at
+$n_{\mathrm{rot}} = 16$, the same as full RoPE. This holds only if the rotated
+block is paired \emph{within itself} --- channel $i$ with channel
+$i + n_{\mathrm{rot}}/2$, the GPT-NeoX layout used by models such as
+\texttt{EleutherAI/pythia-160m}. Pairing $i$ with $i + d/2$ across the whole head
+instead leaves every touched pair half rotated and half not; that variant is not
+orthogonal and is not what any published model does. We mention it because the
+failure is silent: the code runs, the numbers look reasonable, and only a
+norm check reveals the difference. The one claim we withdraw here is any
+suggestion that partial rotation damages the magnitude gate.
+\end{remark}
+
+\subsection{$\mathrm{mscale}$ is a temperature}
+\label{sec:mscale}
+
+\yarn's magnitude factor of Equation~\ref{eq:mscale} multiplies every logit,
+which is precisely a temperature on the attention distribution. At $s = 32$ we
+measure $\mathrm{mscale} = 1.3465736$, matching the closed form
+$0.1\ln 32 + 1$ to all printed digits.
+
+\paperfigure{fig08_mscale_entropy}{%
+  Normalized attention entropy $H/\ln T$ against extension factor, with and
+  without $\mathrm{mscale}$ (left), and the measured $\mathrm{mscale}$ against
+  its closed form (right). $\mathrm{mscale}$ sharpens the attention
+  distribution. See Section~\ref{sec:mscale}.%
+}{fig:entropy}
+
+Figure~\ref{fig:entropy} plots this. With one query against $T = 256$ keys,
+$\mathrm{mscale}$ moves the normalized entropy from $H/\ln T = 0.9233$ to
+$0.8651$, a drop of $0.0582$ in absolute
+nats, from $5.1198$ to $4.7970$. Across the full range of $18$ extension
+factors from $1$ to $128$, the effect is monotone: $H/\ln T$ falls to $0.8383$
+as $\mathrm{mscale}$ rises to $1.4852$. Lowering entropy is a sharpening of the
+attention distribution: fewer keys receive appreciable mass. This is a real,
+measurable, and easily overlooked side effect of context extension that is not
+part of its frequency story, and it is independent of everything in
+Sections~\ref{sec:exact}--\ref{sec:context}. We report it as a measured
+consequence and make no claim about whether it helps or hurts a trained model,
+which we do not measure.
+
+\subsection{The three results are not independent}
+\label{sec:synthesis}
+
+It is worth stating explicitly how R1, R2 and R3 relate, because they are
+usually discussed as three separate observations and they are not.
+
+R1 and R2 pull in opposite directions and both are correct. The additive
+decomposition of Equation~\ref{eq:additive} is exact to
+$5.0\times10^{-14}$ --- the coefficients $A_{ij}$ exist and are real numbers,
+not fudges. But those real numbers are functions of $\delta$, and they vary by
+up to $920.04\times$ over the distance grid. Exactness therefore buys nothing
+against position-conditionality: the map from features to score is exactly
+additive at every fixed distance and wildly non-constant across distances. This
+is the sense in which position-conditionality, not bilinearity, is the operative
+obstruction, and it is what separates R1 from R2: an attribution scheme that
+computes $A_{ij}$ correctly at $\delta = 8$ and reuses it at $\delta = 512$ has
+made an error far larger than any it would make by ignoring RoPE altogether.
+
+R3 is orthogonal to both, and this is the part most likely to be
+misunderstood. The linearization failure is a statement about the
+\emph{approximation} $\cos \D \mapsto 1 - \D^2/2$, not about attribution. One
+could perfectly well attribute a RoPE head exactly --- that is R1 --- and still
+be unable to linearize it. Conversely, one could linearize a head perfectly and
+still have no position-free attribution, which is the situation under full
+\rope\ at any $\delta > 3$. So the two literatures --- ``we need a wider
+context'' and ``we need position-free feature attribution'' --- are addressing
+different problems, and a method that answers one does not answer the other.
+What \yarn\ does is extend the distance range over which a majority of channels
+can be linearized, from $0/32$ to $11/32$ at $\delta \approx 861$. What it does
+not do is make the worst channel linearizable, and the worst channel is what
+determines whether the head as a whole can be treated as linear.
+
+We mention this because the natural reading of Table~\ref{tab:spectrum} is
+that \yarn\ is ``better'', and it is better on one axis and indifferent on the
+other. The honest summary is the one in the remark above: context extension
+changes which channels admit a linearization and when, and does not change the
+fact that the worst channel is out of range.
+
+% =====================================================================
+\section{Limitations}
+
+We list these in decreasing order of how much they constrain the conclusions.
+
+\paragraph{No model.} There is no trained network, no checkpoint, no real
+activation, no training run, and no forward pass through anything learned. All
+measurements are on synthetic vectors with fixed seeds. The claims are about
+the algebra of the position encoding, and they transfer to any head that uses
+it; they say nothing about what any particular trained model does.
+
+\paragraph{No sparse autoencoder and no learned features.} The $8$ directions
+our attribution runs over are random with non-negative coefficients. They have
+the shape of a sparse code and none of its content. No statement here should be
+read as evidence about real feature geometry, real feature redundancy, or real
+circuit structure. In particular, the $920.04\times$ swing in
+Section~\ref{sec:cond} is a property of random directions in a
+$64$-dimensional head, and we have no measurement of what the corresponding
+quantity is for real features.
+
+\paragraph{No retrieval, no accuracy, no perplexity.} There is no needle task,
+no long-context retrieval benchmark, and no language-modelling evaluation
+anywhere in this work. Statements like ``\yarn\ extends usable context'' are
+not measured here. When we say \yarn\ is better on linearizable fraction, we
+mean better on that number, and Section~\ref{sec:context} shows that number
+does not track the amplitude-weighted error.
+
+\paragraph{Single head dimension, single scale, single base.} All measurements
+use $d = 64$, $\mathrm{base} = 10000$, $s = 32$, pre-extension context $2048$,
+and one query/key draw per experiment. We have not swept head dimension, and
+the qualitative claim about which channels dominate the error should be
+expected to depend on $d$ through the number of pairs $\half$. We did not
+measure that dependence and do not claim it.
+
+\paragraph{Synthetic attention for the entropy result.} Section~\ref{sec:mscale}
+uses a random query against $256$ random keys. The entropy values are a
+property of that synthetic configuration, not of any trained distribution. We
+claim only that $\mathrm{mscale}$ acts as a temperature and reduces entropy in
+this setting, which is monotone across $18$ scales.
+
+\paragraph{Linearization is one particular first-order approximation.} We test
+$\cos \D \mapsto 1 - \D^2/2$, $\sin \D \mapsto \D$ with a $0.1\rad$
+threshold. A different truncation, or a per-channel threshold, would move the
+linearizable fractions, and would leave the amplitude-weighted conclusion
+intact only if it did not change which channels dominate. We verified the latter
+qualitatively through the per-pair error but did not sweep thresholds.
+
+\paragraph{Scope of the position-free claim.} Section~\ref{sec:cond} shows that a
+position-free scalar $A_{ij}$ is mis-specified. It does not show that
+per-distance attribution is practically useful --- that requires circuits,
+patching, and a trained model, none of which we have.
+
+\paragraph{What R1 does and does not license.} Exactness at the score level is
+a statement about a bilinear map, and its practical reach is bounded by three
+things we have not crossed. It does not survive the softmax: attention
+\emph{weights} are not additive, so a feature's share of attention mass is not
+its share of the score, and we do not measure the discrepancy. It does not
+survive multi-head composition, where the position-conditional structure we
+describe is per-head and no head shares our synthetic projections. And it does
+not license a claim about attribution methods we did not run; we take
+attribution patching as a reference point, not as something we reproduce or
+compare against. A reader should treat the exactness result as removing one
+stated objection to RoPE-based attribution, not as validating the method.
+
+% =====================================================================
+\section{Related Work}
+
+\paragraph{Position encodings and length extrapolation.}
+RoPE \citep{su2021ropeformer} introduced the rotary scheme studied here.
+\alpibib\ \citep{press2021train} removes position information from the attention
+pattern entirely via a linear bias, and is instructive as a contrast: it has no
+per-channel angle spectrum, and so no version of the linearization problem
+analysed in Section~\ref{sec:context}. On extension, position interpolation
+\citep{chen2023positionalinterp} rescales positions uniformly, which is the
+scheme we measure under the label \texttt{position\_interpolation}, and which
+our table shows is geometrically the most favourable on linearizable fraction.
+\yarn\ \citep{peng2023yarn} keeps the base and ramps per frequency, which is
+what makes $\max_k|\D|$ invariant under it; our measurement of that invariance
+is a direct consequence of that construction, and to our knowledge it is a
+point on which the framing of ``\yarn\ damps large angles'' is easily misread.
+\lengthxtrap\ \citep{sun2022lengthextrap} is relevant to the partial case of
+Section~\ref{sec:partial}, and \longrope\ \citep{ding2024longrope} to per-channel
+non-uniform extension. \ropetheory\ \citep{barbero2024roundandround} analyses
+RoPE's frequency content from an optimization perspective, complementing the
+spectrum measurements of Section~\ref{sec:context}; we do not compare with or
+reproduce their results. Finally, we note explicitly that the ``raise
+$\mathrm{base}$ from $10000$ to $500000$'' recipe is not \yarn, and is also not
+position interpolation: raising the base multiplies channel $k$ by
+$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
+$\max_k|\D|$ untouched. We measure it separately as
+\texttt{base\_500k\_legacy\_claim} for that reason.
+
+\paragraph{Feature-level attribution and circuit discovery.}
+The additive decomposition of activations into learned features originates in
+the superposition line \citep{elhage2022toymodels}, with sparse autoencoders as
+an operational feature extractor \citep{cunningham2023sparseautoencoders}.
+Attribution methods operating on attention heads include attribution patching
+\citep{syed2023attributionpatching}, which we take as the methodological
+reference point for the question ``which features contributed to this
+computation'', and the tuned lens \citep{belrose2023tunedlens} for reading
+intermediate activations back through the model's unembedding. Work extending
+causal-graph analysis to feature-level granularity includes sparse feature
+circuits \citep{marks2024sparsefeaturecircuits} and transcoder-based circuit
+discovery \citep{dunefsky2024transcoders}.
+
+It is worth noting what is common to all of these: they operate on activations
+at a \emph{fixed} position, or integrate over positions by treating each as an
+independent example. The positional encoding is part of the forward pass, not
+part of the attribution target, and so it does not enter the question. Our
+contribution is about the case where it does enter --- not because a method
+asks about it, but because the quantity being attributed, the attention score,
+is a function of two positions rather than one, and a feature's share of it is
+not a constant.
+
+\paragraph{Our relationship to that literature.} Those methods ask which
+features caused a behaviour in a trained model. We ask a strictly prior
+question, about the position encoding alone: given a RoPE head, what is the
+exact algebraic form of a feature's contribution, and is it a scalar? Our
+answer --- no, it is a function of distance --- is a structural precondition
+that any of those methods must handle and that, to our knowledge, has not been
+stated in this form. It is not a competing attribution method and it does not
+evaluate one. We mention the relation because it is a limitation of this paper
+rather than of the field: our per-distance attribution has not been connected to
+a circuit, and we have not shown that measuring it identifies anything about a
+trained model.
+
+% =====================================================================
+\section{Conclusion}
+
+RoPE's effect on feature-level attention attribution is exactly characterizable
+in the relative frame, where the score is $q^{\!\top}\R_{\delta}k$ and each of
+the $\half$ rotary pairs contributes a sinusoid with a position-independent
+amplitude and a linear phase. Three consequences. Attribution at the score level
+is exact, to $3.6\times10^{-14}$, and orthogonality makes the magnitude gate
+exactly position-independent, so the gate/phase split is a theorem rather than
+an approximation. Position-conditionality, not bilinearity, is the operative
+obstruction: a feature's contribution swings by up to $920.04\times$ across
+distance while the total stays additive to $5.0\times10^{-14}$, so
+position-free per-feature attribution is mis-specified under RoPE and the
+per-feature, per-distance one is the correct object. And context extension
+changes the range over which channels can be linearized without changing the
+worst channel at all --- $\max_k|\D|$ is identical for RoPE and \yarn\ at every
+distance tested --- so \yarn\ buys a larger linearizable majority, at an
+amplitude-weighted error ratio of only $0.996840$, not a safe global
+linearization. Partial RoPE is the one construction that delivers an exactly
+position-free sub-score, at the cost of losing norm preservation.
+Section~\ref{sec:synthesis} collects how the three results relate, and the
+short version is that exactness, position-conditionality, and linearizability
+are three separate problems that are easy to conflate.
+
+The measurements are structural and model-independent by design, and we have
+been explicit about what that excludes: no trained model, no learned features,
+no retrieval benchmark, no accuracy figure. What is claimed here is a correct
+and carefully measured characterization of the score's structure under RoPE, and
+nothing beyond it.
+
+\subsection*{A note on two corrections}
+
+Two statements are common enough in informal write-ups of this area that we
+record what we measured against them, since both are cases where the natural
+explanation is wrong in an instructive way. The first is that ``RoPE breaks
+bilinearity''. It does not, at the score level: doubling the query doubles the
+score to a relative error of $7.4\times10^{-16}$. Any observed super-linearity
+comes from changing what is being measured --- typically comparing a score
+against an attention output, which involves the softmax. The second is that
+``YaRN works by raising the base from $10000$ to $500000$''. It does not.
+\yarn\ keeps the base and ramps per frequency, leaving the fastest $9$ of $32$
+pairs bit-for-bit unchanged; the base-raising recipe is a distinct scheme again,
+since it rescales channel $k$ by $s^{-2k/d}$ rather than by $s^{-1}$, and
+appears as its own row in
+Table~\ref{tab:spectrum}. Both corrections push the same way: toward
+disentangling the position encoding from the operations people attribute to it.
+
+% =====================================================================
+\appendix
+\section{Provenance of every number}
+
+Every quantitative claim in this paper is either a literal in the table below,
+or a value derived from it by an arithmetic operation stated where it is used.
+No number was typed from memory.
+
+\paragraph{Configuration.} $d = 64$, $\mathrm{base} = 10000$, extension factor
+$s = 32$, pre-extension context $2048$, $T = 256$ keys; from
+\texttt{measurements.json} keys \texttt{structural\_facts.dim},
+\texttt{structural\_facts.base}, \texttt{mscale\_entropy.scale},
+\texttt{mscale\_entropy.n\_keys}, and the shared-configuration section of
+\texttt{figures/README.md}.
+
+\paragraph{Claims and their source files.}
+% Full-width float: this three-column audit table is ~216pt wider than a
+% single \columnwidth. Layout-only; every row is unchanged.
+\begin{table*}[t]
+\centering
+\caption{Provenance of every literal quoted in the paper.}
+\label{tab:provenance}
+\footnotesize
+\setlength{\tabcolsep}{1.9pt}
+\begin{tabular}{lll}
+\toprule
+paper location & value(s) & file and key \\
+\midrule
+Tab.~\ref{tab:exact} & all rows & \texttt{measurements.json :: structural\_facts} \\
+ & additivity rows & \texttt{feature\_attribution}; \texttt{fig09} CSV \\
+Sec.~\ref{sec:cond} & $920.04$, $154.47$ & \texttt{fig09} CSV, \texttt{contribution} \\
+ & $43.05$ & \texttt{measurements.json :: feature\_attribution} \\
+Sec.~\ref{sec:context} & Tab.~\ref{tab:spectrum} & \texttt{measurements.json :: method\_spectrum} \\
+ & $0.000\rad$ agreement & \texttt{fig03} CSV, \texttt{max\_abs\_angle\_rad} \\
+ & $0.4464$, $1.0000$ & ratios of fig03 medians and maxima \\
+ & $\delta = 861$, $4/32$ & \texttt{fig04} CSV \\
+ & $1.24572\!\times\!10^{6}$ etc. & \texttt{fig05} CSV \\
+ & $1225.06$, $\delta = 3$ & \texttt{fig05}, \texttt{fig06} CSVs \\
+Sec.~\ref{sec:context} & $9$ of $32$, $32.00\times$ & \texttt{fig01} CSV, unchanged-pair count \\
+ & $52.42$, $23.40$ & \texttt{fig02} CSV, \texttt{abs\_angle\_rad} \\
+Sec.~\ref{sec:exact} & $0.9526294618$, $2.3046990967$ & \texttt{fig06} CSV, \texttt{amplitude\_R\_k} \\
+ & $-0.9525$, $-1.0607$, $0.1136$, $4.3\!\times\!10^{-6}$ & \texttt{fig06} CSV \\
+Sec.~\ref{sec:background} & $9$ of $32$ bit-for-bit & \texttt{fig01} CSV, column 3 vs column 1 \\
+Sec.~\ref{sec:partial} & $0.0$, $11.34$, $24.20$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
+ & $0.302$, $0.187$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
+ & $<10^{-13}$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; full-RoPE floor \\
+Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entropy.mscale} \\
+ & $0.9233 \to 0.8651$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
+ & $0.8383$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Derived quantities and their derivations.} The fixed median-angle
+ratio quoted above is a ratio of medians at fixed $\delta$; it is constant across
+distances because \yarn's ramp is a fixed per-channel rescaling and $\D$ is
+linear in $\delta$ for every channel. Fractions converted to counts out of $32$
+are exact, since the denominator is $\half = 32$ pairs and every fraction is a
+multiple of $1/32$. Error ratios are quotients of two entries of the same CSV at
+the same $\delta$. The ``$16$ orders of magnitude'' comparison in
+Section~\ref{sec:cond} divides a swing of order $10^{2}$--$10^{3}$ by the
+$5.0\times10^{-14}$ additivity residual: $920.04/4.974\times10^{-14}
+\approx 1.85\times10^{16}$. The ``less
+than $0.4\%$'' claim in Section~\ref{sec:context} is $1 - 0.996840$. The
+``roughly $1000\times$'' comparison divides
+$1.24572\times10^{6}$ by $1225.06$.
+
+\paragraph{Exact identities reported as equalities.} The claims that
+$\max_k|\D|$ is identical for RoPE and \yarn, that $\Rk$ is a single value
+across all distances, that the clean partial-RoPE sub-score has spread
+$0.0$, and that the table fractions are multiples of $1/32$, are checked as
+exact float equalities, not to a tolerance; the residue in each case is
+$0.0$ or a single ULP, as recorded above.
+
+\paragraph{Citations.} Every cited entry was verified against the arXiv API by
+identifier or by title search; the identifier, exact title and author list in
+\texttt{references.bib} are as returned by that API. No citation in this file
+was included from memory.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
