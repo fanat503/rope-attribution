@@ -178,13 +178,36 @@ YaRN: Peng, Bowen; Quesnelle, Jeffrey; Fan, Honglu; Shippole, Enrico.
 
 ## Scope and honesty
 
-The measurements here are on the *structure* of the score: exact identities and
-their numerical error, on synthetic projections. They are model-independent, and
-that is deliberate — the claims are claims about the position encoding, not about
-any particular trained network. They do not include trained sparse autoencoders,
-real model activations, or retrieval benchmarks. Claims of the form "the model
-retrieves the needle with accuracy 0.7" are not measured anywhere in this
-repository and should not be attributed to it.
+The core measurements here are on the *structure* of the score: exact identities
+and their numerical error, on synthetic projections. That is deliberate - those
+claims are about the position encoding, not about any particular trained network.
+
+`projects/rope_attribution/real_model.py` repeats the key measurements on real
+activations from three trained checkpoints (`pythia-160m` partial rotary,
+`llama-160m` and `SmolLM-135M` full rotary), writing `results/real_model.json`. It
+needs CPU torch, which is not a test dependency, so it is opt-in:
+
+```bash
+pip install -r real_model_requirements.txt
+python -m projects.rope_attribution.real_model     # ~3 min, CPU only
+```
+
+Three findings there matter for reading the synthetic results:
+
+- Real rotary channels are overwhelmingly position-carrying: the median pair
+  carries ~70% of its own amplitude positionally, and only 0.6-0.9% are
+  position-blind at a 1% threshold. The synthetic case suggests a larger
+  position-free slice exists, and on trained weights it does not.
+- The exact identities hold to the **float32** floor (~1e-7), not 1e-14, because
+  real activations are float32. The theorems survive; the floor moved.
+- There is a **134-262x spread across heads** at fixed layer and fixed distance.
+  The repository previously had no error bars anywhere; a single-vector
+  measurement would have missed this by two orders of magnitude.
+
+Still absent, and not measured anywhere here: trained sparse autoencoders,
+retrieval or passkey benchmarks, and any accuracy number. Claims of the form "the
+model retrieves the needle with accuracy 0.7" should not be attributed to this
+repository.
 
 ## Legacy material
 
