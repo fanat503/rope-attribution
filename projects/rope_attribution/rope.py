@@ -45,6 +45,7 @@ __all__ = [
     "partial_rope_cos_sin",
     "rotate_half",
     "apply_rope",
+    "apply_partial_rope",
     "rope_cos_sin",
     "rotary_angles",
     "yarn_parameters",
@@ -100,23 +101,52 @@ def apply_rope(x: np.ndarray, cos: np.ndarray, sin: np.ndarray) -> np.ndarray:
     return x * cos + rotate_half(x) * sin
 
 
+def apply_partial_rope(
+    x: np.ndarray, cos: np.ndarray, sin: np.ndarray, n_rot: int
+) -> np.ndarray:
+    """Apply partial rotary, pairing within the rotated block.
+
+    ``x`` is ``(..., seq, head_dim)``; ``cos``/``sin`` come from
+    :func:`partial_rope_cos_sin` and are ``(seq, head_dim)`` with ``cos = 1, sin = 0``
+    on the unrotated tail. Only the first ``n_rot`` channels are transformed, and they
+    are paired ``i`` with ``i + n_rot // 2`` -- the GPT-NeoX layout, in which the
+    rotated block is itself split in half.
+
+    This is orthogonal for every ``n_rot``, so ``|R x| == |x|`` to machine precision
+    just as for full RoPE.
+    """
+    half = n_rot // 2
+    rotated = x[..., :n_rot]
+    x1, x2 = rotated[..., :half], rotated[..., half:]
+    cos_r, sin_r = cos[..., :n_rot], sin[..., :n_rot]
+    c1, c2 = cos_r[..., :half], cos_r[..., half:]
+    s1, s2 = sin_r[..., :half], sin_r[..., half:]
+    out1 = x1 * c1 - x2 * s1
+    out2 = x2 * c2 + x1 * s2
+    return np.concatenate([out1, out2, x[..., n_rot:]], axis=-1)
+
+
 def partial_rope_cos_sin(
     positions: np.ndarray, inv_f: np.ndarray, n_rot: int, mscale: float = 1.0
 ) -> tuple[np.ndarray, np.ndarray]:
-    """cos/sin tables that rotate only the first ``n_rot`` dimensions.
+    """cos/sin tables for partial rotary: only the first ``n_rot`` dimensions rotate.
 
     The remaining ``head_dim - n_rot`` dimensions receive ``cos = 1, sin = 0`` and are
-    therefore left completely unrotated. This is the "partial rotary" / pp-RoPE
-    arrangement: a fraction ``n_rot / head_dim`` of the channels carry position,
-    the rest carry content only.
+    therefore left completely unrotated. This is the "partial rotary" arrangement used
+    by GPT-NeoX and by models such as ``EleutherAI/pythia-160m`` (``rotary_pct = 0.25``):
+    a fraction ``n_rot / head_dim`` of the channels carry position, the rest carry
+    content only.
 
-    Note that this is *not* an orthogonal transform, unlike full RoPE. ``rotate_half``
-    pairs channel ``i`` with channel ``i + head_dim // 2``, so when ``n_rot < head_dim``
-    a pair that straddles the boundary keeps one half rotated and the other not. The
-    practical consequence is that a partially rotated vector's norm is *not* preserved
-    (measured deviation ~0.27 at ``n_rot = head_dim // 4``), whereas full RoPE
-    preserves it to machine precision. Anything reasoning about "the gate" under
-    pp-RoPE must account for this.
+    **The pairing matters.** Apply these tables with :func:`apply_partial_rope`, which
+    pairs channel ``i`` with channel ``i + n_rot // 2`` *within the rotated block*.
+    Applying them with :func:`apply_rope` instead pairs across the whole head
+    (``i`` with ``i + head_dim // 2``), which for ``n_rot < head_dim`` leaves every
+    touched pair half rotated and half not. That variant is not orthogonal and is not
+    what any published model does; it is a bug, not a convention.
+
+    With the correct pairing partial rotary *is* orthogonal, exactly like full RoPE, so
+    the magnitude gate survives it and ``n_rot`` channels change angle without changing
+    norm.
     """
     dim = inv_f.shape[0] * 2
     if n_rot % 2 != 0:

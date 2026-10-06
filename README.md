@@ -18,7 +18,7 @@ projects/rope_attribution/
   rope.py         RoPE, YaRN, partial RoPE (numpy, float64)
   experiments.py  seven measured experiments
   figures.py      the figure set, every value computed at run time
-tests/            1185 tests
+tests/            1218 tests
 figures/          nine figures, each with a CSV sidecar
 results/          measurements.json
 ```
@@ -27,7 +27,7 @@ Reproduce everything:
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                              # 1185 tests
+pytest -q                              # 1218 tests
 python -m projects.rope_attribution.experiments   # prints the report, rewrites results/
 python -m projects.rope_attribution.figures       # rewrites figures/
 ```
@@ -106,11 +106,13 @@ any of these methods; what YaRN buys is a larger linearizable majority
 
 **Partial RoPE yields an exactly position-free sub-score.** At `p = 0.25` the
 unrotated 75% of channels contribute a sub-score whose spread across distance is
-exactly `0.0`, while the rotated quarter varies by `12.03`. This is a clean
+exactly `0.0`, while the rotated quarter varies by `11.34`. This is a clean
 separation of a bilinear, position-independent term from the position-carrying
 one (`figures/fig07`). Note that partial rotation is *not* orthogonal, so the norm
-is not preserved as it is for full RoPE (deviation `0.27`); reasoning about "the
-gate" under pp-RoPE has to account for that.
+is preserved exactly as for full RoPE, provided the rotated block is paired within
+itself (the GPT-NeoX layout, as in `pythia-160m`). Pairing across the whole head
+instead leaves every touched pair half rotated and half not; that variant is not
+orthogonal and is not what any published model does.
 
 **YaRN's magnitude term is a temperature.** `mscale = 0.1 * ln(factor) + 1`
 (`1.3466` at `scale = 32`) multiplies all logits, pulling attention entropy from

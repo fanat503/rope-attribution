@@ -239,9 +239,9 @@
       2048
     ],
     "clean_score_spread": 0.0,
-    "rotated_score_spread": 12.025726981018646,
-    "clean_magnitude_share_mean": 0.24306319527258705,
-    "partial_norm_deviation": 0.2663070963920635
+    "rotated_score_spread": 11.341035002815437,
+    "clean_magnitude_share_mean": 0.30194191480559224,
+    "partial_norm_deviation": 0.0
   },
   "mscale_entropy": {
     "n_keys": 256,

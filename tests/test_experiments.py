@@ -1099,24 +1099,23 @@ def test_n_rot_is_int_of_the_fraction(n_rot_frac, n_rot):
 
 
 def _pp_rope_vector(vec: np.ndarray, freqs: np.ndarray, n_rot: int, pos: int) -> np.ndarray:
-    """The partial-RoPE operator, written out.
+    """The partial-RoPE operator, written out by hand.
 
-    ``partial_rope_cos_sin`` puts the rotated block's cos/sin on channels
-    ``0 .. n_rot-1`` and identity on the rest, while ``rotate_half`` always pairs
-    channel ``k`` with ``k + dim//2``. So for ``k < n_rot`` the output is
-    ``(v_k cos D - v_{k+h} sin D, v_{k+h})`` with ``D = pos * freqs[k % (n_rot//2)]``,
-    and every other channel is untouched. Note the second half of a touched pair
-    is *not* rotated, which is why the operator is not orthogonal.
+    Independent of ``rope.apply_partial_rope``: the rotated block ``0 .. n_rot-1``
+    is split in half and paired within itself, ``k`` with ``k + n_rot//2``, which is
+    the GPT-NeoX layout. The tail ``n_rot .. dim`` is untouched. Because each pair
+    is a proper 2-D rotation the whole operator is orthogonal.
     """
-    dim = vec.shape[0]
-    half = dim // 2
     out = np.array(vec, dtype=np.float64, copy=True)
     if n_rot == 0:
         return out
-    for k in range(n_rot):
-        angle = pos * freqs[k % (n_rot // 2)]
+    half = n_rot // 2
+    for k in range(half):
+        angle = pos * freqs[k]
         c, s = math.cos(angle), math.sin(angle)
-        out[k] = vec[k] * c - vec[k + half] * s
+        a, b = vec[k], vec[k + half]
+        out[k] = a * c - b * s
+        out[k + half] = b * c + a * s
     return out
 
 
@@ -1127,11 +1126,21 @@ def test_partial_rope_operator_matches_the_hand_written_one():
     for pos in (0, 37, 512):
         mine = _pp_rope_vector(v, freqs, n_rot, pos)
         cos, sin = R.partial_rope_cos_sin(np.array([pos]), freqs, n_rot)
-        theirs = R.apply_rope(v[None, :], cos, sin)[0]
+        theirs = R.apply_partial_rope(v[None, :], cos, sin, n_rot)[0]
         assert np.array_equal(mine, theirs)
+
+    # Applying the partial tables through the full-head apply_rope is the silently
+    # wrong variant: it pairs channel k with k + dim//2 across the whole head.
+    # It "runs" and its output looks plausible, which is why the mistake went
+    # unnoticed until an orthogonality check.
+    cos, sin = R.partial_rope_cos_sin(np.array([37]), freqs, n_rot)
+    wrong = R.apply_rope(v[None, :], cos, sin)[0]
+    assert not np.array_equal(_pp_rope_vector(v, freqs, n_rot, 37), wrong)
+    assert abs(float(np.linalg.norm(wrong)) - float(np.linalg.norm(v))) > 1e-3
 
 
 def test_partial_norm_deviation_matches_the_hand_written_operator():
+    """The hand-written GPT-NeoX operator must reproduce the module's measurement."""
     dim, n_rot = 64, 16
     freqs = _ladder(dim)
     rng = np.random.default_rng(3)
@@ -1141,10 +1150,30 @@ def test_partial_norm_deviation_matches_the_hand_written_operator():
     assert expected == pytest.approx(
         E.partial_rope_split()["partial_norm_deviation"], rel=1e-12
     )
-    # And the sign: pp-RoPE as implemented leaks norm, full RoPE does not.
-    assert expected > 0.1
-    assert E.partial_rope_split(n_rot_frac=1.0)["partial_norm_deviation"] < EXACT_TOL
-    assert E.partial_rope_split(n_rot_frac=0.0)["partial_norm_deviation"] == 0.0
+    # Partial rotary is orthogonal: it must not leak norm, exactly like full RoPE.
+    assert abs(expected) < EXACT_TOL
+    for frac in (0.0, 0.25, 0.5, 1.0):
+        assert E.partial_rope_split(n_rot_frac=frac)["partial_norm_deviation"] < EXACT_TOL
+
+
+def test_partial_rotary_is_orthogonal_for_every_n_rot():
+    """Every ``n_rot`` gives an orthogonal operator, and the tail never moves.
+
+    Regression guard. An implementation that pairs channel ``k`` with
+    ``k + dim//2`` across the whole head also "works", and leaves the norm
+    essentially unchanged for a particular vector - but it is not orthogonal and is
+    not what any published partial-rotary model does.
+    """
+    dim = 64
+    freqs = _ladder(dim)
+    rng = np.random.default_rng(7)
+    for n_rot in range(2, dim + 1, 2):
+        vec = rng.standard_normal(dim)
+        out = _pp_rope_vector(vec, freqs, n_rot, 37)
+        assert float(np.linalg.norm(out)) == pytest.approx(
+            float(np.linalg.norm(vec)), abs=EXACT_TOL
+        ), f"n_rot={n_rot} leaked norm"
+        assert np.array_equal(out[n_rot:], vec[n_rot:]), f"n_rot={n_rot} moved the tail"
 
 
 def test_the_tail_of_the_head_is_exactly_position_free():
@@ -1169,8 +1198,8 @@ def test_the_tail_of_the_head_is_exactly_position_free():
 
     for delta in (1, 64, 512, 2048):
         cos, sin = R.partial_rope_cos_sin(np.array([0, delta]), freqs, n_rot)
-        q_rot = R.apply_rope(q_hat[None, :], cos[0:1], sin[0:1])[0]
-        k_rot = R.apply_rope(k_hat[None, :], cos[1:2], sin[1:2])[0]
+        q_rot = R.apply_partial_rope(q_hat[None, :], cos[0:1], sin[0:1], n_rot)[0]
+        k_rot = R.apply_partial_rope(k_hat[None, :], cos[1:2], sin[1:2], n_rot)[0]
         # the query is at position 0, so it is the identity; the key is at delta
         assert np.array_equal(q_rot, q_hat)
         assert np.array_equal(k_rot[tail], k_hat[tail])
@@ -1208,8 +1237,8 @@ def test_partial_rope_split_is_reproducible_from_the_documented_construction():
     rot = []
     for d in deltas:
         cos, sin = R.partial_rope_cos_sin(np.array([0, d]), freqs, n_rot)
-        q_rot = R.apply_rope(q_hat[None, :], cos[0:1], sin[0:1])[0]
-        k_rot = R.apply_rope(k_hat[None, :], cos[1:2], sin[1:2])[0]
+        q_rot = R.apply_partial_rope(q_hat[None, :], cos[0:1], sin[0:1], n_rot)[0]
+        k_rot = R.apply_partial_rope(k_hat[None, :], cos[1:2], sin[1:2], n_rot)[0]
         rot.append(float(q_rot[:n_rot] @ k_rot[:n_rot]))
     rot = np.array(rot)
     share = np.abs(clean) / (np.abs(clean) + np.abs(rot) + 1e-12)
@@ -1220,8 +1249,8 @@ def test_partial_rope_split_is_reproducible_from_the_documented_construction():
     assert float(share.mean()) == pytest.approx(
         reported["clean_magnitude_share_mean"], rel=1e-12
     )
-    assert reported["rotated_score_spread"] == pytest.approx(12.025726981018646, rel=1e-9)
-    assert reported["clean_magnitude_share_mean"] == pytest.approx(0.24306319527258705, rel=1e-9)
+    assert reported["rotated_score_spread"] == pytest.approx(11.341035002815437, rel=1e-9)
+    assert reported["clean_magnitude_share_mean"] == pytest.approx(0.30194191480559224, rel=1e-9)
 
 
 # ==========================================================================

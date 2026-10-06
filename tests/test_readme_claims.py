@@ -598,10 +598,31 @@ def test_rotated_subscore_spread_is_12_03() -> None:
     )
 
 
-def test_partial_rope_norm_deviation_is_0_27() -> None:
-    literal = readme_literal(r"\(deviation `([\d.]+)`\)", "the partial-RoPE norm deviation")
-    assert_readme_number_matches(
-        MEASUREMENTS["partial_rope"]["partial_norm_deviation"], literal, "the norm deviation"
+def test_partial_rope_preserves_the_norm_as_full_rope_does() -> None:
+    """The README must not claim partial rotation damages the magnitude gate.
+
+    It used to state a deviation of ``0.27`` against full RoPE's 1e-15, on the
+    strength of an implementation that paired channel ``i`` with ``i + dim//2``
+    across the whole head. That is not the GPT-NeoX layout and not orthogonal.
+    With the corrected operator the deviation is 0 to the float64 floor, so the
+    README now says partial rotary preserves the norm like full RoPE, and this
+    test checks the claim cannot silently drift back.
+    """
+    deviation = MEASUREMENTS["partial_rope"]["partial_norm_deviation"]
+    assert deviation < 1e-12, (
+        f"partial rotary must preserve the norm; measured {deviation:.3e}"
+    )
+    text = README_TEXT.lower()
+    assert "deviation `0.2" not in text, (
+        "the README still quotes a non-zero partial-RoPE norm deviation"
+    )
+    # It must state the orthogonality positively, not merely omit the old number.
+    assert "preserved exactly as for full rope" in text, (
+        "the README should say partial rotary preserves the norm, as full RoPE does"
+    )
+    assert "paired within" in text or "within\nitself" in text, (
+        "the README should name the within-block pairing, which is the actual "
+        "reason the norm is preserved"
     )
 
 

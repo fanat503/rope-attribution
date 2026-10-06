@@ -379,16 +379,16 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("partial_clean_const", r"the plotted constant is \$([\d.]+)\$ at every"),
     Claim("partial_rot_spread", r"over those same grids, varies by \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ respectively"),
-    Claim("partial_share", r"score of \$(0\.243)\$ \(JSON grid\) and \$(0\.244)\$ \(figure grid\)"),
+    Claim("partial_share", r"score of \$(0\.302)\$ \(JSON grid\) and \$(0\.187)\$ \(figure grid\)"),
+    # The norm-deviation claims are withdrawn: partial rotary is orthogonal once the
+    # rotated block is paired within itself, so the paper now states a ceiling and
+    # explains the silently-wrong pairing that motivated the earlier, wrong number.
     Claim(
-        "partial_norm_dev",
-        r"a norm deviation of \$(0\.2663)\$ at \$n_\{\\mathrm\{rot\}\} = (\d+)\$",
+        "partial_norm_ceiling",
+        r"&\s*\$<(10)\^\{-(13)\}\$, \$(1\.776)\\\!\\times\\\!10\^\{(-15)\}\$ & \\texttt\{partial",
     ),
-    Claim("partial_norm_ref", r"against \$(1\.776)\\times10\^\{(-15)\}\$ for full RoPE --- a factor of \$(1\.5)\\times10\^\{(14)\}\$"),
     Claim("partial_prov_spreads", r"&\s*\$(0\.0)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & \\texttt\{measurements\.json :: partial"),
-    Claim("partial_prov_share", r"&\s*\$(0\.243)\$, \$(0\.244)\$ & \\texttt\{clean"),
-    Claim("partial_prov_norm", r"&\s*\$(0\.2663)\$, \$(1\.776)\\\!\\times\\\!10\^\{(-15)\}\$ & \\texttt\{partial"),
-    Claim("partial_prov_normfactor", r"factor in Section~\\ref\{sec:partial\} divides \$(0\.2663)\$ by \$(1\.776)\\times10\^\{(-15)\}\$"),
+    Claim("partial_prov_share", r"&\s*\$(0\.302)\$, \$(0\.187)\$ & \\texttt\{clean"),
     # ---- mscale / entropy -------------------------------------------------------
     Claim("mscale_formula", r"\\mathrm\{mscale\} = (0\.1) \\ln s \+ 1"),
     Claim(
@@ -417,13 +417,17 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("prov_pair_d1", r"&\s*\$(-0\.9525)\$, \$(-1\.0607)\$, \$(0\.1136)\$, \$(4\.3)\\\!\\times\\\!10\^\{(-6)\}\$ & \\texttt\{fig06\}"),
     Claim("prov_yarn_note", r"&\s*\$(\d+)\$ of \$(\d+)\$ bit-for-bit"),
     Claim("prov_partial", r"&\s*\$(0\.0)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & \\texttt\{measurements"),
-    Claim("prov_partial_share", r"&\s*\$(0\.243)\$, \$(0\.244)\$ & \\texttt\{clean"),
-    Claim("prov_partial_norm", r"&\s*\$(0\.2663)\$, \$(1\.776)\\\!\\times\\\!10\^\{(-15)\}\$ & \\texttt\{partial"),
+    Claim("prov_partial_share", r"&\s*\$(0\.302)\$, \$(0\.187)\$ & \\texttt\{clean"),
+    Claim("prov_partial_norm", r"&\s*\$<(10)\^\{-(13)\}\$, \$(1\.776)\\\!\\times\\\!10\^\{(-15)\}\$ & \\texttt\{partial"),
+    # The remark that replaced the withdrawn norm claim restates n_rot.
+    Claim(
+        "partial_norm_remark_nrot",
+        r"deviation below the float64 noise floor at \$n_\{\\mathrm\{rot\}\} = (\d+)\$",
+    ),
     Claim("derived_counts", r"converted to counts out of \$(\d+)\$"),
     Claim("derived_half", r"the denominator is \$\\half = (\d+)\$ pairs"),
     Claim("derived_multiple", r"table fractions are multiples of \$(1)/(\d+)\$"),
     Claim("derived_multiple_2", r"every fraction is a multiple of \$(1)/(\d+)\$"),
-    Claim("derived_norm_factor", r"The \$(1\.5)\\times10\^\{(14)\}\$ factor in Section~\\ref\{sec:partial\}"),
     Claim("derived_percent", r"The ``less than \$(0\.4)\\%\$'' claim in Section~\\ref\{sec:context\} is \$1 - (0\.996840)\$"),
     Claim("derived_1000x", r"``roughly \$(\d+)\\times\$'' comparison divides \$1\.24572\\times10\^\{6\}\$ by \$(\d+\.\d+)\$"),
     Claim("exact_identity_zero", r"partial-RoPE sub-score has spread \$(0\.0)\$"),
@@ -1686,7 +1690,6 @@ def test_partial_rope_split_fractions_and_dimensions() -> None:
     assert int(dim) == partial["dim"]
     assert int(n_rot) == partial["n_rot"]
     assert int(literal("limitations_nrot")) == partial["n_rot"]
-    assert int(literal("partial_norm_dev", 2)) == partial["n_rot"]
     assert partial["n_rot"] == int(partial["rotated_fraction"] * partial["dim"])
     assert partial["rotated_fraction"] + partial["clean_fraction"] == 1.0
     assert partial["clean_fraction"] == 0.75
@@ -1748,33 +1751,45 @@ def test_the_clean_magnitude_share_on_both_grids() -> None:
     assert_paper_number_matches(
         MEASUREMENTS["partial_rope"]["clean_magnitude_share_mean"],
         literal("prov_partial_share", 1),
-        "the appendix's 0.243",
+        "the appendix's JSON-grid share",
     )
-    assert_paper_number_matches(measured, literal("prov_partial_share", 2), "the appendix's 0.244")
+    assert_paper_number_matches(measured, literal("prov_partial_share", 2), "the appendix's figure-grid share")
     assert 0.0 < measured < 1.0
 
 
-def test_partial_rope_norm_deviation_and_its_factor_over_full_rope() -> None:
+def test_partial_rope_preserves_the_norm_exactly_as_full_rope_does() -> None:
+    """Partial rotary is orthogonal, so it preserves the norm like full RoPE.
+
+    This test used to pin a norm deviation of 0.2663 and a 1.5e14 factor over full
+    RoPE, on the strength of an implementation that paired channel ``i`` with
+    ``i + head_dim // 2`` across the whole head. That pairing leaves every touched
+    rotary pair half rotated and half not; it is not what GPT-NeoX models such as
+    ``EleutherAI/pythia-160m`` do, and it is not orthogonal. With the correct
+    within-block pairing the deviation sits at the float64 floor, and the paper no
+    longer claims that partial rotation damages the magnitude gate.
+    """
     partial = MEASUREMENTS["partial_rope"]
-    assert_paper_number_matches(
-        partial["partial_norm_deviation"], literal("partial_norm_dev", 1), "the norm deviation"
+    deviation = partial["partial_norm_deviation"]
+    assert deviation < 1e-12, (
+        f"partial rotary must preserve the norm; measured {deviation:.3e}. If this "
+        "failed, apply_partial_rope is pairing across the head instead of within "
+        "the rotated block."
     )
     full_rope = MEASUREMENTS["structural_facts"]["key_norm_preservation_max_abs_err"]
-    assert_paper_sci_matches(
-        full_rope, literal("partial_norm_ref", 1), int(literal("partial_norm_ref", 2)),
-        "the full-RoPE residual",
+    assert full_rope < 1e-12, "full RoPE is the reference floor"
+    # Same order as full RoPE, not orders worse.
+    assert max(deviation, full_rope) < 1e-12
+
+    # The paper states the partial-RoPE floor as a ceiling, like the other residuals.
+    ceiling = float(literal("prov_partial_norm", 1)) * 10.0 ** -int(
+        literal("prov_partial_norm", 2)
     )
-    factor = partial["partial_norm_deviation"] / full_rope
-    assert_paper_sci_matches(
-        factor, literal("partial_norm_ref", 3), int(literal("partial_norm_ref", 4)),
-        "the norm-deviation factor",
-    )
-    prov_dev, prov_mantissa, prov_exponent = groups("partial_prov_norm")[0]
-    assert_paper_number_matches(partial["partial_norm_deviation"], prov_dev, "the deviation (appendix)")
-    assert_paper_sci_matches(full_rope, prov_mantissa, int(prov_exponent), "the full-RoPE residual (appendix)")
-    div_dev, div_mantissa, div_exponent = groups("partial_prov_normfactor")[0]
-    assert_paper_number_matches(partial["partial_norm_deviation"], div_dev, "the deviation (derived)")
-    assert_paper_sci_matches(full_rope, div_mantissa, int(div_exponent), "the divisor (derived)")
+    assert deviation < ceiling
+    full_mantissa, full_exponent = groups("prov_partial_norm")[0][2:]
+    assert_paper_sci_matches(full_rope, full_mantissa, int(full_exponent), "the full-RoPE floor")
+
+    # The remark that replaced the withdrawn claim must name the same n_rot.
+    assert int(literal("partial_norm_remark_nrot")) == partial["n_rot"]
 
 
 def test_partial_rope_subscores_reconstruct_the_full_score() -> None:

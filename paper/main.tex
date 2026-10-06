@@ -835,9 +835,9 @@ Figure~\ref{fig:partial} shows the split. At $d = 64$ with
 $n_{\mathrm{rot}} = 16$: the unrotated sub-score's spread over the $5$-point
 grid is \emph{exactly} $0.0$, and over the finer $54$-point grid it
 is also exactly $0.0$ --- the plotted constant is $0.6857345646988313$ at every
-distance. The rotated sub-score, over those same grids, varies by $12.03$ and
-$22.56$ respectively. The clean part carries a mean magnitude share of the
-score of $0.243$ (JSON grid) and $0.244$ (figure grid), so this is a
+distance. The rotated sub-score, over those same grids, varies by $11.34$ and
+$24.20$ respectively. The clean part carries a mean magnitude share of the
+score of $0.302$ (JSON grid) and $0.187$ (figure grid), so this is a
 substantially weighted, genuinely position-free bilinear term.
 
 This is the one setting in which a position-free additive attribution is exactly
@@ -845,15 +845,19 @@ correct, and it is correct because a quarter of the channels carry no position
 at all. That makes \pip\ the natural recommendation for feature-level
 attribution in a model that has it.
 
-\begin{remark}[\pip\ is not orthogonal, and that matters]
-The \emph{magnitude} consequences of \pip\ are not free. Partial rotation is
-not an orthogonal transform, and a partially rotated vector's norm is not
-preserved: we measure a norm deviation of $0.2663$ at
-$n_{\mathrm{rot}} = 16$, against $1.776\times10^{-15}$ for full RoPE --- a
-factor of $1.5\times10^{14}$. Any argument that reads a gate off a partially
-rotated head has to account for this, because the quantity it treats as
-position-free is not. The unrotated sub-\emph{score} is position-free; the
-unrotated norm is not.
+\begin{remark}[$\pip$ preserves the norm too]
+There is a subtlety here that a natural implementation gets wrong. Partial
+rotary is orthogonal, and so preserves the norm exactly, as full RoPE does: we
+measure a deviation below the float64 noise floor at
+$n_{\mathrm{rot}} = 16$, the same as full RoPE. This holds only if the rotated
+block is paired \emph{within itself} --- channel $i$ with channel
+$i + n_{\mathrm{rot}}/2$, the GPT-NeoX layout used by models such as
+\texttt{EleutherAI/pythia-160m}. Pairing $i$ with $i + d/2$ across the whole head
+instead leaves every touched pair half rotated and half not; that variant is not
+orthogonal and is not what any published model does. We mention it because the
+failure is silent: the code runs, the numbers look reasonable, and only a
+norm check reveals the difference. The one claim we withdraw here is any
+suggestion that partial rotation damages the magnitude gate.
 \end{remark}
 
 \subsection{$\mathrm{mscale}$ is a temperature}
@@ -1138,9 +1142,9 @@ Sec.~\ref{sec:context} & $9$ of $32$, $32.00\times$ & \texttt{fig01} CSV, unchan
 Sec.~\ref{sec:exact} & $0.9526294618$, $2.3046990967$ & \texttt{fig06} CSV, \texttt{amplitude\_R\_k} \\
  & $-0.9525$, $-1.0607$, $0.1136$, $4.3\!\times\!10^{-6}$ & \texttt{fig06} CSV \\
 Sec.~\ref{sec:background} & $9$ of $32$ bit-for-bit & \texttt{fig01} CSV, column 3 vs column 1 \\
-Sec.~\ref{sec:partial} & $0.0$, $12.03$, $22.56$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
- & $0.243$, $0.244$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
- & $0.2663$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; full-RoPE floor \\
+Sec.~\ref{sec:partial} & $0.0$, $11.34$, $24.20$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
+ & $0.302$, $0.187$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
+ & $<10^{-13}$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; full-RoPE floor \\
 Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entropy.mscale} \\
  & $0.9233 \to 0.8651$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
  & $0.8383$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
@@ -1157,8 +1161,7 @@ multiple of $1/32$. Error ratios are quotients of two entries of the same CSV at
 the same $\delta$. The ``$16$ orders of magnitude'' comparison in
 Section~\ref{sec:cond} divides a swing of order $10^{2}$--$10^{3}$ by the
 $5.0\times10^{-14}$ additivity residual: $920.04/4.974\times10^{-14}
-\approx 1.85\times10^{16}$. The $1.5\times10^{14}$ factor in
-Section~\ref{sec:partial} divides $0.2663$ by $1.776\times10^{-15}$. The ``less
+\approx 1.85\times10^{16}$. The ``less
 than $0.4\%$'' claim in Section~\ref{sec:context} is $1 - 0.996840$. The
 ``roughly $1000\times$'' comparison divides
 $1.24572\times10^{6}$ by $1225.06$.

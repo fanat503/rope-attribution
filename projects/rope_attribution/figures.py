@@ -55,7 +55,7 @@ from rope_attribution.experiments import (  # noqa: E402
     score_relative,
 )
 from rope_attribution.rope import (  # noqa: E402
-    apply_rope,
+    apply_partial_rope,
     inv_freq,
     partial_rope_cos_sin,
     yarn_parameters,
@@ -788,8 +788,8 @@ def fig07_partial_rope() -> FigureRecord:
     clean, rotated, full = [], [], []
     for delta in DELTA_GRID:
         cos, sin = partial_rope_cos_sin(np.array([0, delta]), freqs, n_rot)
-        q_rot = apply_rope(q_hat[None, :], cos[0:1], sin[0:1])[0]
-        k_rot = apply_rope(k_hat[None, :], cos[1:2], sin[1:2])[0]
+        q_rot = apply_partial_rope(q_hat[None, :], cos[0:1], sin[0:1], n_rot)[0]
+        k_rot = apply_partial_rope(k_hat[None, :], cos[1:2], sin[1:2], n_rot)[0]
         clean.append(float(q_hat[n_rot:] @ k_hat[n_rot:]))
         rotated.append(float(q_rot[:n_rot] @ k_rot[:n_rot]))
         # The two halves must reconstruct the full partially-rotated score.

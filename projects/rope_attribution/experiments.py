@@ -55,6 +55,7 @@ from pathlib import Path
 import numpy as np
 
 from rope_attribution.rope import (
+    apply_partial_rope,
     apply_rope,
     inv_freq,
     partial_rope_cos_sin,
@@ -383,8 +384,8 @@ def partial_rope_split(
     clean_scores, rot_scores = [], []
     for d in deltas:
         cos, sin = partial_rope_cos_sin(np.array([0, d]), freqs, n_rot)
-        q_rot = apply_rope(q_hat[None, :], cos[0:1], sin[0:1])[0]
-        k_rot = apply_rope(k_hat[None, :], cos[1:2], sin[1:2])[0]
+        q_rot = apply_partial_rope(q_hat[None, :], cos[0:1], sin[0:1], n_rot)[0]
+        k_rot = apply_partial_rope(k_hat[None, :], cos[1:2], sin[1:2], n_rot)[0]
         clean_scores.append(float(q_hat[n_rot:] @ k_hat[n_rot:]))
         rot_scores.append(float(q_rot[:n_rot] @ k_rot[:n_rot]))
 
@@ -403,9 +404,17 @@ def partial_rope_split(
         "clean_score_spread": float(clean_scores.max() - clean_scores.min()),
         "rotated_score_spread": float(rot_scores.max() - rot_scores.min()),
         "clean_magnitude_share_mean": float(magnitude_share.mean()),
+        # Partial rotary is orthogonal under the GPT-NeoX pairing, so this is 0 up to
+        # roundoff, exactly as for full RoPE.
         "partial_norm_deviation": float(
             np.abs(
-                np.linalg.norm(apply_rope(q_hat[None, :], *partial_rope_cos_sin(np.array([37]), freqs, n_rot)))
+                np.linalg.norm(
+                    apply_partial_rope(
+                        q_hat[None, :],
+                        *partial_rope_cos_sin(np.array([37]), freqs, n_rot),
+                        n_rot,
+                    )
+                )
                 - np.linalg.norm(q_hat)
             ).max()
         ),
