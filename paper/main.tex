@@ -112,7 +112,7 @@ orthogonal, the magnitude gate $|q|$ is exactly position-independent, which
 promotes the gate/phase split from heuristic to theorem. Second, the exactness
 does not extend to position-\emph{free} coefficients: $A_{ij}$ is a function of
 the relative distance $\delta$, and we measure one feature's contribution
-swinging by up to $920.04\times$ in magnitude across the distance grid while
+reversing sign across the distance range while
 the total remains additive to $5.0\times10^{-14}$. A position-free per-feature
 attribution number is therefore not well-posed under RoPE; the per-feature,
 per-distance one is. Third, we measure what context extension actually buys.
@@ -163,7 +163,7 @@ rather than asserting it.
 
 \paragraph{R2: the real obstacle is position-conditionality, not bilinearity.}
 $A_{ij}$ depends on $\delta$. A single feature's contribution is a function of
-distance, not a number. We measure swings of up to $920.04\times$ across a
+distance, not a number. We measure that every feature's contribution reverses sign across a
 $54$-point distance grid, against an additivity residual of
 $5.0\times10^{-14}$. The well-posed object under RoPE is a per-feature,
 per-distance attribution. A position-free scalar per feature is not.
@@ -583,31 +583,50 @@ has $\Bk = 0$.
 \paperfigure{fig09_position_conditional_attribution}{%
   Per-feature contribution against relative distance. Eight synthetic
   features; each panel plots $c_i(\delta)$ against $\delta$ with the feature's
-  own mean as a dotted line. Features do not merely move --- they change
-  magnitude by up to $920.04\times$ across the grid. See
-  Section~\ref{sec:cond}.%
+  own mean as a dotted line. Every feature's curve changes sign over the range.
+  See Section~\ref{sec:cond}.%
 }{fig:attrib}
 
-Figure~\ref{fig:attrib} measures the effect directly. With $F = 8$ features on
-the $54$-point distance grid, the ratio $\max_\delta|c_i| / \min_\delta|c_i|$
-takes the values $920.04$, $193.26$, $169.40$, $154.47$, $104.19$, $73.57$,
-$38.63$ and $35.52$ across the eight features. The median is $154.47$, and all
-eight exceed $35\times$. On the coarser $5$-point grid
-$\{1, 8, 32, 128, 512\}$ the worst-feature ratio is $43.05$; that is a statement
-about that grid's coarseness, not about the phenomenon, since the ratio grows
-with the number of distances sampled.
+Figure~\ref{fig:attrib} measures the effect directly, and the result is sharper
+than a magnitude ratio. With $F = 8$ features on the $54$-point distance grid,
+\textbf{every one of the eight contributions changes sign} somewhere in
+$\delta \in [1, 8192]$. The magnitude of $|c_i|$ varies with a coefficient of
+variation of $0.70 \pm 0.03$ across seeds, and the magnitudes at the two ends of
+the range are the same size to within a factor of $10^{-0.08}$. What varies is
+not how large the contribution is but which way it points.
 
-These two numbers together are the central result. A single feature's
-attribution value is not a property of the feature; it is a property of
-\emph{(feature, distance)}. Holding the total additive to
-$5.0\times10^{-14}$ while individual components swing by $920\times$ shows
-that additivity and position-conditionality are independent phenomena, and that
-it is the second that obstructs position-free attribution.
+This is the central result, and it is a stronger one than a large ratio would
+have been. A feature whose attribution reverses sign cannot be summarised by any
+position-independent number --- not approximately, but with the wrong sign. That
+is what obstructs position-free attribution.
+
+\begin{remark}[The ratio we previously led with was an artefact]
+An earlier version of this section reported a worst-feature ratio
+$\max_\delta|c_i|/\min_\delta|c_i|$ of $920\times$. We withdrew it, and it is
+worth recording why, because the failure mode is general. The ratio is
+$\max/\min$ of a continuous function over a sampled grid: as the grid gets
+denser, $\min_\delta|c_i|$ keeps shrinking toward zero while the numerator
+saturates, so the ratio grows without bound. Measured on the same vectors at
+$5$, $17$, $48$, $104$, $235$ and $599$ distances it takes values spread by a
+factor of $31$, and it is not even monotone in density. Across $12$ independent
+seeds its standard deviation exceeds its own mean. It measures the sampling, not
+the function.
+
+The replacements above are chosen for stability rather than for size: the
+coefficient of variation has $3.7\%$ seed variance, and the sign-crossing
+fraction has none at all, because both are computed on a pre-registered distance
+range rather than on whatever extremum a particular grid happens to land near.
+All of this is recomputed in
+\texttt{rope\_attribution.statistics} and written to
+\texttt{results/statistics.json}; the test suite pins the artefact's presence so
+it cannot be quietly reinstated.
+\end{remark}
 
 The practical reading: an additive attribution $\sum_{ij} f_i g_j A_{ij}$ with
 $A_{ij}$ free of position is not merely an approximation --- it is a
 mis-specification. It cannot represent the measured curves for any constant
-$A_{ij}$, because the error it would incur is of the order of the swing itself,
+$A_{ij}$, because the error it would incur is of the order of the contribution
+itself,
 some $16$ orders of magnitude above the additivity residual. The correct object
 is per-feature and per-distance, which we define concretely in
 Section~\ref{sec:wellposed}. Whether that object is useful in practice is a
@@ -898,7 +917,7 @@ R1 and R2 pull in opposite directions and both are correct. The additive
 decomposition of Equation~\ref{eq:additive} is exact to
 $5.0\times10^{-14}$ --- the coefficients $A_{ij}$ exist and are real numbers,
 not fudges. But those real numbers are functions of $\delta$, and they vary by
-up to $920.04\times$ over the distance grid. Exactness therefore buys nothing
+over the distance range. Exactness therefore buys nothing
 against position-conditionality: the map from features to score is exactly
 additive at every fixed distance and wildly non-constant across distances. This
 is the sense in which position-conditionality, not bilinearity, is the operative
@@ -941,7 +960,7 @@ it; they say nothing about what any particular trained model does.
 our attribution runs over are random with non-negative coefficients. They have
 the shape of a sparse code and none of its content. No statement here should be
 read as evidence about real feature geometry, real feature redundancy, or real
-circuit structure. In particular, the $920.04\times$ swing in
+circuit structure. In particular, the sign reversal in
 Section~\ref{sec:cond} is a property of random directions in a
 $64$-dimensional head, and we have no measurement of what the corresponding
 quantity is for real features.
@@ -1062,7 +1081,7 @@ amplitude and a linear phase. Three consequences. Attribution at the score level
 is exact, to $3.6\times10^{-14}$, and orthogonality makes the magnitude gate
 exactly position-independent, so the gate/phase split is a theorem rather than
 an approximation. Position-conditionality, not bilinearity, is the operative
-obstruction: a feature's contribution swings by up to $920.04\times$ across
+obstruction: a feature's contribution reverses sign across
 distance while the total stays additive to $5.0\times10^{-14}$, so
 position-free per-feature attribution is mis-specified under RoPE and the
 per-feature, per-distance one is the correct object. And context extension
@@ -1129,7 +1148,7 @@ paper location & value(s) & file and key \\
 \midrule
 Tab.~\ref{tab:exact} & all rows & \texttt{measurements.json :: structural\_facts} \\
  & additivity rows & \texttt{feature\_attribution}; \texttt{fig09} CSV \\
-Sec.~\ref{sec:cond} & $920.04$, $154.47$ & \texttt{fig09} CSV, \texttt{contribution} \\
+Sec.~\ref{sec:cond} & $8/8$ features cross zero; $\mathrm{CV}=0.70$, drift $0$ & \texttt{results/statistics.json} \\
  & $43.05$ & \texttt{measurements.json :: feature\_attribution} \\
 Sec.~\ref{sec:context} & Tab.~\ref{tab:spectrum} & \texttt{measurements.json :: method\_spectrum} \\
  & $0.000\rad$ agreement & \texttt{fig03} CSV, \texttt{max\_abs\_angle\_rad} \\
@@ -1158,10 +1177,12 @@ distances because \yarn's ramp is a fixed per-channel rescaling and $\D$ is
 linear in $\delta$ for every channel. Fractions converted to counts out of $32$
 are exact, since the denominator is $\half = 32$ pairs and every fraction is a
 multiple of $1/32$. Error ratios are quotients of two entries of the same CSV at
-the same $\delta$. The ``$16$ orders of magnitude'' comparison in
-Section~\ref{sec:cond} divides a swing of order $10^{2}$--$10^{3}$ by the
-$5.0\times10^{-14}$ additivity residual: $920.04/4.974\times10^{-14}
-\approx 1.85\times10^{16}$. The ``less
+the same $\delta$. The sign-crossing fraction, the coefficient of variation and
+the grid-independence drift quoted in Section~\ref{sec:cond} come from
+\texttt{results/statistics.json} and are recomputed by
+\texttt{rope\_attribution.statistics}; the withdrawn ratio is recomputed there
+too, from six grid densities, so that its instability is part of the record
+rather than a claim about a former draft. The ``less
 than $0.4\%$'' claim in Section~\ref{sec:context} is $1 - 0.996840$. The
 ``roughly $1000\times$'' comparison divides
 $1.24572\times10^{6}$ by $1225.06$.
