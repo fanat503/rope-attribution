@@ -18,7 +18,7 @@ projects/rope_attribution/
   rope.py         RoPE, YaRN, partial RoPE (numpy, float64)
   experiments.py  seven measured experiments
   figures.py      the figure set, every value computed at run time
-tests/            1245 tests
+tests/            1249 tests
 figures/          nine figures, each with a CSV sidecar
 results/          measurements.json
 ```
@@ -27,7 +27,7 @@ Reproduce everything:
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                              # 1245 tests
+pytest -q                              # 1249 tests
 python -m projects.rope_attribution.experiments   # prints the report, rewrites results/
 python -m projects.rope_attribution.figures       # rewrites figures/
 ```
@@ -75,11 +75,22 @@ All measured at `dim = 64`, `base = 10000`, `scale = 32`. Full values in
 **Attribution is exact, but position-conditional.** With `x = sum_i f_i d_i` and
 random `W_Q`, `W_K`, the score decomposes additively into per-feature-pair terms
 `A_ij(delta)` to `3.6e-14`. But `A_ij` depends on the distance, so a single
-feature's contribution is a *function of distance*, not a scalar: its magnitude
-varies by 43x across the measured grid in `experiments.py` and by up to 920x
-across the finer grid in `figures/fig09`. This, not a failure of bilinearity, is
-the real obstacle to position-free feature attribution under RoPE
+feature's contribution is a *function of distance*, not a scalar. Measured on the
+54-point grid, **all eight features reverse sign** somewhere in
+`delta in [1, 8192]`, while the magnitudes at the two ends of the range agree to
+within a factor of `10^-0.08`. Summarising `c_i(delta)` by its per-feature mean
+— the least-squares-optimal position-free choice — leaves a residual **15 orders
+of magnitude** above the additivity residual, and that factor stays within
+`15.0`–`15.2` as the grid is made 120x denser. This, not a failure of
+bilinearity, is the real obstacle to position-free feature attribution under RoPE
 (`figures/fig09_position_conditional_attribution.png`).
+
+> The paper previously led with a worst-feature ratio of `920x`. That number was a
+> sampling artefact — a `max/min` over a grid, so it grows without bound as the
+> grid gets denser. `rope_attribution/statistics.py` reproduces the growth (a
+> factor of 32 across six grid densities, non-monotone, seed standard deviation
+> exceeding its own mean) and the paper withdrew the claim. `tests/test_paper_claims.py`
+> fails if it is reinstated.
 
 **YaRN does not shrink the largest angle, and does not come from a bigger base.**
 `max|D_k|` is *identical* for plain RoPE and YaRN at every distance measured

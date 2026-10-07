@@ -392,44 +392,50 @@ def test_additivity_number_is_repeated_consistently_in_the_prose() -> None:
 # ==========================================================================
 
 
-def test_per_feature_spread_on_the_experiment_grid_is_43x() -> None:
-    literal = readme_literal(
-        r"varies by ([\d.]+)x across the measured grid", "the per-feature spread in experiments.py"
+def test_the_readme_sign_crossing_claim_is_measured() -> None:
+    """The README's headline: all eight features reverse sign.
+
+    Recomputed from the module rather than read out of the JSON, so a stale
+    artefact cannot satisfy it.
+    """
+    import rope_attribution.statistics as STATS
+
+    assert "**all eight features reverse sign**" in README_TEXT
+
+    range_lo, range_hi = readme_groups(
+        r"`delta in \[(\d+), (\d+)\]`", "the sign-crossing range"
     )
-    assert_readme_number_matches(
-        MEASUREMENTS["feature_attribution"]["per_feature_contribution_spread_max_ratio"],
-        literal,
-        "per-feature contribution spread",
-    )
+    assert (int(range_lo), int(range_hi)) == (STATS.DELTA_LO, STATS.DELTA_HI)
+
+    summary = STATS.seed_variance()["statistics"]
+    crossing = summary["sign_crossing_fraction_mean"]
+    assert crossing["mean"] == 1.0, crossing
+    assert crossing["std"] == 0.0, crossing
+    assert STATS.N_FEATURES == 8
 
 
-def test_per_feature_spread_on_the_figure_grid_is_920x() -> None:
-    """Recomputed on the finer figure grid, as fig09 does. Not in the JSON."""
-    literal = readme_literal(
-        r"by up to ([\d.]+)x\s+across the finer grid", "the per-feature spread in fig09"
+def test_the_readme_orders_of_magnitude_claim_is_measured() -> None:
+    """The 15-order claim, the bracket the README gives, and the density factor.
+    """
+    import rope_attribution.statistics as STATS
+
+    band = STATS.position_free_error()["log10_ratio_max"]
+
+    orders = int(
+        readme_literal(r"\*\*(\d+)\s+orders\s+of\s+magnitude\*\*", "the position-free residual")
     )
-    rng = np.random.default_rng(1)  # SEED_ATTRIB in figures.py
-    freqs = R.inv_freq(HEAD_DIM, ROPE_BASE)
-    w_q = rng.standard_normal((HEAD_DIM, HEAD_DIM)) / math.sqrt(HEAD_DIM)
-    w_k = rng.standard_normal((HEAD_DIM, HEAD_DIM)) / math.sqrt(HEAD_DIM)
-    coeffs = rng.random(8) * 1.5 + 0.1
-    dirs_q = rng.standard_normal((8, HEAD_DIM))
-    dirs_k = rng.standard_normal((8, HEAD_DIM))
-    q_i = coeffs[:, None] * (dirs_q @ w_q)
-    k_i = coeffs[:, None] * (dirs_k @ w_k)
-    grid = figure_delta_grid()
-    contrib = np.zeros((8, len(grid)))
-    for j, delta in enumerate(grid):
-        block = np.array(
-            [[E.score_relative(q_i[a], k_i[b], freqs, delta) for b in range(8)] for a in range(8)]
-        )
-        contrib[:, j] = block.sum(axis=1)
-    # One feature, swung over every distance: max|c_i| / min|c_i|.
-    ratios = []
-    for i in range(8):
-        nonzero = np.abs(contrib[i][contrib[i] != 0.0])
-        ratios.append(float(nonzero.max() / nonzero.min()))
-    assert_readme_number_matches(max(ratios), literal, "fig09 per-feature contribution spread")
+    assert round(band["min"]) <= orders <= round(band["max"]), (orders, band)
+
+    lo, hi = readme_groups(
+        r"`(\d+\.\d)`[^`\d]+`(\d+\.\d)` as the grid is made", "the stability bracket"
+    )
+    assert float(lo) == pytest.approx(band["min"], abs=0.05), (lo, band)
+    assert float(hi) == pytest.approx(band["max"], abs=0.05), (hi, band)
+
+    denser = float(readme_literal(r"grid is made (\d+)x denser", "the density factor"))
+    rows = STATS.position_free_error()["by_density"]
+    n_deltas = [r["n_deltas"] for r in rows]
+    assert max(n_deltas) / min(n_deltas) == pytest.approx(denser, rel=0.01)
 
 
 # ==========================================================================

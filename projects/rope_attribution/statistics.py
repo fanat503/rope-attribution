@@ -91,6 +91,7 @@ __all__ = [
     "contribution_grid",
     "ratio_vs_density",
     "grid_independence",
+    "position_free_error",
     "seed_variance",
     "run_all",
 ]
@@ -286,7 +287,66 @@ def grid_independence(seed: int = BASE_SEED, n_features: int = N_FEATURES) -> di
 
 
 # --------------------------------------------------------------------------
-# 3. seed variance
+# 3. what the position-free approximation actually costs
+# --------------------------------------------------------------------------
+
+
+def position_free_error(
+    seed: int = BASE_SEED, n_features: int = N_FEATURES, n_points: int = 54
+) -> dict:
+    """Residual of the best position-independent summary of ``c_i(delta)``.
+
+    This is the quantity that matters for the paper's argument, and it is the
+    right way to state the "how badly does position-free attribution fail"
+    claim now that the ``max/min`` ratio has been withdrawn as an artefact.
+
+    The summary is the per-feature mean over the range - a generous choice,
+    since the mean is not required to be representable by any fixed ``A_ij``.
+    The residual is then compared with the additivity residual, which is the
+    scale on which the decomposition *is* exact.
+
+    Unlike ``max/min``, this quantity does **not** degenerate as the grid gets
+    finer. Its denominator is the additivity residual, not a minimum of ``|c|``,
+    and a maximum of ``|c - mean|`` is bounded by the feature's own magnitude.
+    The drift across densities is reported so that claim stays checkable.
+    """
+    per_density = []
+    for n_points_dense in GRID_DENSITIES:
+        deltas, contrib, residuals = contribution_grid(seed, n_features, n_points_dense)
+        residual = float(residuals.max())
+        summary = contrib.mean(axis=1, keepdims=True)
+        err = np.abs(contrib - summary)
+        per_density.append(
+            {
+                "n_deltas": int(deltas.size),
+                "additivity_residual_max": residual,
+                "position_free_error_max": float(err.max()),
+                "position_free_error_min": float(err.min()),
+                "log10_ratio_max": float(np.log10(err.max() / residual)),
+                "log10_ratio_min": float(np.log10(err.min() / residual)),
+                "n_features_reversing": int(
+                    np.sum((contrib.min(axis=1) < 0) & (contrib.max(axis=1) > 0))
+                ),
+            }
+        )
+    lo = min(row["log10_ratio_max"] for row in per_density)
+    hi = max(row["log10_ratio_max"] for row in per_density)
+    lo_min = min(row["log10_ratio_min"] for row in per_density)
+    hi_min = max(row["log10_ratio_min"] for row in per_density)
+    return {
+        "summary": "per-feature mean of c_i(delta) over the range",
+        "by_density": per_density,
+        "log10_ratio_max": {"min": lo, "max": hi, "relative_drift": (hi - lo) / abs(lo)},
+        "log10_ratio_min": {
+            "min": lo_min,
+            "max": hi_min,
+            "relative_drift": (hi_min - lo_min) / abs(lo_min),
+        },
+    }
+
+
+# --------------------------------------------------------------------------
+# 4. seed variance
 # --------------------------------------------------------------------------
 
 
@@ -348,6 +408,7 @@ def run_all(
         },
         "ratio_vs_density": ratio_vs_density(base_seed, n_features),
         "grid_independence": grid_independence(base_seed, n_features),
+        "position_free_error": position_free_error(base_seed, n_features),
         "seed_variance": seed_variance(n_seeds, base_seed, n_features),
     }
 

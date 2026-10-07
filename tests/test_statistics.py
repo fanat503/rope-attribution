@@ -233,6 +233,7 @@ def test_run_all_is_json_serialisable_and_complete() -> None:
         "configuration",
         "ratio_vs_density",
         "grid_independence",
+        "position_free_error",
         "seed_variance",
     }
     json.dumps(result)  # must not raise
@@ -241,6 +242,71 @@ def test_run_all_is_json_serialisable_and_complete() -> None:
     assert cfg["delta_range"] == [S.DELTA_LO, S.DELTA_HI]
     assert cfg["n_seeds"] == 3
     assert set(result["grid_independence"]) == set(S.STATISTICS) | {"max_min_ratio_disputed"}
+
+
+def test_the_position_free_residual_is_fifteen_orders_of_magnitude() -> None:
+    """The replacement headline: how badly does position-free approximation fail?
+
+    This is the number that took over from the withdrawn ratio, so its magnitude
+    and its sign of reasoning both matter. It must be enormous, and it must be
+    enormous for every feature rather than for one lucky one.
+    """
+    result = S.position_free_error()
+    for row in result["by_density"]:
+        assert row["log10_ratio_max"] > 14.0, row
+        assert row["log10_ratio_min"] > 10.0, row
+        assert row["n_features_reversing"] == S.N_FEATURES, row
+
+
+def test_the_position_free_residual_does_not_degenerate_with_grid_density() -> None:
+    """The property the withdrawn ratio lacked, and the reason it replaced it.
+
+    ``max/min`` grows without bound because its denominator is a minimum of a
+    continuous function. This statistic's denominator is an additive residual and
+    its numerator is bounded by the feature's own magnitude, so the quotient has
+    to stay put. If this ever starts drifting, the paper's replacement claim is
+    no better than the artefact it replaced, and this test is what will say so.
+    """
+    result = S.position_free_error()
+    band = result["log10_ratio_max"]
+    assert band["relative_drift"] < 0.05, band
+    # Compare with the artefact on the same footing.
+    ratios = [row["max_min_ratio"] for row in S.ratio_vs_density()]
+    artefact_drift = (max(ratios) - min(ratios)) / min(ratios)
+    assert band["relative_drift"] < 0.1 * artefact_drift, (
+        band["relative_drift"],
+        artefact_drift,
+    )
+
+
+def test_the_position_free_residual_is_what_the_mean_summary_actually_incurs() -> None:
+    """The claim is about the mean summary specifically, and the mean is L2-optimal.
+
+    The paper does not claim the mean is the best summary in every norm, only
+    that summarising by it costs what is measured. This test pins the part that
+    can be pinned: the per-feature mean is the least-squares optimum among all
+    position-independent constants, so the reported squared error is a lower
+    bound on what *any* position-free choice incurs in that norm. The reported
+    max-norm error is simply what the mean incurs, and is large.
+    """
+    _deltas, contrib, _residuals = S.contribution_grid(n_points=54)
+    mean = contrib.mean(axis=1, keepdims=True)
+    residual = float(_residuals.max())
+
+    def squared_error(summary: np.ndarray) -> float:
+        return float(((contrib - summary) ** 2).sum())
+
+    baseline = squared_error(mean)
+    for scale in (0.5, 0.9, 1.1, 2.0):
+        assert squared_error(scale * mean) >= baseline - 1e-9
+    # A shifted per-feature summary is worse still.
+    assert squared_error(mean + 1.0) > baseline
+
+    # The measured quantity is the max-norm error, and it is not roundoff.
+    assert np.abs(contrib - mean).max() / residual > 1e14
+    # It is also large in the norm where the mean is optimal, so no norm choice
+    # rescues a position-free summary.
+    assert np.sqrt(baseline / contrib.size) / residual > 1e13
 
 
 def test_main_writes_the_report_it_prints() -> None:

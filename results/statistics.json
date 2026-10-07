@@ -125,6 +125,75 @@
       "relative_drift": 30.91314728569991
     }
   },
+  "position_free_error": {
+    "summary": "per-feature mean of c_i(delta) over the range",
+    "by_density": [
+      {
+        "n_deltas": 5,
+        "additivity_residual_max": 3.552713678800501e-14,
+        "position_free_error_max": 49.85844758219817,
+        "position_free_error_min": 0.8892806233567683,
+        "log10_ratio_max": 15.147178543837066,
+        "log10_ratio_min": 13.398478621394776,
+        "n_features_reversing": 8
+      },
+      {
+        "n_deltas": 17,
+        "additivity_residual_max": 3.552713678800501e-14,
+        "position_free_error_max": 55.86819161285157,
+        "position_free_error_min": 0.2801727297446173,
+        "log10_ratio_max": 15.19660440586111,
+        "log10_ratio_min": 12.896865653378343,
+        "n_features_reversing": 8
+      },
+      {
+        "n_deltas": 48,
+        "additivity_residual_max": 3.907985046680551e-14,
+        "position_free_error_max": 67.16812293815858,
+        "position_free_error_min": 0.01116209912645072,
+        "log10_ratio_max": 15.235210318507315,
+        "log10_ratio_min": 11.455792981718401,
+        "n_features_reversing": 8
+      },
+      {
+        "n_deltas": 104,
+        "additivity_residual_max": 6.217248937900877e-14,
+        "position_free_error_max": 64.95797594840165,
+        "position_free_error_min": 0.025553496431561684,
+        "log10_ratio_max": 15.019034227272984,
+        "log10_ratio_min": 11.613852075328472,
+        "n_features_reversing": 8
+      },
+      {
+        "n_deltas": 235,
+        "additivity_residual_max": 5.684341886080802e-14,
+        "position_free_error_max": 80.01612257988229,
+        "position_free_error_min": 0.014299891029988743,
+        "log10_ratio_max": 15.148497311732273,
+        "log10_ratio_min": 11.40065253722185,
+        "n_features_reversing": 8
+      },
+      {
+        "n_deltas": 599,
+        "additivity_residual_max": 6.217248937900877e-14,
+        "position_free_error_max": 98.89476744236174,
+        "position_free_error_min": 0.0033097335213572165,
+        "log10_ratio_max": 15.201575056712961,
+        "log10_ratio_min": 10.72619477174514,
+        "n_features_reversing": 8
+      }
+    ],
+    "log10_ratio_max": {
+      "min": 15.019034227272984,
+      "max": 15.235210318507315,
+      "relative_drift": 0.014393474837535034
+    },
+    "log10_ratio_min": {
+      "min": 10.72619477174514,
+      "max": 13.398478621394776,
+      "relative_drift": 0.24913624137135246
+    }
+  },
   "seed_variance": {
     "n_seeds": 12,
     "n_points": 54,

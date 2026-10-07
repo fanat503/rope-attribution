@@ -608,7 +608,7 @@ $\max/\min$ of a continuous function over a sampled grid: as the grid gets
 denser, $\min_\delta|c_i|$ keeps shrinking toward zero while the numerator
 saturates, so the ratio grows without bound. Measured on the same vectors at
 $5$, $17$, $48$, $104$, $235$ and $599$ distances it takes values spread by a
-factor of $31$, and it is not even monotone in density. Across $12$ independent
+factor of $32$, and it is not even monotone in density. Across $12$ independent
 seeds its standard deviation exceeds its own mean. It measures the sampling, not
 the function.
 
@@ -625,9 +625,12 @@ it cannot be quietly reinstated.
 The practical reading: an additive attribution $\sum_{ij} f_i g_j A_{ij}$ with
 $A_{ij}$ free of position is not merely an approximation --- it is a
 mis-specification. It cannot represent the measured curves for any constant
-$A_{ij}$, because the error it would incur is of the order of the contribution
-itself,
-some $16$ orders of magnitude above the additivity residual. The correct object
+$A_{ij}$, and the size of the failure is a measurement rather than a slogan:
+replacing $c_i(\delta)$ by its per-feature mean over the range leaves a residual
+some $15$ orders of magnitude above the additivity residual, and that factor
+stays between $15.0$ and $15.2$ as the distance grid is made $120\times$ denser.
+Unlike the withdrawn ratio, this quantity has an additive residual in its
+denominator, so it does not grow without bound. The correct object
 is per-feature and per-distance, which we define concretely in
 Section~\ref{sec:wellposed}. Whether that object is useful in practice is a
 question about downstream circuits, and is outside what we measure.
@@ -1149,7 +1152,7 @@ paper location & value(s) & file and key \\
 Tab.~\ref{tab:exact} & all rows & \texttt{measurements.json :: structural\_facts} \\
  & additivity rows & \texttt{feature\_attribution}; \texttt{fig09} CSV \\
 Sec.~\ref{sec:cond} & $8/8$ features cross zero; $\mathrm{CV}=0.70$, drift $0$ & \texttt{results/statistics.json} \\
- & $43.05$ & \texttt{measurements.json :: feature\_attribution} \\
+  & $15$ orders, bracket $15.0$-$15.2$ & \texttt{results/statistics.json :: position\_free\_error} \\
 Sec.~\ref{sec:context} & Tab.~\ref{tab:spectrum} & \texttt{measurements.json :: method\_spectrum} \\
  & $0.000\rad$ agreement & \texttt{fig03} CSV, \texttt{max\_abs\_angle\_rad} \\
  & $0.4464$, $1.0000$ & ratios of fig03 medians and maxima \\

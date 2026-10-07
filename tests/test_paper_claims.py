@@ -39,23 +39,21 @@ tokens survive are only those listed in :data:`EXEMPT_ALGEBRA`, each with a
 stated reason.  Adding a number to the paper without adding a test for it fails
 there.
 
-Four known defects in ``paper/main.tex`` are left as *failing* tests rather than
-being silently loosened.  Each names itself in the test name and works the
-arithmetic out in its docstring:
+All four of the defects this file has found have been *fixed* rather than
+loosened: each names itself in the test name and works the arithmetic out in its
+docstring.
 
-* ``test_raising_the_base_by_s_equals_dividing_positions_by_s`` - Section
-  \\ref{sec:background} calls position interpolation "algebraically equivalent"
-  to replacing the base by ``base * s``.  It is not: ``inv_freq[k] = base **
-  (-2k/d)``, so a uniform division by ``s`` and a multiplication of the base by
-  ``s`` differ at every channel except ``k = 0``.
-* ``test_swing_versus_additivity_residual_is_at_least_fifteen_orders_of_magnitude``
-  - the paper says "some 14 orders of magnitude"; its own numbers give 16.
-* ``test_the_synthesis_ramp_from_two_to_eleven_out_of_thirty_two`` - the paper
-  says the linearizable fraction goes "from 2/32 to 11/32 at delta ~ 861";
-  fig04 says plain RoPE holds 0/32 there (2/32 only up to delta = 549).
-* ``test_the_appendix_rounds_the_two_pair_amplitudes_correctly`` - the appendix
-  truncates ``0.9526294617807264`` to ``0.9526294617`` instead of rounding it
-  to ``0.9526294618``.
+One further defect was found by measurement rather than by reading, and is
+recorded here because the audit is more useful for what it caught:
+
+* the paper used to lead with a worst-feature ratio of 920.04x.  That number is
+  a sampling artefact: it is a ``max/min`` over a grid, so it grows without
+  bound as the grid gets denser.  ``rope_attribution.statistics`` reproduces the
+  growth (a factor of 32 across six densities, non-monotone, with a seed
+  standard deviation exceeding its own mean), the paper withdrew the number in a
+  remark, and the tests below now pin the replacements' *stability* instead of
+  their size.  ``test_the_ratio_is_withdrawn_and_the_paper_says_so`` fails if the
+  claim is ever quietly reinstated.
 """
 
 from __future__ import annotations
@@ -155,14 +153,9 @@ CLAIMS: tuple[Claim, ...] = (
     # ---- the two grids ------------------------------------------------------
     Claim("grid_table", r"a \$5\$-point grid \$\\\{([\d, ]+)\\\}\$"),
     Claim("grid_figure", r"a \$(54)\$-point log-spaced integer grid from \$1\$ to \$(8192)\$"),
-    Claim(
-        "grid_coarse_attrib",
-        r"worst-feature ratio is \$(43\.05)\$",
-    ),
-    Claim(
-        "coarse_grid_label",
-        r"On the coarser \$(\d+)\$-point grid \$\\\{([\d, ]+)\\\}\$ the worst-feature ratio",
-    ),
+    # The coarse attribution grid is no longer quoted as a ratio, so the paper no
+    # longer labels it. The fine figure grid is the only attribution grid the
+    # prose has to pin down, and `grid_figure` does that.
     # ---- structural residuals, Table~\ref{tab:exact} ------------------------
     # The paper reports these as ceilings, not digits: each is the float64 roundoff
     # of subtracting two analytically equal expressions, so its value depends on the
@@ -217,7 +210,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("synthesis_additivity", r"is exact to \$(5\.0)\\times10\^\{-14\}\$"),
     Claim("abstract_additivity_54", r"the total remains additive to \$(5\.0)\\times10\^\{-14\}\$"),
     Claim("r2_additivity", r"additivity residual of \$(5\.0)\\times10\^\{-14\}\$"),
-    Claim("cond_additivity", r"Holding the total additive to \$(5\.0)\\times10\^\{-14\}\$"),
+    Claim("cond_additivity", r"total stays additive to \$(5\.0)\\times10\^\{-14\}\$"),
     Claim("conclusion_additivity_54", r"the total stays additive to \$(5\.0)\\times10\^\{-14\}\$"),
     # ---- how the structural tests are built ---------------------------------
     Claim(
@@ -240,19 +233,52 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("threshold_rad_table", r"\$\|\\D\| \\le (0\.1)\\rad\$, with the exact count out of \$\\half = (\d+)\$"),
     Claim("half_def", r"\\newcommand\{\\half\}\{d/(\d+)\}"),
     # ---- feature additivity / position-conditionality -----------------------
-    Claim("spread_max", r"\$(920\.04)\\times\$", 5),
+    # The max/min ratio is withdrawn as a sampling artefact.  The paper now
+    # states the sign-crossing result and the position-free residual instead;
+    # the ratio survives only inside the remark that withdraws it.
     Claim(
-        "spread_max_bare",
-        r"takes the values \$(920\.04)\$",
+        "sign_cv",
+        r"coefficient of\s+variation of \$(0\.\d+) \\pm (0\.\d+)\$",
     ),
-    Claim("spread_round", r"individual components swing by \$(920)\\times\$"),
     Claim(
-        "spread_ratios",
-        r"takes the values \$([\d.]+)\$, \$([\d.]+)\$, \$([\d.]+)\$, \$([\d.]+)\$, "
-        r"\$([\d.]+)\$, \$([\d.]+)\$, \$([\d.]+)\$ and \$([\d.]+)\$",
+        "sign_endpoint_factor",
+        r"same size to within a factor of \$10\^\{(-0\.\d+)\}\$",
     ),
-    Claim("spread_median", r"The median is \$(154\.47)\$"),
-    Claim("spread_floor", r"eight exceed \$(35)\\times\$"),
+    Claim(
+        "withdrawn_ratio",
+        r"worst-feature ratio\s+\$\\max_\\delta\|c_i\|/\\min_\\delta\|c_i\|\$ of \$(920)\\times\$",
+    ),
+    Claim(
+        "withdrawn_ratio_densities",
+        r"\$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ distances it takes",
+    ),
+    Claim("withdrawn_ratio_drift", r"values spread by a\s+factor of \$(\d+)\$"),
+    Claim("withdrawn_ratio_seeds", r"Across \$(\d+)\$ independent seeds its standard deviation"),
+    Claim("replacement_seed_variance", r"variation has .(\d\.\d).*?seed variance"),
+    # The provenance table's row for the central result.
+    Claim(
+        "prov_sign_row",
+        r"\$(\d+)/(\d+)\$ features cross zero; \$\\mathrm\{CV\}=(0\.\d+)\$, drift \$(\d+)\$",
+    ),
+    Claim(
+        "prov_orders_row",
+        r"\$(\d+)\$ orders, bracket \$(\d+\.\d)\$-\$(\d+\.\d)\$ & \\texttt\{results/statistics\.json",
+    ),
+    Claim("sign_cross_range", r"changes sign\} somewhere in \$\\delta \\in \[(\d+), (\d+)\]\$"),
+    Claim("n_features_sign_cross", r"With \$F = (\d+)\$ features on"),
+    Claim(
+        "sign_cross_all",
+        r"\\textbf\{every one of the eight\s+contributions changes sign\}",
+    ),
+    Claim(
+        "position_free_orders",
+        r"residual some \$(\d+)\$ orders of magnitude above the additivity residual",
+    ),
+    Claim(
+        "position_free_band",
+        r"stays between \$(\d+\.\d)\$ and \$(\d+\.\d)\$ as the distance grid",
+    ),
+    Claim("position_free_denser", r"grid is made \$(\d+)\\times\$ denser"),
     Claim(
         "nfeatures_grid",
         r"With \$F = (\d+)\$ features on the \$(\d+)\$-point distance grid",
@@ -266,17 +292,14 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("ngrid_54_partial", r"over the finer \$(\d+)\$-point grid it"),
     Claim("ngrid_54_fig03", r"across all \$(\d+)\$ distances of the finer grid"),
-    # ---- orders of magnitude (Section~\ref{sec:cond}) ------------------------
-    Claim("orders_claim", r"some \$(\d+)\$ orders of magnitude above the additivity residual"),
+    # ---- orders of magnitude (Section~\\ref{sec:cond}) ------------------------
+    # The paper's earlier "16 orders" divided the withdrawn 920x swing by the
+    # additivity residual. It is now the measured position-free residual, whose
+    # denominator is additive, so it does not degenerate as the grid gets denser.
     Claim(
         "orders_claim_provenance",
-        r"comparison in Section~\\ref\{sec:cond\} divides a swing of order "
-        r"\$10\^\{2\}\$--\$10\^\{3\}\$ by the \$5\.0\\times10\^\{-14\}\$ additivity residual",
-    ),
-    # The appendix now shows the quotient explicitly rather than only describing it.
-    Claim(
-        "orders_claim_quotient",
-        r"\$([\d.]+)/([\d.]+)\\times10\^\{-(\d+)\} \\approx ([\d.]+)\\times10\^\{(\d+)\}\$",
+        r"additive to \$5\.0\\times10\^\{-14\}\$",
+        2,
     ),
     # ---- YaRN ramp bookkeeping (fig01) --------------------------------------
     Claim("yarn_unchanged_caption", r"leaves the fastest \$(\d+)\$ of \$(\d+)\$ entries bit-for-bit identical"),
@@ -404,8 +427,6 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("entropy_128_prov", r"&\s*\$(0\.8383)\$, \$(1\.4852)\$ & \\texttt\{fig08\} CSV at \$\\mathrm\{scale\} = (\d+)\$"),
     Claim("entropy_prov_ratios", r"&\s*\$(\d\.\d+) \\to (\d\.\d+)\$ & \\texttt\{entropy"),
     # ---- the appendix's restatements -------------------------------------------
-    Claim("prov_rel_pos_pairs", r"&\s*\$(920\.04)\$, \$(154\.47)\$ & \\texttt\{fig09\}"),
-    Claim("prov_spread_coarse", r"&\s*\$(43\.05)\$ & \\texttt\{measurements\.json :: feature"),
     Claim("prov_max_agreement", r"&\s*\$(0\.000)\\rad\$ agreement & \\texttt\{fig03\}"),
     Claim("prov_ratios", r"&\s*\$(0\.4464)\$, \$(1\.0000)\$ & ratios of fig03"),
     Claim("prov_fig04", r"&\s*\$\\delta = (\d+)\$, \$(\d+)/(\d+)\$ & \\texttt\{fig04\}"),
@@ -445,7 +466,6 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("amp_at_8192_lead", r"At \$\\delta = (\d+)\$ the amplitude-weighted"),
     Claim("pairs_delta_3_body", r"own contribution at \$\\delta = (\d+)\$, identically under"),
     Claim("partial_clean_zero_2", r"is also exactly \$(0\.0)\$ --- the plotted constant"),
-    Claim("prov_orders_claim", r"The ``\$(\d+)\$ orders of magnitude'' comparison in"),
     Claim("fig02_eight_distances", r"against pair index at eight distances"),
     Claim(
         "prop_blind_deltas",
@@ -860,9 +880,8 @@ def test_paper_states_the_two_grids_the_numbers_came_from() -> None:
     grid = figure_delta_grid()
     assert n_figure == len(grid), f"paper says {n_figure} figure distances; the grid has {len(grid)}"
     assert (grid[0], grid[-1]) == (1, top)
-    n_coarse, coarse = groups("coarse_grid_label")[0]
-    assert [int(x) for x in coarse.split(",")] == MEASUREMENTS["feature_attribution"]["deltas"]
-    assert int(n_coarse) == len(MEASUREMENTS["feature_attribution"]["deltas"])
+    # The coarse-grid attribution ratio is no longer quoted in the paper, so the
+    # fine figure grid is the only attribution grid the prose has to pin down.
     assert set(MEASUREMENTS["partial_rope"]["deltas"]).issubset(table_grid)
     assert int(literal("table_intro_grid")) == len(table_grid)
     assert int(literal("table_caption_grid")) == len(table_grid)
@@ -1072,7 +1091,12 @@ def test_feature_additivity_claim_on_the_5_point_grid() -> None:
 
 
 def test_feature_additivity_claim_on_the_54_point_grid() -> None:
-    """fig09's ``additivity_residual`` column, which the paper cites by name."""
+    """fig09's ``additivity_residual`` column, which the paper cites by name.
+
+    Withdrawing the ratio must not weaken the exactness claim, so this test is
+    kept: the additivity residual is the denominator of the replacement
+    statistic, and a denominator that moves would move the headline with it.
+    """
     fine = float(fig09_grid()[1].max())
     assert_paper_asserts_below(
         fine, "additivity_54pt_ceiling", "feature additivity, 54-point grid"
@@ -1108,28 +1132,125 @@ def test_the_two_grids_give_two_different_additivity_residuals() -> None:
 # ==========================================================================
 
 
-def test_per_feature_spread_on_the_experiment_grid_is_43_05() -> None:
-    assert_paper_number_matches(
-        MEASUREMENTS["feature_attribution"]["per_feature_contribution_spread_max_ratio"],
-        literal("grid_coarse_attrib"),
-        "per-feature spread on the 5-point grid",
-    )
-    assert_paper_number_matches(
-        MEASUREMENTS["feature_attribution"]["per_feature_contribution_spread_max_ratio"],
-        literal("prov_spread_coarse"),
-        "per-feature spread (appendix)",
-    )
+def test_the_ratio_is_withdrawn_and_the_paper_says_so() -> None:
+    """The headline ratio is gone, and the withdrawal is on the record.
+
+    The single largest number the paper used to quote was a sampling artefact.
+    What must hold now is not that the number is absent, but that the paper
+    explains why it was wrong: an earlier version reported it, we withdrew it,
+    and the mechanism is named.
+    """
+    import rope_attribution.statistics as STATS
+
+    assert int(literal("withdrawn_ratio")) == 920
+    assert "We withdrew it" in TEX_FLAT
+    # The mechanism is named, not just the retraction.
+    assert "keeps shrinking toward zero" in TEX_FLAT
+    assert "saturates" in TEX_FLAT
+    # And the artefact still reproduces, so the critique is checkable.
+    ratios = [row["max_min_ratio"] for row in STATS.ratio_vs_density()]
+    assert max(ratios) / min(ratios) > 10.0, "the artefact no longer reproduces"
 
 
-def test_per_feature_spread_on_the_figure_grid_is_920_04_everywhere_it_is_written() -> None:
-    """Recomputed from the code, so a stale fig09 CSV cannot satisfy this."""
-    measured = max(fig09_per_feature_ratios(fig09_grid()[0]))
-    occurrences = all_literals("spread_max") + [literal("spread_ratios", 1)]
-    assert len(occurrences) >= 5, f"only {len(occurrences)} occurrences of the swing found"
-    for literal_text in occurrences:
-        assert_paper_number_matches(measured, literal_text, "the fig09 swing")
-    assert_paper_number_matches(measured, literal("spread_max_bare"), "the fig09 swing (prose)")
-    assert_paper_number_matches(measured, literal("prov_rel_pos_pairs", 1), "the swing (appendix)")
+def test_the_withdrawal_remark_is_stable_where_the_headline_was_not() -> None:
+    """Every number in the withdrawal remark is a measured instability.
+
+    These are the six densities, the factor by which the ratio moves across
+    them, and the seed count. None is a single fragile digit, which is why they
+    can be printed in a remark that outlives the claim it withdraws.
+    """
+    import rope_attribution.statistics as STATS
+
+    densities = [int(x) for x in groups("withdrawn_ratio_densities")[0]]
+    measured = [row["n_deltas"] for row in STATS.ratio_vs_density()]
+    assert densities == measured, f"paper says {densities}, module measured {measured}"
+    ratios = [row["max_min_ratio"] for row in STATS.ratio_vs_density()]
+    spread = max(ratios) / min(ratios)
+    assert_paper_number_matches(spread, literal("withdrawn_ratio_drift"), "the ratio's spread")
+    assert int(literal("withdrawn_ratio_seeds")) == STATS.N_SEEDS
+
+
+def test_the_replacement_statistic_is_what_the_paper_leads_with() -> None:
+    """Sign crossing and coefficient of variation, recomputed from the module."""
+    import rope_attribution.statistics as STATS
+
+    summary = STATS.seed_variance()["statistics"]
+    crossing = summary["sign_crossing_fraction_mean"]
+    assert crossing["mean"] == 1.0, "every feature is expected to cross zero"
+    assert crossing["std"] == 0.0, "and with no seed variance at all"
+
+    cv = summary["cv_magnitude_mean"]
+    assert_paper_number_matches(cv["mean"], literal("sign_cv", 1), "the coefficient of variation")
+    assert_paper_number_matches(cv["std"], literal("sign_cv", 2), "the CV seed std")
+
+    endpoints = summary["endpoint_log_ratio_mean"]
+    assert_paper_number_matches(
+        endpoints["mean"], literal("sign_endpoint_factor"), "the endpoint ratio"
+    )
+    # The paper's argument: the endpoints agree, so the reversal is interior.
+    assert abs(endpoints["mean"]) < 0.5, endpoints["mean"]
+
+    assert int(literal("n_features_sign_cross")) == STATS.N_FEATURES
+    assert "every one of the eight" in TEX_FLAT
+
+
+def test_the_replacement_seed_variance_is_the_printed_percentage() -> None:
+    """The paper prints the CV's relative seed variance; check it is measured."""
+    import rope_attribution.statistics as STATS
+
+    cv = STATS.seed_variance()["statistics"]["cv_magnitude_mean"]
+    assert_paper_number_matches(
+        100.0 * cv["relative_std"],
+        literal("replacement_seed_variance"),
+        "the CV relative seed variance in percent",
+    )
+    assert cv["relative_std"] < 0.25, "quoted without tight seeds is fragile"
+
+
+def test_the_position_free_residual_replaces_the_orders_claim() -> None:
+    """The "orders of magnitude" claim is now a measurement, not a quotient.
+
+    It is the residual left by the best position-independent summary, divided
+    by the additivity residual. The test pins the stability claim too, since a
+    replacement that were grid-dependent would just reintroduce the defect.
+    """
+    import rope_attribution.statistics as STATS
+
+    result = STATS.position_free_error()
+    band = result["log10_ratio_max"]
+    claimed = int(literal("position_free_orders"))
+
+    lo = float(literal("position_free_band", 1))
+    hi = float(literal("position_free_band", 2))
+    assert lo == pytest.approx(band["min"], abs=0.05)
+    assert hi == pytest.approx(band["max"], abs=0.05)
+    assert lo <= claimed <= hi, f"paper claims {claimed}, measured {band}"
+
+    groups("orders_claim_provenance")
+
+    # The stability claim, exactly as printed: 120x denser, same factor.
+    denser = int(literal("position_free_denser"))
+    errs = [row["position_free_error_max"] for row in result["by_density"]]
+    n_deltas = [row["n_deltas"] for row in result["by_density"]]
+    assert max(n_deltas) / min(n_deltas) == pytest.approx(denser, rel=0.01)
+    # The residual itself moves by less than a factor of four ...
+    assert max(errs) / min(errs) < 4.0, errs
+    # ... yet the quotient against the additive residual does not.
+    assert band["relative_drift"] < 0.05, band
+
+
+def test_the_position_free_bracket_holds_on_every_seed() -> None:
+    """The order of magnitude is not an accident of the seed the module uses."""
+    import rope_attribution.statistics as STATS
+
+    lo = float(literal("position_free_band", 1))
+    hi = float(literal("position_free_band", 2))
+    for seed in (STATS.BASE_SEED, STATS.BASE_SEED + 1, STATS.BASE_SEED + 2):
+        band = STATS.position_free_error(seed=seed)["log10_ratio_max"]
+        # The printed bracket is for the base seed; on other seeds the claim is
+        # the weaker but still meaningful one that it rounds to the same order.
+        assert round(band["min"]) == round(lo), f"seed {seed} fell to {band['min']:.2f}"
+        assert round(band["max"]) == round(hi), f"seed {seed} rose to {band['max']:.2f}"
 
 
 def test_the_csv_agrees_with_the_recomputed_fig09_grid() -> None:
@@ -1164,70 +1285,26 @@ def test_the_csv_agrees_with_the_recomputed_fig09_grid() -> None:
     )
 
 
-def test_the_eight_per_feature_ratios_are_written_in_descending_order() -> None:
-    written = [float(value) for value in groups("spread_ratios")[0]]
-    measured = sorted(fig09_per_feature_ratios(fig09_csv_curves()), reverse=True)
-    assert len(written) == len(measured) == MEASUREMENTS["feature_attribution"]["n_features"]
-    assert written == sorted(written, reverse=True), f"the paper lists them out of order: {written}"
-    for claimed, actual in zip(written, measured, strict=True):
-        assert_paper_number_matches(actual, f"{claimed:.2f}", "one of the eight ratios")
+def test_every_fig09_curve_reverses_sign_in_the_committed_csv() -> None:
+    """The replacement claim, checked on the committed artefact itself.
 
-
-def test_the_median_of_the_eight_ratios_and_the_35_floor() -> None:
-    ratios = sorted(fig09_per_feature_ratios(fig09_csv_curves()))
-    median = ratios[len(ratios) // 2]
-    assert_paper_number_matches(median, literal("spread_median"), "the median ratio")
-    assert_paper_number_matches(median, literal("prov_rel_pos_pairs", 2), "the median ratio (appendix)")
-    floor = float(literal("spread_floor"))
-    assert min(ratios) > floor, f"the smallest measured ratio is {min(ratios)}, not above {floor}"
-
-
-def test_the_920_swing_is_larger_than_the_43_one_because_the_grid_is_finer() -> None:
-    """'the ratio grows with the number of distances sampled'."""
-    coarse = MEASUREMENTS["feature_attribution"]["per_feature_contribution_spread_max_ratio"]
-    fine = float(literal("spread_max_bare"))
-    assert coarse < fine
-    assert_paper_number_matches(fine, literal("spread_round"), "the rounded 920x")
-    assert len(MEASUREMENTS["feature_attribution"]["deltas"]) < len(figure_delta_grid())
-
-
-def test_the_swing_is_sixteen_orders_of_magnitude_above_the_additivity_residual() -> None:
-    """The swing/residual separation, with the paper's own numbers.
-
-    The paper's derivation is "a swing of order 10^2--10^3 divided by the
-    5.0e-14 additivity residual". The two numbers quoted in that paragraph are
-    the 920.04 swing (fig09, 54-point grid) and the 4.974e-14 residual, and
-    920.0444 / 4.9738e-14 = 1.85e16, i.e. SIXTEEN orders of magnitude. The paper
-    used to say 14; it now says 16 and shows the quotient.
+    The paper no longer quotes a max/min ratio per feature, but the CSV still
+    has to support the claim that is made about it. This is the claim that
+    replaces the ratio: all eight features change sign over the range.
     """
-    residual = float(fig09_grid()[1].max())
-    swing = float(literal("spread_max_bare"))
-    coarse_swing = MEASUREMENTS["feature_attribution"]["per_feature_contribution_spread_max_ratio"]
-    coarse_residual = MEASUREMENTS["feature_attribution"]["additivity_max_abs_err"]
-    claimed = int(literal("orders_claim"))
-    groups("orders_claim_provenance")
+    curves = fig09_csv_curves()
+    n_features = MEASUREMENTS["feature_attribution"]["n_features"]
+    assert len(curves) == n_features, len(curves)
+    for index, values in enumerate(curves):
+        row = np.asarray(values, dtype=float)
+        assert row.min() < 0.0 < row.max(), (
+            f"feature {index} does not reverse: {row.min()}..{row.max()}"
+        )
 
-    # The appendix now writes the quotient out; check every number in it.
-    q_swing, q_res, q_res_exp, q_value, q_value_exp = groups("orders_claim_quotient")[0]
-    assert float(q_swing) == pytest.approx(swing, rel=HEDGE_TOLERANCE)
-    assert_paper_sci_matches(
-        residual, q_res, -int(q_res_exp), "the additivity residual in the quotient"
-    )
-
-    measured = int(math.floor(math.log10(swing / residual)))
-    assert claimed == measured, (
-        f"the paper claims {claimed} orders of magnitude, but its own numbers "
-        f"{swing!r} / {residual!r} give {swing / residual:.6g} = 10^{measured}."
-    )
-    assert measured == 16
-    assert_paper_sci_matches(
-        swing / residual, q_value, int(q_value_exp), "the quotient in the appendix"
-    )
-    assert int(q_value_exp) == measured
-
-    # The coarser pair is still fifteen, so the conservative reading holds.
-    assert math.floor(math.log10(coarse_swing / coarse_residual)) == 15
-    assert measured >= 15, "the swing/residual ratio is no longer huge; revisit this claim"
+    # The additivity residual is the denominator of the replacement statistic,
+    # so it must still be exact on this grid.
+    residuals = csv_rows("fig09_position_conditional_attribution")
+    assert max(abs(float(r["additivity_residual"])) for r in residuals) < 1e-13
 
 
 # ==========================================================================
