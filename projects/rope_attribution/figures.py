@@ -1052,6 +1052,21 @@ def fig09_position_conditional_attribution() -> FigureRecord:
         nonzero = np.abs(contrib[i][contrib[i] != 0.0])
         ratios[i] = float(nonzero.max() / nonzero.min())
     spread_here = float(ratios.max())
+    # Counted from the array rather than assumed, so the caption cannot claim a
+    # reversal that this particular draw does not contain.
+    n_reversing = int(
+        np.sum((contrib.min(axis=1) < 0.0) & (contrib.max(axis=1) > 0.0))
+    )
+    delta_hi = int(DELTA_GRID[-1])
+    # The endpoint comparison the paper leans on, computed here rather than typed
+    # in: if it moves, this caption must move with it.
+    i_lo = int(np.argmin(np.abs(DELTA_GRID - 1)))
+    i_hi = int(np.argmin(np.abs(DELTA_GRID - delta_hi)))
+    endpoint_log_ratio = float(
+        np.log10(
+            np.abs(contrib[:, i_hi]).mean() / max(np.abs(contrib[:, i_lo]).mean(), 1e-300)
+        )
+    )
     reference = feature_attribution(
         n_features=N_FEATURES,
         dim=HEAD_DIM,
@@ -1116,9 +1131,15 @@ def fig09_position_conditional_attribution() -> FigureRecord:
             f"(seed={SEED_ATTRIB})"
         ),
         headline=(
-            f"a single feature's contribution swings by up to {spread_here:.4f}x in"
-            f" magnitude across distances (max|c_i|/min|c_i|), with the score still"
-            f" additive to {additivity_residual:.3e}."
+            f"{n_reversing} of {N_FEATURES} features reverse sign somewhere in"
+            f" the range [1, {delta_hi}], with the score still additive to"
+            f" {additivity_residual:.3e}. The magnitudes at the two ends of the"
+            f" range agree to within 10^{endpoint_log_ratio:.2f}, so what changes"
+            " across distance is"
+            " which way the contribution points, not how large it is. The"
+            f" max/min ratio this figure was once described by ({spread_here:.2f}x)"
+            " is a sampling artefact and is deliberately not reported; see"
+            " rope_attribution.statistics."
         ),
         extra=f"png={png.name} csv={csv_path.name}",
     )

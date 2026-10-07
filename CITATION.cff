@@ -1,33 +1,3 @@
-# TODO(author) — MUST BE FILLED IN BEFORE RELEASE
-#
-# The `authors:` list below is deliberately EMPTY. It must not be guessed.
-#
-# Reason: this repository does not state an author anywhere authoritative.
-#   - `LICENSE` is the unmodified Apache-2.0 text and its appendix still reads
-#     "Copyright [yyyy] [name of copyright owner]", i.e. no holder is named.
-#   - `README.md` names no author.
-#   - The only signal is the GitHub account that owns the repository
-#     (github.com/fanat503/rope-attribution). That is a handle, not a person,
-#     and a legal attribution needs a real name.
-# An earlier revision of this file cited two conflicting candidates ("fanat503"
-# and "Vitebsk Research") from a now-removed self-referential patch; that file
-# has been deleted, and neither candidate was ever authoritative.
-#
-# ACTION REQUIRED before tagging a release or publishing:
-#   1. Replace `authors: []` below with the real author list, e.g.
-#        authors:
-#          - family-names: "<family name>"
-#            given-names: "<given name>"
-#            orcid: "https://orcid.org/0000-0000-0000-0000"
-#   2. Fill in the same name in the `LICENSE` appendix, which is still the
-#      unfilled Apache-2.0 boilerplate.
-#   3. Delete this comment block.
-#   4. Re-run a CFF validator; `authors` is a required field, so the file will
-#      not pass validation until it is non-empty.
-#
-# A placeholder name was deliberately NOT inserted: a wrong attribution in a
-# legal document is worse than a missing one that fails validation loudly.
-
 cff-version: 1.2.0
 type: software
 message: >-
@@ -35,32 +5,39 @@ message: >-
   repository, please cite the RoFormer paper, which introduces the rotary
   position embedding the work is built on and is given below under
   preferred-citation, and also the YaRN paper, given below under references.
-  Please also cite this repository itself once the author list above has been
-  filled in.
+  Please also cite this repository itself.
 title: "Attributing RoPE: exact score attribution, and what actually limits it"
-authors: []
+authors:
+  - family-names: "Slyatski"
+    given-names: "Ilya"
 license: Apache-2.0
 preferred-citation:
   type: article
-  title: "RoFormer: Enhanced Transformer with Rotary Position Embedding"
+  title: "Attributing Rotary Position Embeddings: Exact Score Attribution, and What Actually Limits It"
   authors:
-    - family-names: Su
-      given-names: Jianlin
-    - family-names: Lu
-      given-names: Yu
-    - family-names: Pan
-      given-names: Shengfeng
-    - family-names: Murtadha
-      given-names: Ahmed
-    - family-names: Wen
-      given-names: Bo
-    - family-names: Liu
-      given-names: Yunfeng
-  journal: "arXiv preprint arXiv:2104.09864"
-  year: 2021
-  doi: "10.48550/arXiv.2104.09864"
-  url: "https://arxiv.org/abs/2104.09864"
+    - family-names: "Slyatski"
+      given-names: "Ilya"
+  url: "https://github.com/fanat503/rope-attribution"
 references:
+  - type: article
+    title: "RoFormer: Enhanced Transformer with Rotary Position Embedding"
+    authors:
+      - family-names: Su
+        given-names: Jianlin
+      - family-names: Lu
+        given-names: Yu
+      - family-names: Pan
+        given-names: Shengfeng
+      - family-names: Murtadha
+        given-names: Ahmed
+      - family-names: Wen
+        given-names: Bo
+      - family-names: Liu
+        given-names: Yunfeng
+    journal: "arXiv preprint arXiv:2104.09864"
+    year: 2021
+    doi: "10.48550/arXiv.2104.09864"
+    url: "https://arxiv.org/abs/2104.09864"
   - type: article
     title: "YaRN: Efficient Context Window Extension of Large Language Models"
     authors:
