@@ -2452,15 +2452,17 @@ def test_the_paper_states_a_limitations_section() -> None:
         " ",
         TEX[TEX.index("\\section{Limitations}") : TEX.index("\\section{Related Work}")],
     )
-    for paragraph in (
-        "No model.",
-        "No sparse autoencoder and no learned features.",
-        "No retrieval, no accuracy, no perplexity.",
-        "Single head dimension, single scale, single base.",
+    # The four disclaimers are required by name of what they disclaim, not by the
+    # heading they happen to sit under: the section was compressed to four bold
+    # leads, and a test that keyed on "\paragraph{...}" would fail on the heading
+    # while saying nothing about whether the disclaimer is still there.
+    for label, required in (
+        ("no model", "no trained network, no checkpoint, no real"),
+        ("no learned features", "none of its content"),
+        ("no evaluation", "no retrieval benchmark and no language-modelling evaluation"),
+        ("single configuration", "We have not swept head dimension"),
     ):
-        assert f"\\paragraph{{{paragraph}}}" in limitations, (
-            f"the Limitations section no longer contains the '{paragraph}' paragraph"
-        )
+        assert required in limitations, f"Limitations no longer states: {label}"
     assert "This matters enough to state before the results" in TEX_FLAT
 
 

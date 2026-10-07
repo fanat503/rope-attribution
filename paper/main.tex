@@ -182,33 +182,25 @@ error and \yarn\ does not touch them.
 
 \subsection{What we do not claim}
 
-This matters enough to state before the results.
-
-\begin{itemize}
-  \itemsep2pt
-  \item \textbf{There is no trained model here, and no real activations.} Every
-    measurement is made on synthetic query and key vectors drawn from a fixed
-    seed and projected through synthetic feature directions. We never load a
-    checkpoint.
-  \item \textbf{There is no sparse autoencoder anywhere in this work.} The
-    feature decomposition we attribute over is a synthetic construction with
-    $8$ random directions and non-negative coefficients, chosen to mimic the
-    shape of a sparse code, not learned from anything. It is a test fixture for
-    the algebra, not a model of a real feature set.
-  \item \textbf{There is no retrieval benchmark and no accuracy measurement.} We
-    report no perplexity, no needle-in-a-haystack score, no long-context
-    retrieval result. We cannot and do not report anything of the form ``the
-    model retrieves the needle with accuracy $0.7$'', because nothing like that
-    is measured. Where we compare RoPE and \yarn, we compare \emph{quantities of
-    the position encoding}: angles, linearizable fractions, error ratios.
-  \item \textbf{We do not claim any scheme is better in practice.} RoPE, \yarn\
-    and position interpolation are all in real use. Our table ranks them on
-    angle geometry only, and Section~\ref{sec:context} shows that a favourable
-    ranking on one axis does not transfer to the amplitude-weighted one.
-  \item \textbf{The conclusions are model-independent by construction.} That is
-    deliberate. They are claims about the structure of the score under a
-    particular positional encoding, and they would hold for any head using it.
-\end{itemize}
+This matters enough to state before the results. There is no trained model here,
+and no real activations: every measurement is on synthetic query and key vectors
+from a fixed seed, projected through synthetic feature directions.
+We never load a checkpoint. There is no sparse autoencoder anywhere in this work:
+we attribute over a synthetic feature set, with $8$ random directions and
+non-negative coefficients, which mimic the \emph{shape} of a sparse code and are
+a test fixture for the algebra, not a model of a real feature set.
+There is no retrieval benchmark and no accuracy measurement: we report no
+perplexity, no needle-in-a-haystack score and no long-context retrieval result.
+We cannot and do not report anything of the form ``the model retrieves the
+needle with accuracy $0.7$'', because nothing like that is measured. Where we
+compare RoPE and \yarn\ we compare \emph{quantities of the position encoding}
+--- angles, linearizable fractions, error ratios. We do not claim any scheme is
+better in practice: all are in real use, our table ranks them on angle geometry
+only, and Section~\ref{sec:context} shows that a favourable ranking on one axis
+does not transfer to the amplitude-weighted one. The conclusions are
+model-independent by construction, which is deliberate: they are claims about
+the structure of the score under a particular positional encoding, and they
+would hold for any head using it.
 
 The contribution, stated exactly: a correct, carefully measured characterization
 of what RoPE does to feature-level attention attribution, an identification of
@@ -406,9 +398,13 @@ drawn from different grids are never compared as though they were the same.
     non-negative coefficients, project each summand independently, and check
     $s(\delta) \stackrel{?}{=} \sum_{ij} A_{ij}(\delta)$ where
     $A_{ij} = q_i^{\!\top}\R_{\delta}k_j$.
-  \item \textbf{Position-conditionality.} For each feature $i$, the ratio
-    $\max_\delta |c_i(\delta)| / \min_\delta |c_i(\delta)|$, restricted to
-    non-zero values.
+  \item \textbf{Position-conditionality.} For each feature $i$ we record the
+    signed curve $c_i(\delta)$ over the whole range, and report three summaries of
+    it: whether it changes sign at all, its coefficient of variation in
+    magnitude, and the residual left by replacing it with a position-independent
+    constant. We deliberately do \emph{not} report
+    $\max_\delta |c_i| / \min_\delta |c_i|$: that is a property of the sampling
+    grid, and Section~\ref{sec:cond} explains what went wrong when we did.
   \item \textbf{Linearization.} We replace $\cos \D$ by $1 - \D^2/2$ and
     $\sin \D$ by $\D$, and measure the damage per pair, normalized by that
     pair's own amplitude $\Rk$, plus the amplitude-weighted total. The per-pair
@@ -431,12 +427,10 @@ drawn from different grids are never compared as though they were the same.
 \end{itemize}
 
 \paragraph{Reproducibility.} Every figure ships the array it plotted as a CSV
-sidecar, so no claim in this paper is read off a pixel. Every number quoted
-below was extracted from those files programmatically, and the appendix records
-which file and key each one came from. The full audit is mechanical: each
-literal in the tables above is either an entry of
-\texttt{results/measurements.json}, an entry of a figure CSV, or an explicitly
-stated quotient of two such entries.
+sidecar, so no claim in this paper is read off a pixel, and the appendix records
+which file and key every quoted number came from. The audit is mechanical: each
+literal in the tables is either an entry of \texttt{results/measurements.json},
+an entry of a figure CSV, or a stated quotient of two such entries.
 
 % =====================================================================
 \section{Results}
@@ -951,128 +945,101 @@ fact that the worst channel is out of range.
 % =====================================================================
 \section{Limitations}
 
-We list these in decreasing order of how much they constrain the conclusions.
+In decreasing order of how much they constrain the conclusions.
 
-\paragraph{No model.} There is no trained network, no checkpoint, no real
-activation, no training run, and no forward pass through anything learned. All
-measurements are on synthetic vectors with fixed seeds. The claims are about
-the algebra of the position encoding, and they transfer to any head that uses
-it; they say nothing about what any particular trained model does.
+\textbf{No model.} There is no trained network, no checkpoint, no real
+activation, no training run, and no forward pass through anything learned. The
+claims are about the algebra of the position encoding and transfer to any head
+that uses it; they say nothing about what any particular trained model does. The
+$8$ directions our attribution runs over are random with non-negative
+coefficients: they have the shape of a sparse code and none of its content, so
+nothing here is evidence about real feature geometry or circuit structure. In
+particular, the sign reversal in Section~\ref{sec:cond} is a property of random
+directions in a $64$-dimensional head, and we have no measurement of the
+corresponding quantity for real features. There is also no needle task, no
+retrieval benchmark and no language-modelling evaluation: when we say \yarn\ is
+better on linearizable fraction, we mean better on that number, and
+Section~\ref{sec:context} shows it does not track the amplitude-weighted error.
 
-\paragraph{No sparse autoencoder and no learned features.} The $8$ directions
-our attribution runs over are random with non-negative coefficients. They have
-the shape of a sparse code and none of its content. No statement here should be
-read as evidence about real feature geometry, real feature redundancy, or real
-circuit structure. In particular, the sign reversal in
-Section~\ref{sec:cond} is a property of random directions in a
-$64$-dimensional head, and we have no measurement of what the corresponding
-quantity is for real features.
+\textbf{Single configuration.} All measurements use $d = 64$, $\mathrm{base} =
+10000$, $s = 32$, pre-extension context $2048$, and one query/key draw per
+experiment. We have not swept head dimension, and the claim about which channels
+dominate the error should be expected to depend on $d$ through the number of
+pairs $\half$; we did not measure that dependence and do not claim it. The
+entropy result of Section~\ref{sec:mscale} uses a random query against $256$
+random keys, so it is a property of that synthetic configuration rather than of
+any trained distribution; we claim only that $\mathrm{mscale}$ acts as a
+temperature there, which is monotone across $18$ scales.
 
-\paragraph{No retrieval, no accuracy, no perplexity.} There is no needle task,
-no long-context retrieval benchmark, and no language-modelling evaluation
-anywhere in this work. Statements like ``\yarn\ extends usable context'' are
-not measured here. When we say \yarn\ is better on linearizable fraction, we
-mean better on that number, and Section~\ref{sec:context} shows that number
-does not track the amplitude-weighted error.
+\textbf{Approximation choices.} Linearization is one particular first-order
+approximation: we test $\cos \D \mapsto 1 - \D^2/2$, $\sin \D \mapsto \D$ with
+a $0.1\rad$ threshold. A different truncation, or a per-channel threshold, would
+move the linearizable fractions, and would leave the amplitude-weighted
+conclusion intact only if it did not change which channels dominate. We verified
+that qualitatively through the per-pair error but did not sweep thresholds.
 
-\paragraph{Single head dimension, single scale, single base.} All measurements
-use $d = 64$, $\mathrm{base} = 10000$, $s = 32$, pre-extension context $2048$,
-and one query/key draw per experiment. We have not swept head dimension, and
-the qualitative claim about which channels dominate the error should be
-expected to depend on $d$ through the number of pairs $\half$. We did not
-measure that dependence and do not claim it.
-
-\paragraph{Synthetic attention for the entropy result.} Section~\ref{sec:mscale}
-uses a random query against $256$ random keys. The entropy values are a
-property of that synthetic configuration, not of any trained distribution. We
-claim only that $\mathrm{mscale}$ acts as a temperature and reduces entropy in
-this setting, which is monotone across $18$ scales.
-
-\paragraph{Linearization is one particular first-order approximation.} We test
-$\cos \D \mapsto 1 - \D^2/2$, $\sin \D \mapsto \D$ with a $0.1\rad$
-threshold. A different truncation, or a per-channel threshold, would move the
-linearizable fractions, and would leave the amplitude-weighted conclusion
-intact only if it did not change which channels dominate. We verified the latter
-qualitatively through the per-pair error but did not sweep thresholds.
-
-\paragraph{Scope of the position-free claim.} Section~\ref{sec:cond} shows that a
-position-free scalar $A_{ij}$ is mis-specified. It does not show that
-per-distance attribution is practically useful --- that requires circuits,
-patching, and a trained model, none of which we have.
-
-\paragraph{What R1 does and does not license.} Exactness at the score level is
-a statement about a bilinear map, and its practical reach is bounded by three
+\textbf{Scope of the exactness claim.} Exactness at the score level is a
+statement about a bilinear map, and its practical reach is bounded by three
 things we have not crossed. It does not survive the softmax: attention
 \emph{weights} are not additive, so a feature's share of attention mass is not
 its share of the score, and we do not measure the discrepancy. It does not
 survive multi-head composition, where the position-conditional structure we
 describe is per-head and no head shares our synthetic projections. And it does
 not license a claim about attribution methods we did not run; we take
-attribution patching as a reference point, not as something we reproduce or
-compare against. A reader should treat the exactness result as removing one
-stated objection to RoPE-based attribution, not as validating the method.
+attribution patching as a reference point, not as something we reproduce. A
+reader should treat exactness as removing one stated objection to RoPE-based
+attribution, not as validating the method. Relatedly, Section~\ref{sec:cond}
+shows that a position-free scalar $A_{ij}$ is mis-specified; it does not show
+that per-distance attribution is practically useful, which would require
+circuits, patching, and a trained model.
 
 % =====================================================================
 \section{Related Work}
 
-\paragraph{Position encodings and length extrapolation.}
-RoPE \citep{su2021ropeformer} introduced the rotary scheme studied here.
-\alpibib\ \citep{press2021train} removes position information from the attention
-pattern entirely via a linear bias, and is instructive as a contrast: it has no
-per-channel angle spectrum, and so no version of the linearization problem
-analysed in Section~\ref{sec:context}. On extension, position interpolation
-\citep{chen2023positionalinterp} rescales positions uniformly, which is the
-scheme we measure under the label \texttt{position\_interpolation}, and which
-our table shows is geometrically the most favourable on linearizable fraction.
-\yarn\ \citep{peng2023yarn} keeps the base and ramps per frequency, which is
-what makes $\max_k|\D|$ invariant under it; our measurement of that invariance
-is a direct consequence of that construction, and to our knowledge it is a
+\textbf{Position encodings and length extrapolation.} RoPE
+\citep{su2021ropeformer} is the scheme studied here. \alpibib\
+\citep{press2021train} is an instructive contrast: it removes position from the
+attention pattern via a linear bias, so it has no per-channel angle spectrum and
+no version of the linearization problem of Section~\ref{sec:context}. On
+extension, position interpolation \citep{chen2023positionalinterp} rescales
+positions uniformly --- the scheme measured as \texttt{position\_interpolation},
+which our table shows is geometrically the most favourable on linearizable
+fraction. \yarn\ \citep{peng2023yarn} keeps the base and ramps per frequency,
+which is what makes $\max_k|\D|$ invariant under it; to our knowledge this is a
 point on which the framing of ``\yarn\ damps large angles'' is easily misread.
-\lengthxtrap\ \citep{sun2022lengthextrap} is relevant to the partial case of
-Section~\ref{sec:partial}, and \longrope\ \citep{ding2024longrope} to per-channel
-non-uniform extension. \ropetheory\ \citep{barbero2024roundandround} analyses
-RoPE's frequency content from an optimization perspective, complementing the
-spectrum measurements of Section~\ref{sec:context}; we do not compare with or
-reproduce their results. Finally, we note explicitly that the ``raise
-$\mathrm{base}$ from $10000$ to $500000$'' recipe is not \yarn, and is also not
-position interpolation: raising the base multiplies channel $k$ by
-$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
-$\max_k|\D|$ untouched. We measure it separately as
-\texttt{base\_500k\_legacy\_claim} for that reason.
+\lengthxtrap\ \citep{sun2022lengthextrap} covers the partial case of
+Section~\ref{sec:partial}, \longrope\ \citep{ding2024longrope} per-channel
+non-uniform extension, and \ropetheory\ \citep{barbero2024roundandround} RoPE's
+frequency content from an optimization perspective; we neither compare with nor
+reproduce the last. Finally, the ``raise $\mathrm{base}$ from $10000$ to
+$500000$'' recipe is not \yarn, and is also not position interpolation:
+raising the base multiplies channel $k$ by $s^{-2k/d}$ rather than by $s^{-1}$,
+so it leaves $\theta_0 = 1$ and hence $\max_k|\D|$ untouched. We measure it
+separately as \texttt{base\_500k\_legacy\_claim} for that reason.
 
-\paragraph{Feature-level attribution and circuit discovery.}
-The additive decomposition of activations into learned features originates in
-the superposition line \citep{elhage2022toymodels}, with sparse autoencoders as
-an operational feature extractor \citep{cunningham2023sparseautoencoders}.
-Attribution methods operating on attention heads include attribution patching
-\citep{syed2023attributionpatching}, which we take as the methodological
-reference point for the question ``which features contributed to this
-computation'', and the tuned lens \citep{belrose2023tunedlens} for reading
-intermediate activations back through the model's unembedding. Work extending
-causal-graph analysis to feature-level granularity includes sparse feature
-circuits \citep{marks2024sparsefeaturecircuits} and transcoder-based circuit
-discovery \citep{dunefsky2024transcoders}.
+\textbf{Feature-level attribution.} The additive decomposition of activations
+into learned features originates in the superposition line
+\citep{elhage2022toymodels}, with sparse autoencoders as an operational extractor
+\citep{cunningham2023sparseautoencoders}. Attribution on attention heads
+includes attribution patching \citep{syed2023attributionpatching}, which we take
+as the methodological reference for ``which features contributed to this
+computation'', and the tuned lens \citep{belrose2023tunedlens}. Feature-level
+causal graphs appear in sparse feature circuits \citep{marks2024sparsefeaturecircuits}
+and transcoder-based discovery \citep{dunefsky2024transcoders}. What is common
+to all of them is that they operate at a \emph{fixed} position, or integrate
+over positions treating each as an independent example: the positional encoding
+is part of the forward pass, not the attribution target.
 
-It is worth noting what is common to all of these: they operate on activations
-at a \emph{fixed} position, or integrate over positions by treating each as an
-independent example. The positional encoding is part of the forward pass, not
-part of the attribution target, and so it does not enter the question. Our
-contribution is about the case where it does enter --- not because a method
-asks about it, but because the quantity being attributed, the attention score,
-is a function of two positions rather than one, and a feature's share of it is
-not a constant.
-
-\paragraph{Our relationship to that literature.} Those methods ask which
-features caused a behaviour in a trained model. We ask a strictly prior
-question, about the position encoding alone: given a RoPE head, what is the
-exact algebraic form of a feature's contribution, and is it a scalar? Our
-answer --- no, it is a function of distance --- is a structural precondition
-that any of those methods must handle and that, to our knowledge, has not been
-stated in this form. It is not a competing attribution method and it does not
-evaluate one. We mention the relation because it is a limitation of this paper
-rather than of the field: our per-distance attribution has not been connected to
-a circuit, and we have not shown that measuring it identifies anything about a
-trained model.
+\textbf{Our relationship to that literature.} Those methods ask which features
+caused a behaviour in a trained model. We ask a strictly prior question about
+the position encoding alone: given a RoPE head, what is the exact algebraic form
+of a feature's contribution, and is it a scalar? Our answer --- no, it is a
+function of distance --- is a structural precondition that any of those methods
+must handle and that, to our knowledge, has not been stated in this form. It is
+not a competing attribution method and it evaluates none. We mention the relation
+because it is a limitation of this paper rather than of the field: our
+per-distance attribution has not been connected to a circuit, and we have not
+shown that measuring it identifies anything about a trained model.
 
 % =====================================================================
 \section{Conclusion}
