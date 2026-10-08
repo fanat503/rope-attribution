@@ -90,7 +90,7 @@ def test_the_last_main_text_section_is_found(pages: list[str]) -> None:
 
 @pytest.mark.xfail(
     strict=False,
-    reason="the main text is still 14 pages; it must be compressed to 9",
+    reason="the main text is still 12 pages; it must be compressed to 9",
 )
 def test_the_main_text_fits_in_nine_pages(pages: list[str]) -> None:
     """The limit itself, measured rather than asserted.

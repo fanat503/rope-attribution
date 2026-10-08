@@ -66,7 +66,12 @@ those files or from `results/measurements.json`.
   least nine embedded images.
 - `tests/test_venue_compliance.py::test_the_main_text_fits_in_nine_pages` measures
   the main text against NeurIPS' nine-page limit. It is currently `xfail`: the
-  main text runs to 14 pages.
+  main text runs to **12 pages**. Progress so far, from 14: the official style
+  file is tighter than the hand-rolled geometry, the synthesis subsection and the
+  Method protocol moved to appendices, and partial-RoPE and mscale moved out of
+  the counted part. What remains in the main text is R1, R2, R3 and the
+  per-pair decomposition; cutting further would remove headline results rather
+  than prose.
 
 ## Page limit accounting
 
