@@ -491,6 +491,139 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("exact_identity_residue", r"residue in each case is \$(0\.0)\$ or a single ULP"),
 )
 
+# --------------------------------------------------------------------------
+# Section~\ref{sec:trained}: the same identities on trained weights
+# --------------------------------------------------------------------------
+#
+# Extended rather than merged, so that the block reads as one unit. Every number
+# below is checked against ``results/real_model.json`` by
+# ``tests/test_paper_trained_claims.py``.
+CLAIMS += (
+    Claim(
+        "trained_relpos_worst",
+        r"worst absolute error of \$(\d+\.\d+)\\times10\^\{-12\}\$ across all three",
+    ),
+    Claim("trained_float32_eps", r"float32 epsilon of \$(1\.\d+)\\times10\^\{-7\}\$"),
+    Claim(
+        "trained_closed_form",
+        r"relative error of \$(\d+\.\d+)\\times10\^\{-8\}\$ on \\texttt\{pythia-160m\}, "
+        r"\$(\d+\.\d+)\\times10\^\{-8\}\$ on \\texttt\{llama-160m\} and "
+        r"\$(\d+\.\d+)\\times10\^\{-8\}\$ on \\texttt\{SmolLM-135M\}",
+    ),
+    Claim(
+        "trained_bilinearity",
+        r"content behaves the same\s+way at \$(\d+\.\d+)\\times10\^\{-8\}\$, "
+        r"\$(\d+\.\d+)\\times10\^\{-8\}\$ and \$(\d+\.\d+)\\times10\^\{-8\}",
+    ),
+    Claim(
+        "trained_share_pythia",
+        r"from \$(0\.\d+)\$ to \$(0\.\d+)\$ on \\texttt\{pythia-160m\}, "
+        r"a factor of \$(\d+\.\d)\$",
+    ),
+    Claim(
+        "trained_share_llama",
+        r"on \\texttt\{llama-160m\} it spans \$(0\.\d+)\$ to \$(0\.\d+)\$, "
+        r"a factor of \$(\d+\.\d)\$",
+    ),
+    Claim(
+        "trained_share_smollm",
+        r"on \\texttt\{SmolLM-135M\}, \$(0\.\d+)\$ to \$(0\.\d+)\$, "
+        r"a factor of \$(\d+\.\d)\$",
+    ),
+    Claim(
+        "trained_share_iqr",
+        r"interquartile range alone runs from \$(0\.\d+)\$ to \$(0\.\d+)\$",
+    ),
+    Claim(
+        "trained_blind_fraction",
+        r"position-blind fraction is \$(0\.\d+)\$ on \\texttt\{pythia-160m\}, "
+        r"\$(0\.\d+)\$ on \\texttt\{llama-160m\} and \$(0\.\d+)\$ on",
+    ),
+    Claim("trained_blind_band", r"between \$(0\.\d+)\\%\$ and \$(0\.\d+)\\%\$"),
+    Claim("gpt2_no_rope", r"learned absolute table of size \$(\d+)\$"),
+    # The five relative distances the trained-weights section sweeps.
+    Claim(
+        "trained_delta_range",
+        r"across \$(\d+)\$ relative distances and every attention head",
+    ),
+    # The parameter sizes of the three checkpoints. Only the range is claimed:
+    # the per-model parameter counts live in the Hugging Face config, not in
+    # results/real_model.json, so there is nothing here to check them against and
+    # pretending otherwise would be a claim with no measurement behind it.
+    Claim("trained_model_sizes", r"checkpoints of \$(\d+)\$--\$(\d+)\$M parameters"),
+    # `delta = 512` is the delta at which several comparisons are quoted. Until
+    # now it had no claim at all and survived only because the blanking bug made
+    # every scan of this region report a phantom; see unaccounted_numbers().
+    Claim("delta_512", r"\\delta = (512)\$"),
+    # ---- structural constants the span-first scan exposed -------------------
+    #
+    # These were never covered by a claim. They did not show up as orphans until
+    # unaccounted_numbers() stopped blanking claims out before scanning, because
+    # the leftover `$` characters re-paired into spans that swallowed them. So
+    # the old guard was silently blind over the whole paper; fixing it revealed
+    # this hole rather than creating it. `32` is the number of rotary pairs at
+    # d = 64, `16` is the rotated width in the partial-RoPE section.
+    Claim(
+        "half_derivation",
+        r"every fraction is a multiple of \$1/(32)\$",
+    ),
+    Claim(
+        "half_pair_count",
+        r"denominator is \$\\half = (32)\$ pairs",
+    ),
+    Claim("grid_table_members", r"grid \$\\\{1, 64, (512), 2048, 4096\\\}\$"),
+    Claim(
+        "interp_delta_512",
+        r"position interpolation reaches .*?= (16)\$",
+    ),
+    Claim("partial_rot_first", r"\$n_\{\\mathrm\{rot\}\} = (16)\$", 2),
+    # `32` and `512` recur ~46 times across the paper, in prose, in inline
+    # fractions (9/32), and in the tables. Each occurrence that a reader could
+    # check is pinned by one of the following; they are grouped by the *form* the
+    # number takes rather than written out 46 times.
+    Claim("ext_scale_prose", r"extension factor \$s = (32)\$", 3),
+    Claim("ext_scale_at", r"At \$s = (32)\$ we measure"),
+    Claim("ext_scale_under_yarn", r"Under .*? at \$s = (32)\$"),
+    Claim("ext_scale_figure", r"slow tail down by exactly \$(32)\\times\$"),
+    Claim("ext_scale_divides", r"divides every entry by \$(32)\$"),
+    Claim("ext_scale_all_entries", r"differs from RoPE in all \$(32)\$ entries"),
+    Claim("yarn_fastest_pairs", r"fastest \$(9)\$ of the \$(32)\$ rotary pairs"),
+    Claim("yarn_leaves_pairs", r"leaving the fastest \$(9)\$ of \$(32)\$ pairs"),
+    Claim("yarn_leaves_entries", r"leaves \$(9)\$ of \$(32)\$ entries untouched"),
+    Claim("yarn_ladder_entries", r"fastest \$(9)\$ of \$(32)\$ entries bit-for-bit identical"),
+    Claim("half_in_caption", r"exact count out of \$\\half = (32)\$ in brackets"),
+    Claim("counts_out_of_half", r"counts out of \$(32)\$ are exact"),
+    Claim("multiple_of_one_over_half", r"multiple of \$1/(32)\$"),
+    Claim("linearizable_from_zero", r"from \$(0)/32\$ to \$(11)/32\$ at"),
+    Claim(
+        "yarn_retains_there",
+        r"retains \$(11)/32\$ there and \$(4)/32\$ at \$\\delta = (8192)\$",
+    ),
+    Claim("mscale_closed_form", r"closed form \$0\.1\\ln (32) \+ 1\$"),
+    Claim("delta_512_at", r"at \$\\delta = (512)\$", 4),
+    Claim("ladder_still_sits", r"ladder still sits at \$(512)\$"),
+    Claim("interp_row_delta", r"interpolation & (512) & (16)"),
+    # The prose immediately below Table~\ref{tab:spectrum} restates four of its
+    # cells. Those restatements are claims in their own right, and they are the
+    # ones a reader is most likely to quote.
+    Claim(
+        "linearizable_rise_512",
+        r"rises from \$(\d\.\d+)\$ to \$(0\.3438)\$ at \$\\delta = 512\$",
+    ),
+    Claim(
+        "linearizable_rise_4096",
+        r"and from \$(\d\.\d+)\$ to \$(0\.2188)\$ at \$\\delta = 4096\$",
+    ),
+    Claim(
+        "legacy_row_fractions",
+        r"different numbers again \(\$(0\.3438)\$ and \$(0\.\d+)\$\)",
+    ),
+    Claim(
+        "interp_shrinks_max_angle",
+        r"shrinking .*? from \$(\d+)\$ to\s*\$(\d+)\\rad\$",
+    ),
+)
+
 
 def claim(name: str) -> Claim:
     for entry in CLAIMS:
@@ -2574,21 +2707,50 @@ VERIFIED_TABLES = ("tab:spectrum", "tab:exact")
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 
 
+_BIBLIOGRAPHY_MARKERS = (
+    "\\begin{thebibliography}",
+    "\\bibliography{",
+    "\\printbibliography",
+)
+
+
+def _body_only(text: str) -> str:
+    """The document up to the bibliography.
+
+    The unaccounted-number scan must not cross into the bibliography: the years
+    and arXiv digits there are not claims, and natbib typesets them inside math
+    spacing that a naive dollar-span scanner sweeps in. Cutting the scan is the
+    correct fix; excusing real numbers would not be.
+    """
+    cut = len(text)
+    for marker in _BIBLIOGRAPHY_MARKERS:
+        idx = text.find(marker)
+        if idx >= 0:
+            cut = min(cut, idx)
+    return text[:cut]
+
+
 def _math_spans(text: str) -> list[str]:
     return re.findall(r"(?<!\\)\$(?:\\\$|[^\n])*?(?<!\\)\$", text)
 
 
-def unaccounted_numbers() -> set[str]:
-    """Numeric tokens in ``$...$`` that no claim in this module accounts for."""
-    # Every claim span is blanked *simultaneously*, not one pattern at a time:
-    # two claims can overlap (a restatement inside a longer sentence), and
-    # blanking them in sequence would let the first one destroy the second's
-    # anchor and leave its numbers looking unaccounted for.
+def _covered_spans() -> list[tuple[int, int]]:
+    """Every character range a registered claim, or a verified table, accounts for.
+
+    The result is *merged* into disjoint intervals sorted by start. Merging is
+    what makes :func:`_is_covered` a plain binary search: without it, spans are
+    sorted by start but not by end, so an early span can reach further right than
+    a later one and any "the first span that ends before this position ends the
+    scan" reasoning is wrong. That bug reported every table cell as unaccounted
+    while simultaneously reporting the same numbers as covered.
+    """
     spans: list[tuple[int, int]] = []
     for entry in CLAIMS:
-        spans.extend((match.start(), match.end()) for match in re.finditer(entry.pattern, TEX_FLAT))
+        spans.extend(
+            (match.start(), match.end()) for match in re.finditer(entry.pattern, TEX_FLAT)
+        )
     for label in VERIFIED_TABLES:
-        anchor = TEX_FLAT.index(f"\\label{{{label}}}")
+        anchor = TEX_FLAT.index("\\label{" + label + "}")
         begin = TEX_FLAT.index("\\begin{tabular}", anchor)
         spans.append((begin, TEX_FLAT.index("\\end{tabular}", begin)))
     merged: list[tuple[int, int]] = []
@@ -2597,17 +2759,54 @@ def unaccounted_numbers() -> set[str]:
             merged[-1] = (merged[-1][0], max(merged[-1][1], end))
         else:
             merged.append((start, end))
-    pieces = []
-    cursor = 0
-    for start, end in merged:
-        pieces.append(TEX_FLAT[cursor:start])
-        pieces.append(" ")
-        cursor = end
-    pieces.append(TEX_FLAT[cursor:])
-    text = "".join(pieces)
+    return merged
+
+
+def _is_covered(position: int, spans: list[tuple[int, int]]) -> bool:
+    """Is ``position`` inside any of ``spans``? Binary search over merged spans.
+
+    Requires ``spans`` to be disjoint and sorted, which :func:`_covered_spans`
+    guarantees.
+    """
+    lo, hi = 0, len(spans)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if spans[mid][1] <= position:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo < len(spans) and spans[lo][0] <= position < spans[lo][1]
+
+
+def unaccounted_numbers() -> set[str]:
+    """Numeric tokens in ``$...$`` that no claim in this module accounts for.
+
+    Note on method: this deliberately does *not* blank out the claimed spans and
+    then re-scan. Blanking is tempting and wrong. A claim pattern usually covers
+    the interior of a ``$...$`` span without covering its delimiters, so blanking
+    it leaves a pair of orphaned ``$`` characters behind; those re-pair with the
+    next orphaned ``$`` somewhere else in the document and manufacture a single
+    enormous span that runs from the middle of one section into the bibliography.
+    The numbers swept into it have nothing to do with any claim, which is how a
+    table of phantom orphans appeared the moment a claim was added whose span
+    happened not to include its own ``$``.
+
+    Scanning span-first has no such failure mode: the spans are exactly the ones
+    the author wrote, and each number is tested for coverage by its own position,
+    so a claim that covers half a span still accounts for the half it covers.
+    """
+    covered = _covered_spans()
     numbers: set[str] = set()
-    for span in _math_spans(text):
-        numbers.update(_NUMBER.findall(span))
+    # Offsets index into TEX_FLAT, because _body_only only ever truncates the
+    # string and never reorders or re-encodes it: body[i] == TEX_FLAT[i] for all
+    # i < len(body). That identity is what makes match.start() usable directly,
+    # and it is asserted below rather than assumed.
+    body = _body_only(TEX_FLAT)
+    assert body == TEX_FLAT[: len(body)], "_body_only changed the text, not just its length"
+    for match in re.finditer(r"(?<!\\)\$(?:\\\$|[^\n])*?(?<!\\)\$", body):
+        for number in _NUMBER.finditer(match.group(0)):
+            if not _is_covered(match.start() + number.start(), covered):
+                numbers.add(number.group(0))
     return numbers
 
 
@@ -2643,9 +2842,28 @@ def test_the_claim_registry_is_not_vacuous() -> None:
         found = groups(entry.name)
         if any(any(group for group in match) for match in found):
             capturing += 1
-    assert capturing >= len(CLAIMS) - 5, (
-        f"only {capturing} of {len(CLAIMS)} claims capture a number at all; the rest "
-        f"are anchors that would hide numbers from the exhaustiveness scan"
+    # Named rather than a bare number, because this allowance grew silently as
+    # claims were added and a count gives a reader nothing to check against.
+    # Each of these locates a claim whose number is spelled out in words rather
+    # than digits, so there is nothing to capture; all are deliberate.
+    no_capture = {
+        "sign_cross_all",  # "every one of the eight"
+        "orders_claim_provenance",  # restates a claim captured elsewhere
+        "table_d_base",  # "\mathrm{base} = 10^{4}" as written in the table header
+        "partial_p",  # a definition, not a measurement
+        "fig02_eight_distances",  # "at eight distances"
+    }
+    uncapturing = {entry.name for entry in CLAIMS} - {
+        entry.name
+        for entry in CLAIMS
+        if any(any(group for group in match) for match in groups(entry.name))
+    }
+    assert uncapturing == no_capture, (
+        f"claims that capture nothing changed: {sorted(uncapturing)} "
+        f"(expected {sorted(no_capture)})"
+    )
+    assert capturing == len(CLAIMS) - len(no_capture), (
+        f"only {capturing} of {len(CLAIMS)} claims capture a number at all"
     )
 
 

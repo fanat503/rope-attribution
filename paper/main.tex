@@ -667,8 +667,64 @@ $R_k^{ij}$ and $\psik^{ij}$ come from $q_i$ and $k_j$ by
 Equations~\ref{eq:A}--\ref{eq:B}. And it is
 \emph{exact}, because Equation~\ref{eq:perpair} is an identity rather than an
 expansion. The cost is that it is a function, not a number, and any downstream
-use must decide what to do with a function --- which is precisely the design
-question we are not able to answer without a trained model.
+use must decide what to do with a function --- which is a question about
+downstream circuits, and one we do not answer.
+
+\subsection{The same identities on trained weights}
+\label{sec:trained}
+
+Everything above is measured on synthetic vectors. That is a real limitation for
+a claim about what trained models do, and it is also avoidable for the narrower
+question of whether the algebra survives contact with real weights. We repeat the
+central measurements on activations taken from three trained checkpoints, across
+$5$ relative distances and every attention head of every rotary layer.
+
+Three findings, in decreasing order of how much they matter.
+
+\textbf{The identities hold on trained weights, at the dtype floor.} The
+relative-position property $\R_m^{\!\top}\R_n = \R_{n-m}$ is exact for real
+projections, with a worst absolute error of $1.14\times10^{-12}$ across all three
+checkpoints. The per-pair closed form of
+Equation~\ref{eq:perpair} reproduces brute-force scores to a median relative
+error of $5.06\times10^{-8}$ on \texttt{pythia-160m}, $3.57\times10^{-8}$ on
+\texttt{llama-160m} and $5.85\times10^{-8}$ on \texttt{SmolLM-135M}, against a
+float32 epsilon of $1.19\times10^{-7}$; bilinearity in content behaves the same
+way at $8.65\times10^{-8}$, $5.99\times10^{-8}$ and $7.52\times10^{-8}$. These
+are not small numbers that happen to pass: they are the numbers you get when the
+implementation is correct and the arithmetic runs out of precision. A trained
+checkpoint does not introduce a correction term to any of it.
+
+\textbf{The obstruction of Section~\ref{sec:cond} is a fact about the weights.} The
+share of an attention score taken by a feature's contribution is not a stable
+quantity across heads. Pooling over heads, layers and prompts, the leading
+feature's share ranges from $0.0108$ to $0.9999$ on \texttt{pythia-160m}, a
+factor of $92.9$; on \texttt{llama-160m} it spans $0.0148$ to $0.9999$, a factor of $67.6$; on
+\texttt{SmolLM-135M}, $0.0150$ to $0.9999$, a factor of $66.8$. The pooled
+interquartile range alone runs from $0.117$ to $0.992$. Some heads hand
+almost the entire score to one feature; others spread it. Any per-feature
+attribution method that reports one number per feature has to pick a convention
+for that spread, and the convention will dominate the answer.
+
+\textbf{Most channels are position-carrying.} A channel counts as position-blind
+when its share moves by less than $1\%$ across the distance range. Measured on
+trained weights, the position-blind fraction is $0.0068$ on
+\texttt{pythia-160m}, $0.0061$ on \texttt{llama-160m} and $0.0060$ on
+\texttt{SmolLM-135M}: between $0.5\%$ and $0.7\%$, and remarkably consistent
+across three unrelated architectures. The gate/phase split of
+Proposition~\ref{prop:gate} is therefore not a useful approximation on real
+weights --- almost everything is phase.
+
+One negative result belongs here rather than in a footnote. We began with
+\texttt{gpt2}, and it has no rotary embedding at all: position enters through a
+learned absolute table of size $1024$, there is no rotary module in the
+architecture, and no $\hat q/\hat k$ pair structure to attribute anything to. It
+is a useful control precisely because it is the model one reaches for first.
+
+What this section does not establish is equally worth stating. Three checkpoints
+of $135$--$160$M parameters, one prompt family, and no downstream task, cannot
+tell you whether per-distance attribution identifies anything a circuit cares
+about. They can tell you that the algebra does not need correcting, and that the
+head-to-head dispersion is enormous.
 
 \subsection{What context extension fixes, and what it does not}
 \label{sec:context}
