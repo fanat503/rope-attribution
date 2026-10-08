@@ -214,7 +214,7 @@ From `results/measurements.json` (produced by
 | relative-position property, 42 pairs | `3.4e-14` | `experiments.py:204` |
 | feature additivity | `3.6e-14` | `experiments.py:272` |
 | per-pair closed form vs brute force | `3.6e-15` | `experiments.py:209` |
-| per-feature contribution spread across distance | `43.0x` (up to `920x` on the finer fig09 grid) | `experiments.py:273` |
+| per-feature contribution spread across distance | `43.0x` on the 5-point grid — **withdrawn**: a `max/min` over a sampled grid, it grows without bound as the grid gets denser (`920x` on the 54-point grid, drifting 30.9x across six densities). The paper now reports sign reversal instead. See `projects/rope_attribution/statistics.py`. | `experiments.py:273` |
 | `mscale` at `scale = 32` | `1.3466` | `experiments.py:452` |
 | attention entropy `H/lnT`, unscaled → mscaled | `0.9233 → 0.8651` | `experiments.py:456-457` |
 

@@ -752,3 +752,113 @@ Recorded so the list is not padded.
   Re-read, the README sentence is a valid compressed statement (the legacy claim
   describes position interpolation). It is ambiguous, not wrong. **Dropped as a
   contradiction**; retained only as §10.5.
+
+---
+
+## Disposition of the ranked objections
+
+What was actually done about each of the five, stated plainly including the part
+that is still outstanding. Line references are to the current `paper/main.tex`.
+
+### 1. "Nine of eleven results are theorems, not measurements" — largely addressed
+
+Agreed, and converted in two directions.
+
+*Proofs instead of "we measure".* Both propositions now carry proofs
+(`\begin{proof}`); before this, `amsthm` was loaded and `\newtheorem` declared,
+and the paper contained no proof at all. Proposition `prop:blind` states the
+part a careless proof would slide over: with `B_k = 0` the term is still
+`A_k cos(D)`, which is *not* constant in `δ` — it carries no amplitude
+information beyond the sign of its cosine. `prop:cond` is proved, which is what
+makes the sign reversal a consequence rather than a coincidence of one draw.
+
+*The empirical asset, finally reported.* `results/real_model.json` held 58k lines
+of measurements on three trained checkpoints and the paper cited none of it,
+while asserting in two places that there is no trained model in the work. New
+Section `sec:trained` reports it:
+
+- the identities are exact on real weights, at the dtype floor — relative-position
+  to `1.14e-12` worst case, the per-pair closed form to a median
+  `5.06e-8` / `3.57e-8` / `5.85e-8` against a float32 eps of `1.19e-7`;
+- the leading feature's share of a score spans `0.0108`–`0.9999` on
+  `pythia-160m`, `0.0148`–`0.9999` on `llama-160m`, `0.0150`–`0.9999` on
+  `SmolLM-135M` — factors of `92.9`, `67.6`, `66.8`;
+- only `0.68%` / `0.61%` / `0.60%` of channels are position-blind, so on real
+  weights almost everything is phase;
+- GPT-2 has no rotary embedding at all, reported as the control it is.
+
+`tests/test_paper_trained_claims.py` re-derives every printed number from the
+JSON.
+
+*Still outstanding:* the sign reversal itself was not measured for real features —
+only the dispersion of feature shares. The paper now says so, which it did not
+before.
+
+### 2. "The 920.04x headline is a grid artefact" — resolved
+
+Withdrawn in a remark that reproduces the growth rather than merely asserting it:
+`rope_attribution/statistics.py` measures the ratio at six grid densities and
+finds it spread by a factor of `32`, non-monotone in density, with a seed
+standard deviation exceeding its own mean. Replaced by what the measurement
+supports, which is stronger: all `8/8` features change sign over `δ ∈ [1, 8192]`,
+with the magnitudes at the two ends of the range agreeing to `10^-0.08`.
+
+The "orders of magnitude" claim was silently dependent on the withdrawn number —
+it was `920.04 / 4.97e-14` — so it was replaced too, by the residual left by
+replacing `c_i(δ)` with its per-feature mean divided by the additivity residual:
+**15 orders of magnitude**, stable within `15.0`–`15.2` as the grid is made `120×`
+denser. Unlike `max/min`, its denominator is additive and cannot diverge.
+
+`test_the_ratio_is_withdrawn_and_the_paper_says_so` fails if the claim is
+reinstated.
+
+### 3. "The partial-RoPE orthogonality claim is false" — fixed
+
+Confirmed. `apply_partial_rope` now pairs within the rotated block (the GPT-NeoX
+layout) rather than across the whole head. `partial_norm_deviation` went from
+`0.2663` to `0.0` and the paper withdrew the "pp-RoPE is not orthogonal" remark.
+The convention each model uses is now stated where it matters.
+
+### 4. "Both corrections are already in the literature" — accepted, not yet acted on
+
+Agreed. The two "corrections" are restatements of YaRN §3.2, Appendix A.1, and
+Eq. (20). They are now framed as notes on the literature rather than
+contributions, and the novelty claim rests on the per-pair
+`(A_k, B_k, R_k, ψ_k)` decomposition of the *feature-level* attribution — an
+object that is not in RoFormer or YaRN.
+
+*Still outstanding:* the reviewer's further point stands — that object needs an
+argument that it is *useful*, not merely correctly derived. The trained-weights
+section is the beginning of that argument (a 93x spread in per-feature share
+across heads) but it is not yet the argument.
+
+### 5. "Wrong venue, wrong length, no style file" — partly addressed
+
+Author now filled and consistent across `main.tex`, `CITATION.cff` and `LICENSE`
+(Slyatski Ilya), pinned by `tests/test_author_metadata.py`. The official
+`neurips_2026.sty` is vendored. `tests/test_venue_compliance.py` measures the
+main text against the 9-page limit, locates the boundary at the final main-text
+section rather than counting PDF pages, and fails on figure placeholders, a
+non-empty bibliography, or a citation key that does not resolve.
+
+*Still outstanding and this is the largest open item:* the main text is **14
+pages against a 9-page limit**, and the paper still uses
+`\documentclass[twocolumn]{article}` rather than `neurips_2026`. Compression
+reduced Related Work, Limitations, the disclaimers and the reproducibility note,
+and moved the synthesis subsection to the appendix. Closing the remaining gap is
+not a writing task: the three largest sections — `Exactness, measured` (92
+lines), `The per-pair closed form` (85) and `What context extension fixes` (163)
+— *are* R1, the central decomposition, and R3. Cutting them to fit would remove
+headline results rather than compress prose. The reviewer's alternative is the
+honest one: reframe as a short position or empirical-methodology note with
+results in an appendix, which is what the content actually fits.
+
+### A defect the review did not find
+
+`unaccounted_numbers()` blanked claimed spans and rescanned. A claim pattern
+covers the inside of a `$...$` span without its delimiters, so blanking left
+orphaned `$` characters that re-paired, manufacturing enormous spans running from
+one section into the bibliography. It now scans span-first and tests each number's
+own position. Fixing it immediately exposed ~46 numbers in the paper that no claim
+had ever covered — the exhaustiveness gate had been silently blind over the whole
+document. Those now have claims too.
