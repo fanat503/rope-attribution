@@ -546,6 +546,13 @@ CLAIMS += (
         "trained_delta_range",
         r"across \$(\d+)\$ relative distances and every attention head",
     ),
+    # The two grids, restated where the protocol summary now lives in the main
+    # text. The same values are claimed again in Appendix~\ref{app:method}.
+    Claim(
+        "method_two_grids",
+        r"a \$(5)\$-point grid for the structural and scheme-comparison\s+tables, and a "
+        r"\$(54)\$-point log-spaced grid from \$1\$ to \$(8192)\$",
+    ),
     # The parameter sizes of the three checkpoints. Only the range is claimed:
     # the per-model parameter counts live in the Hugging Face config, not in
     # results/real_model.json, so there is nothing here to check them against and
