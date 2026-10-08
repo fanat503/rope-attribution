@@ -873,78 +873,16 @@ whole head safe, and neither is a rescue for position-free attribution --- that
 failure is in R2, which no amount of angle damping addresses.
 \end{remark}
 
-\subsection{Partial RoPE gives an exactly position-free sub-score}
-\label{sec:partial}
-\pip\ rotates only a fraction $p = n_{\mathrm{rot}}/d$ of channels and leaves
-the rest untouched. The score then splits into an unrotated part and a rotated
-part, and the unrotated part is position-free by construction --- not
-approximately, but exactly, because no rotation is applied to it.
+Two further findings are recorded in the appendices rather than here, because
+neither is part of R1--R3 and both are consequences of the same
+characterization. Appendix~\ref{sec:partial} shows that partial RoPE yields an
+\emph{exactly} position-free sub-score, which is the one place the gate/phase
+split is usable in practice, and a useful diagnostic for which convention a given
+implementation uses. Appendix~\ref{sec:mscale} shows that \yarn's magnitude
+factor acts exactly as a temperature on the attention distribution, monotone in
+entropy across $18$ scales --- so it changes the score's sharpness without
+touching its per-pair structure, which is why it cannot repair R2.
 
-\paperfigure{fig07_partial_rope}{%
-  Partial RoPE at $p = 0.25$: the rotated and unrotated sub-scores against
-  relative distance (left), and each sub-score's deviation from its own mean
-  (right). The clean sub-score is flat to the last bit; the rotated one
-  oscillates. See Section~\ref{sec:partial}.%
-}{fig:partial}
-
-Figure~\ref{fig:partial} shows the split. At $d = 64$ with
-$n_{\mathrm{rot}} = 16$: the unrotated sub-score's spread over the $5$-point
-grid is \emph{exactly} $0.0$, and over the finer $54$-point grid it
-is also exactly $0.0$ --- the plotted constant is $0.6857345646988313$ at every
-distance. The rotated sub-score, over those same grids, varies by $11.34$ and
-$24.20$ respectively. The clean part carries a mean magnitude share of the
-score of $0.302$ (JSON grid) and $0.187$ (figure grid), so this is a
-substantially weighted, genuinely position-free bilinear term.
-
-This is the one setting in which a position-free additive attribution is exactly
-correct, and it is correct because a quarter of the channels carry no position
-at all. That makes \pip\ the natural recommendation for feature-level
-attribution in a model that has it.
-
-\begin{remark}[$\pip$ preserves the norm too]
-There is a subtlety here that a natural implementation gets wrong. Partial
-rotary is orthogonal, and so preserves the norm exactly, as full RoPE does: we
-measure a deviation below the float64 noise floor at
-$n_{\mathrm{rot}} = 16$, the same as full RoPE. This holds only if the rotated
-block is paired \emph{within itself} --- channel $i$ with channel
-$i + n_{\mathrm{rot}}/2$, the GPT-NeoX layout used by models such as
-\texttt{EleutherAI/pythia-160m}. Pairing $i$ with $i + d/2$ across the whole head
-instead leaves every touched pair half rotated and half not; that variant is not
-orthogonal and is not what any published model does. We mention it because the
-failure is silent: the code runs, the numbers look reasonable, and only a
-norm check reveals the difference. The one claim we withdraw here is any
-suggestion that partial rotation damages the magnitude gate.
-\end{remark}
-
-\subsection{$\mathrm{mscale}$ is a temperature}
-\label{sec:mscale}
-
-\yarn's magnitude factor of Equation~\ref{eq:mscale} multiplies every logit,
-which is precisely a temperature on the attention distribution. At $s = 32$ we
-measure $\mathrm{mscale} = 1.3465736$, matching the closed form
-$0.1\ln 32 + 1$ to all printed digits.
-
-\paperfigure{fig08_mscale_entropy}{%
-  Normalized attention entropy $H/\ln T$ against extension factor, with and
-  without $\mathrm{mscale}$ (left), and the measured $\mathrm{mscale}$ against
-  its closed form (right). $\mathrm{mscale}$ sharpens the attention
-  distribution. See Section~\ref{sec:mscale}.%
-}{fig:entropy}
-
-Figure~\ref{fig:entropy} plots this. With one query against $T = 256$ keys,
-$\mathrm{mscale}$ moves the normalized entropy from $H/\ln T = 0.9233$ to
-$0.8651$, a drop of $0.0582$ in absolute
-nats, from $5.1198$ to $4.7970$. Across the full range of $18$ extension
-factors from $1$ to $128$, the effect is monotone: $H/\ln T$ falls to $0.8383$
-as $\mathrm{mscale}$ rises to $1.4852$. Lowering entropy is a sharpening of the
-attention distribution: fewer keys receive appreciable mass. This is a real,
-measurable, and easily overlooked side effect of context extension that is not
-part of its frequency story, and it is independent of everything in
-Sections~\ref{sec:exact}--\ref{sec:context}. We report it as a measured
-consequence and make no claim about whether it helps or hurts a trained model,
-which we do not measure.
-
-% =====================================================================
 \section{Limitations}
 
 R1, R2 and R3 are usually discussed as three separate observations, and they are
@@ -1289,6 +1227,83 @@ sidecar, so no claim in this paper is read off a pixel, and the appendix records
 which file and key every quoted number came from. The audit is mechanical: each
 literal in the tables is either an entry of \texttt{results/measurements.json},
 an entry of a figure CSV, or a stated quotient of two such entries.
+
+% =====================================================================
+
+
+% Secondary findings (partial RoPE, mscale/temperature), moved out of
+% the main text to respect the nine-page limit. Content unchanged.
+
+\subsection{Partial RoPE gives an exactly position-free sub-score}
+\label{sec:partial}
+\pip\ rotates only a fraction $p = n_{\mathrm{rot}}/d$ of channels and leaves
+the rest untouched. The score then splits into an unrotated part and a rotated
+part, and the unrotated part is position-free by construction --- not
+approximately, but exactly, because no rotation is applied to it.
+
+\paperfigure{fig07_partial_rope}{%
+  Partial RoPE at $p = 0.25$: the rotated and unrotated sub-scores against
+  relative distance (left), and each sub-score's deviation from its own mean
+  (right). The clean sub-score is flat to the last bit; the rotated one
+  oscillates. See Section~\ref{sec:partial}.%
+}{fig:partial}
+
+Figure~\ref{fig:partial} shows the split. At $d = 64$ with
+$n_{\mathrm{rot}} = 16$: the unrotated sub-score's spread over the $5$-point
+grid is \emph{exactly} $0.0$, and over the finer $54$-point grid it
+is also exactly $0.0$ --- the plotted constant is $0.6857345646988313$ at every
+distance. The rotated sub-score, over those same grids, varies by $11.34$ and
+$24.20$ respectively. The clean part carries a mean magnitude share of the
+score of $0.302$ (JSON grid) and $0.187$ (figure grid), so this is a
+substantially weighted, genuinely position-free bilinear term.
+
+This is the one setting in which a position-free additive attribution is exactly
+correct, and it is correct because a quarter of the channels carry no position
+at all. That makes \pip\ the natural recommendation for feature-level
+attribution in a model that has it.
+
+\begin{remark}[$\pip$ preserves the norm too]
+There is a subtlety here that a natural implementation gets wrong. Partial
+rotary is orthogonal, and so preserves the norm exactly, as full RoPE does: we
+measure a deviation below the float64 noise floor at
+$n_{\mathrm{rot}} = 16$, the same as full RoPE. This holds only if the rotated
+block is paired \emph{within itself} --- channel $i$ with channel
+$i + n_{\mathrm{rot}}/2$, the GPT-NeoX layout used by models such as
+\texttt{EleutherAI/pythia-160m}. Pairing $i$ with $i + d/2$ across the whole head
+instead leaves every touched pair half rotated and half not; that variant is not
+orthogonal and is not what any published model does. We mention it because the
+failure is silent: the code runs, the numbers look reasonable, and only a
+norm check reveals the difference. The one claim we withdraw here is any
+suggestion that partial rotation damages the magnitude gate.
+\end{remark}
+
+\subsection{$\mathrm{mscale}$ is a temperature}
+\label{sec:mscale}
+
+\yarn's magnitude factor of Equation~\ref{eq:mscale} multiplies every logit,
+which is precisely a temperature on the attention distribution. At $s = 32$ we
+measure $\mathrm{mscale} = 1.3465736$, matching the closed form
+$0.1\ln 32 + 1$ to all printed digits.
+
+\paperfigure{fig08_mscale_entropy}{%
+  Normalized attention entropy $H/\ln T$ against extension factor, with and
+  without $\mathrm{mscale}$ (left), and the measured $\mathrm{mscale}$ against
+  its closed form (right). $\mathrm{mscale}$ sharpens the attention
+  distribution. See Section~\ref{sec:mscale}.%
+}{fig:entropy}
+
+Figure~\ref{fig:entropy} plots this. With one query against $T = 256$ keys,
+$\mathrm{mscale}$ moves the normalized entropy from $H/\ln T = 0.9233$ to
+$0.8651$, a drop of $0.0582$ in absolute
+nats, from $5.1198$ to $4.7970$. Across the full range of $18$ extension
+factors from $1$ to $128$, the effect is monotone: $H/\ln T$ falls to $0.8383$
+as $\mathrm{mscale}$ rises to $1.4852$. Lowering entropy is a sharpening of the
+attention distribution: fewer keys receive appreciable mass. This is a real,
+measurable, and easily overlooked side effect of context extension that is not
+part of its frequency story, and it is independent of everything in
+Sections~\ref{sec:exact}--\ref{sec:context}. We report it as a measured
+consequence and make no claim about whether it helps or hurts a trained model,
+which we do not measure.
 
 % =====================================================================
 

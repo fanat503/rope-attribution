@@ -541,6 +541,9 @@ CLAIMS += (
     ),
     Claim("trained_blind_band", r"between \$(0\.\d+)\\%\$ and \$(0\.\d+)\\%\$"),
     Claim("gpt2_no_rope", r"learned absolute table of size \$(\d+)\$"),
+    # The scale sweep the mscale appendix result rests on, restated in the
+    # pointer that replaced that section in the main text.
+    Claim("appendix_mscale_scales", r"monotone in\s+entropy across \$(18)\$ scales"),
     # The five relative distances the trained-weights section sweeps.
     Claim(
         "trained_delta_range",
