@@ -310,12 +310,44 @@ depend on $\delta$. Hence $\Rk$ and $\psik$ are position-independent, and the
 pair $k$ is completely position-blind if and only if $\Bk = 0$.
 \end{proposition}
 
+\begin{proof}[Proof of Proposition~\ref{prop:blind}]
+Read $\Ak$ and $\Bk$ off Equations~\ref{eq:A}--\ref{eq:B}: each is a sum or
+difference of products $q[\cdot]k[\cdot]$ of content coordinates, and neither
+$\delta$ nor $\invf_k$ appears. So both are $\delta$-independent, and so are
+$\Rk = \operatorname{hypot}(\Ak, \Bk)$ and
+$\psik = \operatorname{atan2}(\Bk, \Ak)$, which are functions of
+$(\Ak, \Bk)$ alone.
+
+For the only-if direction, note that $\Rk$ is the amplitude of the sinusoid
+$c_k(\delta) = \Rk\cos(\D - \psik)$ with $\D = \delta\invf_k$ ranging over an
+interval of length $|m - n|\cdot\invf_k$ as the relative distance varies. If
+$\Bk = 0$ then $\psik = 0$, $c_k(\delta) = \Ak\cos\D$, which depends on
+$\delta$ only through its sign on the intervals where $\cos$ changes sign; if
+$\Bk \ne 0$ the pair mixes amplitude and phase and $c_k$ is non-constant
+whenever $\invf_k \ne 0$. In the non-degenerate case $\invf_k > 0$ for every
+$k < \half$, so $\Bk = 0$ is exactly the position-blind case, which is what
+Proposition~\ref{prop:gate} uses to separate a per-pair ``gate'' from a
+``phase''.
+\end{proof}
+
 \begin{proposition}[Conditionality]
 \label{prop:cond}
 Because $c_k(\delta)$ is a non-constant sinusoid in general, a feature's
 contribution to the score is a function of $\delta$, unless every rotary pair
 that feature touches happens to satisfy $\Bk = 0$.
 \end{proposition}
+
+\begin{proof}[Proof of Proposition~\ref{prop:cond}]
+A feature's contribution is $\sum_k$ over the rotary pairs it touches, each term
+$\Rk\cos(\delta\invf_k - \psik)$. If every such pair has $\Bk = 0$ then each
+$\psik = 0$ and each term is $\Ak\cos(\delta\invf_k)$, whose dependence on
+$\delta$ is confined to the sign of the cosine --- no amplitude information
+about the relative distance is carried. If some touched pair has $\Bk \ne 0$,
+the sum contains a genuine sinusoid in $\delta$ with nonzero frequency
+$\invf_k > 0$, so it is not $\delta$-independent and in general changes sign as
+$\delta$ ranges over the context window. Section~\ref{sec:cond} measures the
+sign change rather than assuming it.
+\end{proof}
 
 Proposition~\ref{prop:cond} is the whole of R2, stated before any measurement.
 Section~\ref{sec:cond} measures how large the effect is.
