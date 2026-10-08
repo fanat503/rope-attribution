@@ -26,6 +26,22 @@ pdflatex main && bibtex main && pdflatex main && pdflatex main
 `bibtex` is required for the bibliography to resolve on the first pass; the two
 following `pdflatex` runs pick up the citation numbers and the cross-references.
 
+## Style files
+
+`neurips_2026.sty` is vendored in this directory and is loaded as
+`\usepackage[preprint,position]{neurips_2026}` on top of
+`\documentclass[twocolumn]{article}`.
+
+The matching `neurips_2026.cls` is **not** vendored. It could not be fetched from
+the NeurIPS repositories during this work (`neurips.cc/Conferences/2026/...`
+returns 404 for the class), so the `\documentclass{neurips_2026}` form is not
+available. NeurIPS ships the two files together; before submitting, download both
+from the conference style-files page and switch line 15 of `main.tex` to
+`\documentclass[preprint,position]{neurips_2026}`, dropping the `\usepackage`.
+
+The style file loads `natbib` and sets the geometry itself, so `main.tex` must
+not load either. It also explicitly forbids `fullpage`.
+
 ## Missing figures
 
 `\paperfigure` takes `(png basename, caption, label)`. If `../figures/NAME.png`

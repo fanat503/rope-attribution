@@ -12,19 +12,22 @@
 %  Figures are included by relative path and guarded with \IfFileExists
 %  so that the document still compiles with an empty ../figures/.
 % =====================================================================
+% The official NeurIPS 2026 style file, vendored in this directory:
+%   neurips_2026.sty, \ProvidesPackage{neurips_2026}[2026-01-29 ...]
+% It loads natbib and sets the geometry itself (textwidth=5.5in, textheight=9in,
+% top=1in) and explicitly forbids `fullpage`, so neither is loaded here.
+%
+% `preprint` keeps author and affiliation visible; a blind submission would drop
+% it. `position` is the track this paper targets: the contribution is a
+% characterization of the algebra plus measurements on trained weights, not a new
+% method benchmarked against baselines.
+%
+% NOTE: this is the `\documentclass{article}` + `\usepackage{neurips_2026}`
+% form rather than `\documentclass{neurips_2026}`, because the matching
+% `neurips_2026.cls` is not vendored and could not be fetched from the NeurIPS
+% repositories. The two files ship together; see paper/BUILD.md.
 \documentclass[twocolumn]{article}
-
-% ---- review/preprint setup, self-contained (no .sty files required) ----
-\usepackage{natbib}
-% Geometry: give the package ONE non-contradictory specification. The
-% previous pair (\usepackage[margin=1in]{geometry} followed by
-% \geometry{textwidth=5.5in,textheight=9in}) made geometry emit
-%   "Over-specification in `h'-direction. `width' (397.485pt) is ignored"
-% and lay the document out at 6.5in wide, silently discarding the declared
-% 5.5in. textheight=9in on letterpaper reproduces the intended 1in top and
-% bottom margins; the 5.5in block is then centred (1.5in left/right).
-\usepackage[letterpaper,textwidth=5.5in,textheight=9in]{geometry}
-\setlength{\columnsep}{0.25in}
+\usepackage[preprint,position]{neurips_2026}
 \usepackage{amsmath,amssymb,amsthm,bm}
 \usepackage{graphicx}
 \usepackage{booktabs}
