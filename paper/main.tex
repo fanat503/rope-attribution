@@ -182,13 +182,15 @@ error and \yarn\ does not touch them.
 
 \subsection{What we do not claim}
 
-This matters enough to state before the results. There is no trained model here,
-and no real activations: every measurement is on synthetic query and key vectors
-from a fixed seed, projected through synthetic feature directions.
-We never load a checkpoint. There is no sparse autoencoder anywhere in this work:
-we attribute over a synthetic feature set, with $8$ random directions and
-non-negative coefficients, which mimic the \emph{shape} of a sparse code and are
-a test fixture for the algebra, not a model of a real feature set.
+This matters enough to state before the results. The algebraic claims are made on
+synthetic query and key vectors from a fixed seed, projected through synthetic
+feature directions; Section~\ref{sec:trained} then repeats the central
+measurements on activations from three trained checkpoints, and that section
+reports what those activations do and do not settle. There is no sparse
+autoencoder anywhere in this work: we attribute over a synthetic feature set,
+with $8$ random directions and non-negative coefficients, which mimic the
+\emph{shape} of a sparse code and are a test fixture for the algebra, not a model
+of a real feature set.
 There is no retrieval benchmark and no accuracy measurement: we report no
 perplexity, no needle-in-a-haystack score and no long-context retrieval result.
 We cannot and do not report anything of the form ``the model retrieves the
@@ -992,62 +994,31 @@ Sections~\ref{sec:exact}--\ref{sec:context}. We report it as a measured
 consequence and make no claim about whether it helps or hurts a trained model,
 which we do not measure.
 
-\subsection{The three results are not independent}
-\label{sec:synthesis}
-
-It is worth stating explicitly how R1, R2 and R3 relate, because they are
-usually discussed as three separate observations and they are not.
-
-R1 and R2 pull in opposite directions and both are correct. The additive
-decomposition of Equation~\ref{eq:additive} is exact to
-$5.0\times10^{-14}$ --- the coefficients $A_{ij}$ exist and are real numbers,
-not fudges. But those real numbers are functions of $\delta$, and they vary by
-over the distance range. Exactness therefore buys nothing
-against position-conditionality: the map from features to score is exactly
-additive at every fixed distance and wildly non-constant across distances. This
-is the sense in which position-conditionality, not bilinearity, is the operative
-obstruction, and it is what separates R1 from R2: an attribution scheme that
-computes $A_{ij}$ correctly at $\delta = 8$ and reuses it at $\delta = 512$ has
-made an error far larger than any it would make by ignoring RoPE altogether.
-
-R3 is orthogonal to both, and this is the part most likely to be
-misunderstood. The linearization failure is a statement about the
-\emph{approximation} $\cos \D \mapsto 1 - \D^2/2$, not about attribution. One
-could perfectly well attribute a RoPE head exactly --- that is R1 --- and still
-be unable to linearize it. Conversely, one could linearize a head perfectly and
-still have no position-free attribution, which is the situation under full
-\rope\ at any $\delta > 3$. So the two literatures --- ``we need a wider
-context'' and ``we need position-free feature attribution'' --- are addressing
-different problems, and a method that answers one does not answer the other.
-What \yarn\ does is extend the distance range over which a majority of channels
-can be linearized, from $0/32$ to $11/32$ at $\delta \approx 861$. What it does
-not do is make the worst channel linearizable, and the worst channel is what
-determines whether the head as a whole can be treated as linear.
-
-We mention this because the natural reading of Table~\ref{tab:spectrum} is
-that \yarn\ is ``better'', and it is better on one axis and indifferent on the
-other. The honest summary is the one in the remark above: context extension
-changes which channels admit a linearization and when, and does not change the
-fact that the worst channel is out of range.
-
 % =====================================================================
 \section{Limitations}
 
+R1, R2 and R3 are usually discussed as three separate observations, and they are
+not: R1 and R2 pull in opposite directions, and R3 is orthogonal to both.
+Appendix~\ref{sec:synthesis} sets out how they relate, and why context extension
+is \emph{indifferent} on the axis that matters most.
+
 In decreasing order of how much they constrain the conclusions.
 
-\textbf{No model.} There is no trained network, no checkpoint, no real
-activation, no training run, and no forward pass through anything learned. The
-claims are about the algebra of the position encoding and transfer to any head
-that uses it; they say nothing about what any particular trained model does. The
-$8$ directions our attribution runs over are random with non-negative
-coefficients: they have the shape of a sparse code and none of its content, so
-nothing here is evidence about real feature geometry or circuit structure. In
-particular, the sign reversal in Section~\ref{sec:cond} is a property of random
-directions in a $64$-dimensional head, and we have no measurement of the
-corresponding quantity for real features. There is also no needle task, no
-retrieval benchmark and no language-modelling evaluation: when we say \yarn\ is
-better on linearizable fraction, we mean better on that number, and
-Section~\ref{sec:context} shows it does not track the amplitude-weighted error.
+\textbf{No downstream model, and no learned features.} The algebraic claims rest
+on synthetic vectors with fixed seeds, and Section~\ref{sec:trained} confirms the
+central identities on activations from three trained checkpoints at
+$135$--$160$M parameters. Neither connects to a task: there is no retrieval
+benchmark, no language-modelling evaluation and no causal patching anywhere in
+this work. The $8$ directions our attribution runs over are random with
+non-negative coefficients: they have the shape of a sparse code and none of its
+content, so nothing here is evidence about real feature geometry or circuit
+structure. Where we say \yarn\ is better on linearizable fraction, we mean better
+on that number, and Section~\ref{sec:context} shows it does not track the
+amplitude-weighted error. In particular, the sign reversal in
+Section~\ref{sec:cond} is a property of random directions in a
+$64$-dimensional head, and although Section~\ref{sec:trained} measures the
+head-to-head dispersion of feature shares on real weights, we have not measured
+the sign reversal itself for real features.
 
 \textbf{Single configuration.} All measurements use $d = 64$, $\mathrm{base} =
 10000$, $s = 32$, pre-extension context $2048$, and one query/key draw per
@@ -1259,5 +1230,47 @@ was included from memory.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
+
+
+% Moved out of the main text to respect the nine-page limit.
+% Content unchanged; only its placement.
+
+\subsection{The three results are not independent}
+\label{sec:synthesis}
+
+It is worth stating explicitly how R1, R2 and R3 relate, because they are
+usually discussed as three separate observations and they are not.
+
+R1 and R2 pull in opposite directions and both are correct. The additive
+decomposition of Equation~\ref{eq:additive} is exact to
+$5.0\times10^{-14}$ --- the coefficients $A_{ij}$ exist and are real numbers,
+not fudges. But those real numbers are functions of $\delta$, and they vary by
+over the distance range. Exactness therefore buys nothing
+against position-conditionality: the map from features to score is exactly
+additive at every fixed distance and wildly non-constant across distances. This
+is the sense in which position-conditionality, not bilinearity, is the operative
+obstruction, and it is what separates R1 from R2: an attribution scheme that
+computes $A_{ij}$ correctly at $\delta = 8$ and reuses it at $\delta = 512$ has
+made an error far larger than any it would make by ignoring RoPE altogether.
+
+R3 is orthogonal to both, and this is the part most likely to be
+misunderstood. The linearization failure is a statement about the
+\emph{approximation} $\cos \D \mapsto 1 - \D^2/2$, not about attribution. One
+could perfectly well attribute a RoPE head exactly --- that is R1 --- and still
+be unable to linearize it. Conversely, one could linearize a head perfectly and
+still have no position-free attribution, which is the situation under full
+\rope\ at any $\delta > 3$. So the two literatures --- ``we need a wider
+context'' and ``we need position-free feature attribution'' --- are addressing
+different problems, and a method that answers one does not answer the other.
+What \yarn\ does is extend the distance range over which a majority of channels
+can be linearized, from $0/32$ to $11/32$ at $\delta \approx 861$. What it does
+not do is make the worst channel linearizable, and the worst channel is what
+determines whether the head as a whole can be treated as linear.
+
+We mention this because the natural reading of Table~\ref{tab:spectrum} is
+that \yarn\ is ``better'', and it is better on one axis and indifferent on the
+other. The honest summary is the one in the remark above: context extension
+changes which channels admit a linearization and when, and does not change the
+fact that the worst channel is out of range.
 
 \end{document}

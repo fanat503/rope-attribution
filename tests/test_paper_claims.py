@@ -550,7 +550,7 @@ CLAIMS += (
     # the per-model parameter counts live in the Hugging Face config, not in
     # results/real_model.json, so there is nothing here to check them against and
     # pretending otherwise would be a claim with no measurement behind it.
-    Claim("trained_model_sizes", r"checkpoints of \$(\d+)\$--\$(\d+)\$M parameters"),
+    Claim("trained_model_sizes", r"checkpoints (?:of|at) \$(\d+)\$--\$(\d+)\$M parameters"),
     # `delta = 512` is the delta at which several comparisons are quoted. Until
     # now it had no claim at all and survived only because the blanking bug made
     # every scan of this region report a phantom; see unaccounted_numbers().
@@ -2606,10 +2606,17 @@ def test_the_paper_states_a_limitations_section() -> None:
     # heading they happen to sit under: the section was compressed to four bold
     # leads, and a test that keyed on "\paragraph{...}" would fail on the heading
     # while saying nothing about whether the disclaimer is still there.
+    # Keyed on what each disclaimer says, not on the heading it sits under, and
+    # not on a phrase that a previous revision happened to use. The set was
+    # rewritten when the paper gained Section~\ref{sec:trained}: "no trained
+    # model anywhere in this work" stopped being true, and asserting it would
+    # have meant keeping a claim the repository had already outgrown.
     for label, required in (
-        ("no model", "no trained network, no checkpoint, no real"),
+        ("no downstream model", "Neither connects to a task"),
+        ("trained weights acknowledged", "Section~" + chr(92) + "ref{sec:trained} confirms the"),
         ("no learned features", "none of its content"),
-        ("no evaluation", "no retrieval benchmark and no language-modelling evaluation"),
+        ("no evaluation", "no retrieval benchmark, no language-modelling evaluation"),
+        ("sign reversal is synthetic", "property of random directions in a"),
         ("single configuration", "We have not swept head dimension"),
     ):
         assert required in limitations, f"Limitations no longer states: {label}"
@@ -2620,15 +2627,17 @@ def test_the_paper_disclaims_the_three_forbidden_things() -> None:
     """No trained sparse autoencoder, no real activations, no retrieval accuracy."""
     disclaimer = disclaimer_text()
     for phrase in (
-        "There is no trained model here, and no real activations",
         "There is no sparse autoencoder anywhere in this work",
         "There is no retrieval benchmark and no accuracy measurement",
         "We do not claim any scheme is better in practice",
         "The conclusions are model-independent by construction",
-        "We never load a checkpoint",
-        "no training run, and no forward pass through anything learned",
-        "no trained model, no learned features,",
         "no retrieval benchmark, no accuracy figure",
+        # Section~\ref{sec:trained} now measures on trained weights, so the
+        # disclaimer is about what those measurements are *for*, not about their
+        # absence. Asserting "we never load a checkpoint" here would have been
+        # asserting something the repository had stopped being true of.
+        "Neither connects to a task",
+        "Section~" + chr(92) + "ref{sec:trained} then repeats the central",
     ):
         assert phrase in disclaimer, f"the paper no longer says: {phrase!r}"
 

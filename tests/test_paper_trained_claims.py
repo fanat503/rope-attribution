@@ -90,6 +90,9 @@ def test_the_model_size_range_matches_the_checkpoint_names(trained: dict) -> Non
     """
     lo, hi = (int(x) for x in groups("trained_model_sizes")[0])
     assert lo < hi
+    # Printed in two places (Section~\ref{sec:trained} and Limitations) and the
+    # two must agree, or a reader comparing them sees a contradiction.
+    assert len(groups("trained_model_sizes")) >= 2, groups("trained_model_sizes")
     sizes = set()
     for model_id in trained["aggregates"]:
         for tag in model_id.split("/")[-1].split("-"):
