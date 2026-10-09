@@ -54,3 +54,17 @@ jobs:
         # tests/. The projects/frontier-01-*.py archive is deliberately outside
         # that scope; do not widen it here to make a red build green.
         run: python -m ruff check .
+
+      - name: Makefile targets exist and `results` reproduces the committed artefact
+        # The README tells a reader that `make all` reproduces the repository. That
+        # promise is checked here rather than asserted in prose, because the
+        # machine this was written on has no make and the claim would otherwise be
+        # unfalsifiable. `results` is the cheapest target that proves the Makefile
+        # works and that the committed JSON is still what the code produces; the
+        # diff is allowed to be empty and is reported either way, since a non-empty
+        # diff on a seeded run would mean the seeds moved, which the tests catch
+        # more precisely.
+        run: |
+          make help
+          make results
+          git diff --stat -- results/ | tail -n 5

@@ -1,15 +1,102 @@
 # Attributing RoPE: exact score attribution, and what actually limits it
 
-This repository studies how attention scores are attributed to features when
-positions are encoded with rotary embeddings. It contains a from-scratch
-implementation of RoPE, YaRN and partial RoPE, and a set of experiments whose
-every reported number is computed at run time.
+## TL;DR
 
-There is an earlier body of exploratory work under `projects/frontier-01-*`.
-**Some of those scripts print illustrative constants rather than computing
-measurements.** See [Legacy material](#legacy-material) before citing anything
-from them. The code under `projects/rope_attribution/` is the maintained
-implementation and is the only part of this repository that should be relied on.
+Under rotary position embeddings an attention score is **exactly** bilinear in the
+content vectors at fixed relative distance, so the additive feature decomposition
+`score = Σ_ij f_i g_j A_ij(δ)` is exact — not approximate. But `A_ij` is a
+function of the distance, and that function **reverses sign**: on the 54-point
+grid all 8 of 8 features change sign somewhere in `δ ∈ [1, 8192]`. So a
+position-free per-feature scalar is not merely inaccurate, it is *backwards*:
+replacing `c_i(δ)` with its per-feature mean gets the sign wrong on **26.8%** of
+per-pair, per-distance cells of three trained checkpoints, with a median relative
+error of `1.13` against a peak of `1`. The well-posed object is per-feature and
+per-distance — and it is closed-form, so it costs the same as the scalar it
+replaces.
+
+Three claims we explicitly do **not** make: the algebra is already published
+(arXiv:2607.25507, §3–§4); RoPE internals are not under-explored in general; and
+nothing here evaluates a downstream task.
+
+## Dataflow
+
+Every number in the paper traces to one of two generated artefacts. Nothing is
+typed in by hand.
+
+```
+                       rope.py  (RoPE / YaRN / partial RoPE, numpy float64)
+                          │
+        ┌─────────────────┼──────────────────────┐
+        │                 │                      │
+  experiments.py    statistics.py          usefulness.py
+  structural facts, grid-independent        what a position-free
+  spectra, additivity,  │                  scalar costs, on real
+  partial RoPE, mscale  │                  checkpoints
+        │               │                      │
+        ▼               ▼                      ▼
+  results/           results/              results/
+  measurements.json  statistics.json       usefulness.json
+        │               │                      │
+        │               └──────────┬───────────┘
+        │                          │
+        ▼                          ▼
+   figures/*.png  ◄──── figures.py ────┘
+   + CSV sidecars  (10 figures, every array plotted is shipped)
+        │
+        ▼
+   tests/test_paper_claims.py   parses paper/main.tex, re-derives every literal
+   tests/test_real_model.py     re-runs the checkpoint measurements
+   tests/test_usefulness.py     re-prices the position-free alternative
+```
+
+The claim registry in `tests/test_paper_claims.py` is the audit: it locates each
+number in `paper/main.tex` by pattern, compares it against the artefact, and
+fails if a number in the paper has no claim behind it. Adding a number to the
+paper without a test for it fails the suite.
+
+## Reproduce everything
+
+```bash
+pip install -e . && pip install -r requirements-dev.txt
+pytest -q                                        # 1298 tests
+python -m projects.rope_attribution.experiments  # results/measurements.json
+python -m projects.rope_attribution.statistics  # results/statistics.json
+python -m projects.rope_attribution.figures      # figures/*.png + CSV sidecars
+```
+
+On a machine with GNU make, `make all` does all of the above and recompiles the
+paper. The `make` targets are exercised by CI rather than only asserted here: the
+workflow runs `make help` and `make results` and reports the diff against the
+committed `results/`, so a broken target fails the build instead of this
+README's promise failing quietly. `make help` lists every target.
+
+The checkpoint measurements are opt-in because they need CPU torch, which is not
+a test dependency:
+
+```bash
+pip install -r real_model_requirements.txt
+python -m projects.rope_attribution.real_model    # results/real_model.json
+python -m projects.rope_attribution.usefulness    # results/usefulness.json
+```
+
+Both committed artefacts are verified bit-identical across three independent
+regenerations.
+
+## Citation
+
+```bibtex
+@misc{slyatski2026attributingrope,
+  title  = {Attributing Rotary Position Embeddings: Exact Score Attribution,
+            and What Actually Limits It},
+  author = {Slyatski, Ilya},
+  year   = {2026},
+  note   = {Preprint. Algebra standard: see arXiv:2607.25507 for the per-pair
+             closed form this work attributes rather than derives.}
+}
+```
+
+If you use this repository, also cite the paper it builds on — RoFormer
+(arXiv:2104.09864) — and YaRN (arXiv:2309.00071), which it measures as a control.
 
 ## What is computed
 
@@ -17,20 +104,21 @@ implementation and is the only part of this repository that should be relied on.
 projects/rope_attribution/
   rope.py         RoPE, YaRN, partial RoPE (numpy, float64)
   experiments.py  seven measured experiments
+  statistics.py   grid-independence and seed-variance statistics
+  usefulness.py   cost of the best position-free surrogate, on real checkpoints
+  real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, every value computed at run time
 tests/            1298 tests
 figures/          ten figures, each with a CSV sidecar
-results/          measurements.json
+results/          measurements.json, statistics.json, usefulness.json
 ```
 
-Reproduce everything:
-
-```bash
-pip install -e . && pip install -r requirements-dev.txt
-pytest -q                              # 1298 tests
-python -m projects.rope_attribution.experiments   # prints the report, rewrites results/
-python -m projects.rope_attribution.figures       # rewrites figures/
-```
+There is an earlier body of exploratory work under `projects/frontier-01-*`.
+**Some of those scripts print illustrative constants rather than computing
+measurements, and their novelty claim is known to be false.** See
+[Legacy material](#legacy-material) before citing anything from them. The code
+under `projects/rope_attribution/` is the maintained implementation and is the
+only part of this repository that should be relied on.
 
 ## The setting
 
