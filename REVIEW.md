@@ -819,18 +819,45 @@ layout) rather than across the whole head. `partial_norm_deviation` went from
 `0.2663` to `0.0` and the paper withdrew the "pp-RoPE is not orthogonal" remark.
 The convention each model uses is now stated where it matters.
 
-### 4. "Both corrections are already in the literature" — accepted, not yet acted on
+### 4. "Both corrections are already in the literature" — addressed, and the sweep found more
 
-Agreed. The two "corrections" are restatements of YaRN §3.2, Appendix A.1, and
-Eq. (20). They are now framed as notes on the literature rather than
-contributions, and the novelty claim rests on the per-pair
-`(A_k, B_k, R_k, ψ_k)` decomposition of the *feature-level* attribution — an
-object that is not in RoFormer or YaRN.
+Agreed, and a systematic arXiv sweep turned up something stronger than the
+reviewer's point: **the per-pair closed form itself is published.** Chachamovits
+(arXiv:2607.25507, §3-§4) writes a rotary head as a sum of per-pair terms
+`ρ cos(α − β + (m−n)θ)` with `ρ = |q_j||k_j|` — our closed form — and remarks
+that the term goes negative near `π`, which is the sign behaviour the paper had
+presented as its own finding. The same identity appears in Liang et al.
+(arXiv:2606.24033, §1); the per-frequency spectral structure of attention has been
+measured on pretrained checkpoints by Li (arXiv:2607.06621). All six arXiv IDs
+were verified against the arXiv API before being written into `references.bib`.
 
-*Still outstanding:* the reviewer's further point stands — that object needs an
-argument that it is *useful*, not merely correctly derived. The trained-weights
-section is the beginning of that argument (a 93x spread in per-feature share
-across heads) but it is not yet the argument.
+The paper now states that the algebra is standard and that what is claimed is the
+attribution semantics and its consequence. `LEGACY.md` records that the frozen
+`frontier-01-*` documents assert the opposite and that this is false.
+
+Two results from the sweep are worth a reviewer's attention:
+
+- **The sign reversal appears unreported.** No paper found reports that a
+  feature's contribution to a rotary score changes sign as relative distance
+  grows. The closest is Jedryszek and Crook (arXiv:2605.16331), who attribute per
+  frequency pair with verified additivity and then *exclude* sign-inconsistent
+  bands as numerically unreliable. The paper's position is that on the
+  decompositions it tests, the sign change is exact and its magnitude is the
+  feature's own amplitude, so it is a phenomenon rather than a numerical nuisance.
+- **Position-blindness is a known gap, but a different one.** Haklay et al.
+  (arXiv:2502.04577) document that circuit discovery assumes position-invariance
+  and introduce position-aware edge attribution. That supports the framing and is
+  cited as such, but it is blindness to *which token position* a component
+  matters at, not to the score's dependence on the distance between two
+  positions.
+
+*Now addressed:* the "useful, not merely correct" point. `usefulness.py` compares
+the exact attribution against the **best possible** position-free scalar — the
+least-squares constant over the distance range, not a strawman — on the same three
+checkpoints. That optimum reports the wrong sign on **26.8%** of per-pair,
+per-distance cells, with a median relative error of `1.13` against a peak of `1`.
+No head leaves the band `22.4%`-`34.9%` across `2790` heads, so this is the
+ordinary case.
 
 ### 5. "Wrong venue, wrong length, no style file" — partly addressed
 
