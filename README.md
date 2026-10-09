@@ -18,7 +18,7 @@ projects/rope_attribution/
   rope.py         RoPE, YaRN, partial RoPE (numpy, float64)
   experiments.py  seven measured experiments
   figures.py      the figure set, every value computed at run time
-tests/            1277 tests
+tests/            1298 tests
 figures/          nine figures, each with a CSV sidecar
 results/          measurements.json
 ```
@@ -27,7 +27,7 @@ Reproduce everything:
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                              # 1277 tests
+pytest -q                              # 1298 tests
 python -m projects.rope_attribution.experiments   # prints the report, rewrites results/
 python -m projects.rope_attribution.figures       # rewrites figures/
 ```
@@ -205,20 +205,45 @@ python -m projects.rope_attribution.real_model     # ~3 min, CPU only
 
 Three findings there matter for reading the synthetic results:
 
-- Real rotary channels are overwhelmingly position-carrying: the median pair
-  carries ~70% of its own amplitude positionally, and only 0.6-0.9% are
-  position-blind at a 1% threshold. The synthetic case suggests a larger
-  position-free slice exists, and on trained weights it does not.
+- Real rotary channels are overwhelmingly position-carrying: only 0.6-0.7% of
+  pairs are position-blind at a 1% threshold, and remarkably consistently across
+  three unrelated architectures.
 - The exact identities hold to the **float32** floor (~1e-7), not 1e-14, because
   real activations are float32. The theorems survive; the floor moved.
-- There is a **134-262x spread across heads** at fixed layer and fixed distance.
-  The repository previously had no error bars anywhere; a single-vector
-  measurement would have missed this by two orders of magnitude.
+- The leading feature's **share** of a score spans `0.011` to `0.9999` depending
+  on the head — a factor of 67-93x across the three checkpoints. The repository
+  previously had no error bars anywhere; a single-vector measurement would have
+  missed this by two orders of magnitude.
 
-Still absent, and not measured anywhere here: trained sparse autoencoders,
-retrieval or passkey benchmarks, and any accuracy number. Claims of the form "the
-model retrieves the needle with accuracy 0.7" should not be attributed to this
-repository.
+`projects/rope_attribution/usefulness.py` then asks what the correction is worth,
+on the same checkpoints. It compares the exact per-distance attribution against
+the **best possible** position-free scalar — the least-squares constant over the
+distance range, not a strawman — and finds that the optimum reports the wrong
+sign on `26.8%` of per-pair, per-distance cells, with a median relative error of
+`1.13` against a peak of `1`. That is the cost of insisting a RoPE feature's
+contribution is a number, and it is the paper's answer to "is this object useful
+or merely correct".
+
+```bash
+PYTHONPATH=projects python -m rope_attribution.usefulness   # ~4 min, CPU only
+```
+
+### What this repository does not claim
+
+- **The algebra is not new.** The per-pair closed form appears in Chachamovits,
+  *Phase Structure in Rotary Attention* (arXiv:2607.25507, §3-§4), in
+  Liang et al., *RoPE-Aware Bit Allocation* (arXiv:2606.24033, §1), and the
+  per-frequency spectral structure of attention has been measured on pretrained
+  checkpoints by Li (arXiv:2607.06621). What is claimed here is the attribution
+  semantics and its consequence, not the identity. The frozen
+  `frontier-01-*` documents assert the opposite — that nobody has done this — and
+  that claim is false; see `LEGACY.md`.
+- **The sign reversal appears to be unreported**, but that is a search result,
+  not a proof of absence.
+- Still absent and not measured anywhere here: trained sparse autoencoders,
+  retrieval or passkey benchmarks, and any accuracy number. Claims of the form
+  "the model retrieves the needle with accuracy 0.7" should not be attributed to
+  this repository.
 
 ## Legacy material
 

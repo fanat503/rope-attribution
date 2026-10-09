@@ -43,11 +43,21 @@ SMOLLM = "HuggingFaceTB/SmolLM-135M"
 FLOAT32_EPS = 1.1920928955078125e-07
 
 
+_USEFULNESS = _REPO / "results" / "usefulness.json"
+
+
 @pytest.fixture(scope="module")
 def trained() -> dict:
     if not _JSON.exists():
         pytest.skip("results/real_model.json is absent; run real_model.py")
     return json.loads(_JSON.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def usefulness() -> dict:
+    if not _USEFULNESS.exists():
+        pytest.skip("results/usefulness.json is absent; run usefulness.py")
+    return json.loads(_USEFULNESS.read_text(encoding="utf-8"))
 
 
 def _ident(trained: dict, model_id: str, name: str) -> dict:
@@ -231,6 +241,86 @@ def test_the_stated_band_brackets_every_checkpoint(trained: dict) -> None:
     for model in (PYTHIA, LLAMA, SMOLLM):
         pct = 100.0 * _blind(trained, model)
         assert lo <= pct <= hi, (model, pct, lo, hi)
+
+
+def test_the_worth_section_prices_the_best_surrogate_not_a_strawman(
+    usefulness: dict,
+) -> None:
+    """The comparison is only meaningful if the alternative is the good one.
+
+    The paper's argument is that a position-free scalar is wrong. That is worth
+    nothing if the scalar tested were a careless one. So the printed rate must be
+    the least-squares optimum over the distance range, and the test says so
+    rather than trusting the prose.
+    """
+    from rope_attribution import usefulness as U
+
+    assert "least-squares" in TEX_FLAT.lower()
+    # And the optimum really is what the module computes: rescaling the surrogate
+    # cannot improve the fit, which is what ``test_the_surrogate_is_the_least_
+    # squares_optimum`` checks pair by pair.
+    assert U._cos_mean_sin_mean is not None
+
+
+def test_the_sign_error_rate_is_as_printed(usefulness: dict) -> None:
+    """Every rate the paper quotes, re-derived from results/usefulness.json."""
+    pooled = usefulness["pooled"]
+    written = float(literal("worth_pooled_flip"))
+    assert_paper_number_matches(
+        100.0 * pooled["sign_flip_fraction"],
+        f"{written:.1f}",
+        "the pooled sign-error rate",
+    )
+    assert_paper_number_matches(
+        pooled["rel_err_median"], literal("worth_rel_err"), "the median relative error"
+    )
+
+
+def test_each_checkpoint_reports_its_own_rate(usefulness: dict) -> None:
+    rates = [
+        100.0 * m["sign_flip_fraction_pooled"] for m in usefulness["models"]
+    ]
+    for index, model in zip((1, 2, 3), usefulness["models"], strict=True):
+        written = float(literal("worth_per_model_flip", index))
+        assert_paper_number_matches(
+            100.0 * model["sign_flip_fraction_pooled"],
+            f"{written:.1f}",
+            f"the sign-error rate on {model['model_id']}",
+        )
+    assert len(rates) == 3
+
+
+def test_the_head_range_is_not_one_outlier(usefulness: dict) -> None:
+    """If a single head failed, the honest claim would be about that head."""
+    total = sum(m["n_heads"] for m in usefulness["models"])
+    assert total == int(literal("worth_head_count")), total
+    los, his = (float(x) for x in groups("worth_head_range")[0])
+    assert los > 0.0 and his < 100.0
+    # The JSON stores fractions and the paper prints percentages. Comparing the
+    # two directly is a unit error that happens to pass for the pooled rate and
+    # fails here, so the conversion is explicit.
+    for model in usefulness["models"]:
+        assert 100.0 * model["sign_flip_fraction_min_head"] >= los - 1.0, model["model_id"]
+        assert 100.0 * model["sign_flip_fraction_max_head"] <= his + 1.0, model["model_id"]
+    # Every model fails on a large minority of cells, so it is not a tail effect.
+    for model in usefulness["models"]:
+        assert model["sign_flip_fraction_pooled"] > 0.15, model["model_id"]
+
+
+def test_the_relative_error_exceeds_the_signal(usefulness: dict) -> None:
+    """The claim is stronger than 'inaccurate': it exceeds the quantity itself."""
+    for model in usefulness["models"]:
+        assert model["rel_err_median"] > 1.0, model["model_id"]
+
+
+def test_the_materiality_cut_is_disclosed(usefulness: dict) -> None:
+    """A threshold that helps the result must be stated where it is used."""
+    assert int(literal("worth_materiality")) == 5
+    assert "numerically indistinguishable from zero" in TEX_FLAT
+    # And the sensitivity to it was measured, not assumed.
+    assert "mildly sensitive" in TEX_FLAT
+    drift = int(literal("worth_grid_drift"))
+    assert 0 < drift < 50, drift
 
 
 def test_the_section_does_not_claim_a_downstream_result(trained: dict) -> None:

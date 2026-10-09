@@ -379,7 +379,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("amp_ratio", r"a ratio of \$(0\.996840)\$"),
     Claim("amp_ratio_r3", r"error ratio \\yarn/RoPE is \$(0\.99684)\$ at \$\\delta = (\d+)\$"),
     Claim("amp_ratio_conclusion", r"amplitude-weighted error ratio of only \$(0\.996840)\$"),
-    Claim("amp_percent", r"buys less than \$(0\.4)\\%\$ on this measure"),
+    Claim("amp_percent", r"buys less than \$(0\.4)\\\%\$ on this measure"),
     Claim("rms_ratio", r"per-pair RMS ratio is \$(0\.999977)\$"),
     Claim("pi_amp", r"this axis \(\$(\d+\.\d+)\$ at \$\\delta = (\d+)\$, roughly \$(\d+)\\times\$ below RoPE\)"),
     # ---- fig06 per-pair --------------------------------------------------------
@@ -541,6 +541,30 @@ CLAIMS += (
     ),
     Claim("trained_blind_band", r"between \$(0\.\d+)\\%\$ and \$(0\.\d+)\\%\$"),
     Claim("gpt2_no_rope", r"learned absolute table of size \$(\d+)\$"),
+    # ---- Section~\ref{sec:worth}: what a position-free scalar costs ---------
+    Claim(
+        "worth_pooled_flip",
+        r"wrong sign on \$(26\.\d)\\%\$ of per-pair, per-distance\s+cells",
+    ),
+    Claim(
+        "worth_per_model_flip",
+        r"rate is \$(27\.\d)\\%\$ on\s+\\texttt\{pythia-160m\}, \$(26\.\d)\\%\$ on \\texttt\{llama-160m\} and "
+        r"\$(26\.\d)\\%\$ on\s+\\texttt\{SmolLM-135M\}",
+    ),
+    Claim(
+        "worth_head_count",
+        r"all \$(2790)\$ heads the per-head rate never leaves the\s+band \$(22\.\d)\\%\$ to \$(34\.\d)\\%\$",
+    ),
+    Claim(
+        "worth_head_range",
+        r"the per-head rate never leaves the\s+band \$(22\.\d)\\%\$ to \$(34\.\d)\\%\$",
+    ),
+    Claim("worth_rel_err", r"median \$(1\.\d+)\$ against a peak of \$1\$"),
+    Claim("worth_materiality", r"at least \$(\d+)\\%\$ of its own peak"),
+    Claim(
+        "worth_grid_drift",
+        r"drift is about \$(18)\\%\$ across a \$(14)\\times\$ change in density",
+    ),
     # The scale sweep the mscale appendix result rests on, restated in the
     # pointer that replaced that section in the main text.
     Claim("appendix_mscale_scales", r"monotone in\s+entropy across \$(18)\$ scales"),

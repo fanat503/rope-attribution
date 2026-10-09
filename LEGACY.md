@@ -11,6 +11,26 @@ every number it reports. The legacy tree mostly does not.
 Read this file before quoting anything from `projects/frontier-01-*`. When the
 legacy documents and `results/measurements.json` disagree, the measurements win.
 
+### A factual claim in the legacy tree that is now known to be false
+
+Many legacy documents assert, as a headline result, a "search proof" that nobody
+has previously solved exact feature attribution for RoPE. That claim is false
+and should not be repeated.
+
+Chachamovits, *Phase Structure in Rotary Attention* (arXiv:2607.25507, §3--§4)
+writes a rotary head as a sum of per-pair terms
+$\rho\cos(\alpha - \beta + (m-n)\theta)$ with $\rho = |q_j||k_j|$ --- the same
+closed form these documents present as new --- and remarks that the term goes
+negative near $\pi$, which is the sign behaviour they claim to have discovered.
+The same identity also appears in Liang et al., *RoPE-Aware Bit Allocation for
+KV-Cache Quantization* (arXiv:2606.24033, §1).
+
+Both were verified against the arXiv API before being written here. What the
+maintained paper now claims is narrower and defensible: not the algebra, which is
+standard, but the attribution semantics and the consequence that no
+position-free per-feature scalar exists. The legacy tree's broader novelty claim
+should be treated as unsupported.
+
 ---
 
 ## 0. Counts

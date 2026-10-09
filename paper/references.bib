@@ -87,6 +87,79 @@
   primaryClass  = {cs.LG}
 }
 
+% ---------------------------------------------------------------------------
+% Closest prior work, added after a literature sweep. Each of these was located
+% by searching arXiv and each is cited in the paper precisely because it
+% constrains what may be claimed. Verified against the arXiv API (id, title,
+% author list, submission date) rather than from memory.
+% ---------------------------------------------------------------------------
+
+% The per-pair closed form written out for a rotary head, in polar form:
+% S = sum_j |q_j||k_j| cos(alpha_j - beta_j + (m-n) theta_j). This is the same
+% identity the paper uses, and the paper says so rather than claiming it.
+@article{chachamovits2026phase,
+  title   = {Phase Structure in Rotary Attention: A Spectral Framework for
+             Semantic Continuity and Execution-Boundary Governance},
+  author  = {Chachamovits, Abraham},
+  journal = {arXiv preprint arXiv:2607.25507},
+  year    = {2026},
+  eprint  = {2607.25507},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% The only prior work that attributes a RoPE score per frequency pair with
+% verified additivity. It *excludes* sign-inconsistent bands as numerically
+% unreliable; the paper's central claim is that they are the phenomenon.
+@article{jedryszek2026retrieval,
+  title   = {Retrieval and competition: how a protein foundation model starts
+             a protein},
+  author  = {Jedryszek, Piotr and Crook, Oliver M.},
+  journal = {arXiv preprint arXiv:2605.16331},
+  year    = {2026},
+  eprint  = {2605.16331},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% Per-frequency spectral structure of attention measured on seven pretrained
+% checkpoints, in weight space and projected onto the odd-in-delta component.
+@article{li2026fingerprint,
+  title   = {Fingerprint, Not Blueprint: How Positional Schemes Set the
+             Default Spectral Algebra of Attention},
+  author  = {Li, Hengyu},
+  journal = {arXiv preprint arXiv:2607.06621},
+  year    = {2026},
+  eprint  = {2607.06621},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% Existing circuit-discovery methods assume position-invariance. This is the
+% strongest prior support for the paper's framing, and it is about token
+% position rather than about score dependence on distance.
+@article{haklay2025positionaware,
+  title   = {Position-aware Automatic Circuit Discovery},
+  author  = {Haklay, Tal and Orgad, Hadas and Bau, David and Mueller, Aaron
+             and Belinkov, Yonatan},
+  journal = {arXiv preprint arXiv:2502.04577},
+  year    = {2025},
+  eprint  = {2502.04577},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% The same per-pair bilinear identity, used only to allocate KV-cache bits.
+@article{liang2026roaware,
+  title   = {RoPE-Aware Bit Allocation for KV-Cache Quantization},
+  author  = {Liang, Fengfeng and Zhang, Yuechen and Jia, Jiaya},
+  journal = {arXiv preprint arXiv:2606.24033},
+  year    = {2026},
+  eprint  = {2606.24033},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
 @article{elhage2022toymodels,
   title   = {Toy Models of Superposition},
   author  = {Elhage, Nelson and Hume, Tristan and Olsson, Catherine and

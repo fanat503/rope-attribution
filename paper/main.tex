@@ -651,8 +651,46 @@ $R_k^{ij}$ and $\psik^{ij}$ come from $q_i$ and $k_j$ by
 Equations~\ref{eq:A}--\ref{eq:B}. And it is
 \emph{exact}, because Equation~\ref{eq:perpair} is an identity rather than an
 expansion. The cost is that it is a function, not a number, and any downstream
-use must decide what to do with a function --- which is a question about
-downstream circuits, and one we do not answer.
+use must decide what to do with a function.
+
+\subsection{What the function is worth}
+\label{sec:worth}
+
+An exact object that is expensive to use is not worth much, so the useful
+question is not whether the decomposition is right --- it is, to the dtype floor
+--- but what a position-free scalar costs. Here we price it.
+
+For a rotary pair, the exact contribution over a distance range is
+$A_k\cos(\delta\invf_k) + B_k\sin(\delta\invf_k)$, so the best possible
+position-free scalar for that pair is the least-squares constant over the range,
+namely $A_k \cdot \overline{\cos} + B_k \cdot \overline{\sin}$ with
+$\overline{\cos}$ and $\overline{\sin}$ the range means of the cosine and sine.
+Using the least-squares optimum rather than a convenient strawman is the point:
+the number below is the cost of the \emph{best} position-free attribution, not
+the cost of a careless one.
+
+Across the three trained checkpoints of Section~\ref{sec:trained}, over every
+rotary layer and head, that optimum reports the wrong sign on $26.8\%$ of
+per-pair, per-distance cells. Per model the rate is $27.6\%$ on
+\texttt{pythia-160m}, $26.3\%$ on \texttt{llama-160m} and $26.4\%$ on
+\texttt{SmolLM-135M}. Across all $2790$ heads the per-head rate never leaves the
+band $22.4\%$ to $34.9\%$, so this is not one bad head but the ordinary case. The
+relative error is larger than the signal itself: median $1.13$ against a peak of
+$1$.
+
+Two things are worth being precise about. The rate is counted only over cells
+where the exact term carries at least $5\%$ of its own peak --- beyond that the
+exact value is numerically indistinguishable from zero and ``sign'' is not
+meaningful. And the statistic is mildly sensitive to how densely the distance
+range is sampled, because a coarser grid misses the cells nearest the zero
+crossings; the drift is about $18\%$ across a $14\times$ change in density, which
+is two orders of magnitude better behaved than the withdrawn
+$\max/\min$ ratio and is reported rather than hidden.
+
+So the choice is not between an exact object and an approximate one. It is
+between an object that is right, and the best competing scalar being wrong by a
+margin larger than the quantity it is describing, on one cell in four. That is
+what it costs to insist that a RoPE feature's contribution is a number.
 
 \subsection{The same identities on trained weights}
 \label{sec:trained}
@@ -977,12 +1015,45 @@ to all of them is that they operate at a \emph{fixed} position, or integrate
 over positions treating each as an independent example: the positional encoding
 is part of the forward pass, not the attribution target.
 
-\textbf{Our relationship to that literature.} Those methods ask which features
-caused a behaviour in a trained model. We ask a strictly prior question about
-the position encoding alone: given a RoPE head, what is the exact algebraic form
-of a feature's contribution, and is it a scalar? Our answer --- no, it is a
-function of distance --- is a structural precondition that any of those methods
-must handle and that, to our knowledge, has not been stated in this form. It is
+\textbf{The algebra is not new, and we do not claim it is.} Chachamovits
+\citep{chachamovits2026phase} writes a rotary head as a sum of per-pair terms
+$\rho\cos(\alpha - \beta + (m-n)\theta)$ with $\rho = |q_j||k_j|$, which is our
+closed form, and remarks that the term goes negative near $\pi$. The same identity
+appears in KV-cache quantization work \citep{liang2026roaware}, again without an
+attribution reading, and the per-frequency spectral structure of attention has
+been measured on pretrained checkpoints in weight space
+\citep{li2026fingerprint}. Our contribution is not the identity and not the
+frequency content; it is the attribution semantics, the well-posedness argument
+below, and the measurements.
+
+\textbf{Nobody has reported the sign reversal, as far as we can determine.} Our
+searches --- including a systematic pass over the above --- returned no paper
+reporting that a feature's contribution to a rotary score changes sign as the
+relative distance grows. The closest is Jedryszek and Crook
+\citep{jedryszek2026retrieval}, who attribute a rotary score per frequency pair
+with verified additivity and then \emph{exclude} bands whose contributions are
+sign-inconsistent, on the grounds that small denominators make the fractional
+decomposition unreliable. We read that as the phenomenon we are describing being
+discarded as numerical noise. On the synthetic decompositions we test it is not
+noise: the sign change is exact and its magnitude is the feature's own amplitude.
+A two-position comparison can also exhibit it, but reporting it as something to be
+excluded is not the same as measuring it across a range and showing that no
+position-free summary can represent it.
+
+\textbf{Position-blindness is a known gap, but not this one.} Haklay and
+colleagues \citep{haklay2025positionaware} observe that circuit-discovery methods
+assume position-invariance and introduce position-aware edge attribution to
+relax it. That is the strongest existing support for our framing, and we cite it
+as such. It is a different blindness, though: they distinguish \emph{which token
+position} a component matters at, whereas we are concerned with the score's
+geometric dependence on the distance between two positions. Relaxing the first
+does not give you the second.
+
+\textbf{Our relationship to the attribution literature.} Those methods ask which
+features caused a behaviour in a trained model. We ask a prior question about the
+position encoding alone: given a RoPE head, what is the exact algebraic form of a
+feature's contribution, and is it a scalar? Our answer --- no, it is a function of
+distance --- is a structural precondition any of those methods must handle. It is
 not a competing attribution method and it evaluates none. We mention the relation
 because it is a limitation of this paper rather than of the field: our
 per-distance attribution has not been connected to a circuit, and we have not
