@@ -991,50 +991,46 @@ point on which the framing of ``\yarn\ damps large angles'' is easily misread.
 \lengthxtrap\ \citep{sun2022lengthextrap} covers the partial case of
 Section~\ref{sec:partial}, \longrope\ \citep{ding2024longrope} per-channel
 non-uniform extension, and \ropetheory\ \citep{barbero2024roundandround} RoPE's
-frequency content from an optimization perspective; we neither compare with nor
-reproduce the last. Finally, the ``raise $\mathrm{base}$ from $10000$ to
-$500000$'' recipe is not \yarn, and is also not position interpolation:
-raising the base multiplies channel $k$ by $s^{-2k/d}$ rather than by $s^{-1}$,
-so it leaves $\theta_0 = 1$ and hence $\max_k|\D|$ untouched. We measure it
-separately as \texttt{base\_500k\_legacy\_claim} for that reason.
+frequency content from an optimization perspective. Finally, the ``raise
+$\mathrm{base}$ from $10000$ to $500000$'' recipe is not \yarn, and is also not
+position interpolation: raising the base multiplies channel $k$ by $s^{-2k/d}$
+rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence $\max_k|\D|$
+untouched. We measure it separately as \texttt{base\_500k\_legacy\_claim} for that
+reason.
 
 \textbf{Feature-level attribution.} The additive decomposition of activations
 into learned features originates in the superposition line
 \citep{elhage2022toymodels}, with sparse autoencoders as an operational extractor
-\citep{cunningham2023sparseautoencoders}. Attribution on attention heads
-includes attribution patching \citep{syed2023attributionpatching}, which we take
-as the methodological reference for ``which features contributed to this
-computation'', and the tuned lens \citep{belrose2023tunedlens}. Feature-level
-causal graphs appear in sparse feature circuits \citep{marks2024sparsefeaturecircuits}
-and transcoder-based discovery \citep{dunefsky2024transcoders}. What is common
-to all of them is that they operate at a \emph{fixed} position, or integrate
-over positions treating each as an independent example: the positional encoding
-is part of the forward pass, not the attribution target.
+\citep{cunningham2023sparseautoencoders}; attribution on attention heads runs
+from attribution patching \citep{syed2023attributionpatching}, our methodological
+reference for ``which features contributed to this computation'', to the tuned
+lens \citep{belrose2023tunedlens}, sparse feature circuits
+\citep{marks2024sparsefeaturecircuits} and transcoder-based discovery
+\citep{dunefsky2024transcoders}. What is common to all of them is that they
+operate at a \emph{fixed} position, or integrate over positions treating each as
+an independent example: the positional encoding is part of the forward pass, not
+the attribution target.
 
 \textbf{The algebra is not new, and we do not claim it is.} Chachamovits
 \citep{chachamovits2026phase} writes a rotary head as a sum of per-pair terms
-$\rho\cos(\alpha - \beta + (m-n)\theta)$ with $\rho = |q_j||k_j|$, which is our
-closed form, and remarks that the term goes negative near $\pi$. The same identity
-appears in KV-cache quantization work \citep{liang2026roaware}, again without an
-attribution reading, and the per-frequency spectral structure of attention has
-been measured on pretrained checkpoints in weight space
-\citep{li2026fingerprint}. Our contribution is not the identity and not the
-frequency content; it is the attribution semantics, the well-posedness argument
-below, and the measurements.
+$\rho\cos(\alpha - \beta + (m-n)\theta)$ with $\rho = |q_j||k_j|$ --- our closed
+form --- and remarks that the term goes negative near $\pi$. The same identity
+appears in KV-cache quantization work \citep{liang2026roaware}, and the
+per-frequency spectral structure of attention has been measured on pretrained
+checkpoints in weight space \citep{li2026fingerprint}. What is claimed here is
+not the identity or the frequency content: it is the attribution semantics, the
+well-posedness argument below, and the measurements.
 
-\textbf{Nobody has reported the sign reversal, as far as we can determine.} Our
-searches --- including a systematic pass over the above --- returned no paper
-reporting that a feature's contribution to a rotary score changes sign as the
-relative distance grows. The closest is Jedryszek and Crook
-\citep{jedryszek2026retrieval}, who attribute a rotary score per frequency pair
-with verified additivity and then \emph{exclude} bands whose contributions are
-sign-inconsistent, on the grounds that small denominators make the fractional
-decomposition unreliable. We read that as the phenomenon we are describing being
-discarded as numerical noise. On the synthetic decompositions we test it is not
-noise: the sign change is exact and its magnitude is the feature's own amplitude.
-A two-position comparison can also exhibit it, but reporting it as something to be
-excluded is not the same as measuring it across a range and showing that no
-position-free summary can represent it.
+\textbf{The sign reversal appears unreported.} Our searches, including a
+systematic pass over the above, returned no paper reporting that a feature's
+contribution to a rotary score changes sign as the relative distance grows. The
+closest is Jedryszek and Crook \citep{jedryszek2026retrieval}, who attribute a
+rotary score per frequency pair with verified additivity and then \emph{exclude}
+sign-inconsistent bands as numerically unreliable. We read that as the phenomenon
+we are describing being discarded as noise. On the decompositions we test it is
+not noise: the sign change is exact and its magnitude is the feature's own
+amplitude. Reporting it as something to be excluded is not the same as measuring
+it across a range and showing that no position-free summary can represent it.
 
 \textbf{Position-blindness is a known gap, but not this one.} Haklay and
 colleagues \citep{haklay2025positionaware} observe that circuit-discovery methods
