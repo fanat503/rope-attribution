@@ -285,7 +285,10 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("ngrid_54", r"bit-identical to plain RoPE at every one of \$(\d+)\$ tested"),
     Claim("ngrid_54_point", r"across a \$(\d+)\$-point distance grid"),
-    Claim("ngrid_54_linearizable", r"across the \$(\d+)\$-point grid\. Plain"),
+    Claim(
+        "ngrid_54_linearizable",
+        r"no channel linearizable across the\s+\$(\d+)\$-point grid past \$\\delta = (\d+)\$",
+    ),
     Claim(
         "ngrid_54_fig06",
         r"single value \$([\d.]+)\$ at every one of the \$(\d+)\$ distances",
@@ -2493,7 +2496,11 @@ def test_every_paperfigure_label_is_defined_and_unique() -> None:
     calls = paperfigure_calls()
     labels = [label for _stem, _caption, label in calls]
     assert len(labels) == len(set(labels)), f"duplicate figure labels: {labels}"
-    assert all(label.startswith("fig:") for label in labels), labels
+    # Figures moved into the appendix to fit the nine-page limit carry an `app:`
+    # prefix, so that a reference to one cannot be mistaken for a main-text figure.
+    assert all(
+        label.startswith("fig:") or label.startswith("app:fig:") for label in labels
+    ), labels
     stems = [stem for stem, _caption, _label in calls]
     assert len(stems) == len(set(stems)), f"a figure stem is included twice: {stems}"
     for stem, caption, label in calls:

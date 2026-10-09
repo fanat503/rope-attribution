@@ -841,26 +841,22 @@ $128\rad$.
   the bulk of the spectrum. See Section~\ref{sec:context}.%
 }{fig:spectrum}
 
-\paperfigure{fig04_linearizable_fraction}{%
-  Fraction of rotary pairs admitting the first-order linearization, against
-  relative distance, for all four schemes. Plain RoPE reaches zero; \yarn\ and
-  the other schemes retain a shrinking minority. See
-  Section~\ref{sec:context}.%
-}{fig:linearizable}
-
 \paragraph{Neither rescues a global linearization.}
-Figure~\ref{fig:linearizable} tracks this across the $54$-point grid. Plain
-RoPE retains no linearizable channel at all from $\delta = 861$ onward, where it
-is exactly $0.0000$ at every subsequent grid point, while \yarn\ retains
+Plain RoPE retains no linearizable channel at all from $\delta = 861$ onward,
+where it is exactly $0.0000$ at every subsequent grid point, while \yarn\ retains
 $11/32$ there and $4/32$ at $\delta = 8192$. So \yarn\ does not rescue the
 linearization either; it lengthens the range over which a majority of channels
 can be linearized. The per-channel mechanism is in
-Figure~\ref{fig:pairs}: the fastest rotary pair's error reaches the size of its
+Figure~\ref{app:fig:pairs}: the fastest rotary pair's error reaches the size of its
 own contribution at $\delta = 3$, identically under RoPE and \yarn\ --- the same
 $\delta$, because \yarn\ does not touch that channel. Note how early that is.
 The fastest channel turns a full revolution per token, so it is out of the
 linear regime within three tokens of separation and stays out. No amount of
-ramping the slow tail repairs a channel that is wrong that soon.
+ramping the slow tail repairs a channel that is wrong that soon. The
+fraction-linearizable curve for all four schemes is in
+Figure~\ref{app:fig:linearizable}, and the amplitude-weighted error in
+Figure~\ref{app:fig:error}. Plain RoPE holds no channel linearizable across the
+$54$-point grid past $\delta = 861$.
 
 \paperfigure{fig05_linearization_error}{%
   Amplitude-weighted and per-pair linearization error against relative distance,
@@ -868,14 +864,14 @@ ramping the slow tail repairs a channel that is wrong that soon.
   of one another even though their median angles differ by more than a factor of
   two: the error is dominated by the handful of fast channels both schemes leave
   untouched. See Section~\ref{sec:context}.%
-}{fig:error}
+}{app:fig:error}
 
 \paperfigure{fig06_pair_exact_vs_linear}{%
   Exact per-pair contribution against its first-order Taylor form, for five
   selected rotary pairs, under RoPE and \yarn. The fastest pair's normalized
   error reaches $1$, meaning an error as large as the term itself, at
   $\delta = 3$ under both schemes. See Section~\ref{sec:context}.%
-}{fig:pairs}
+}{app:fig:pairs}
 
 The same figure localizes the damage. At $\delta = 1$ the fastest pair $k = 0$
 has an exact contribution of $-0.9525$ against a linearized value of
@@ -888,7 +884,7 @@ linear regime. This is the whole of Section~\ref{sec:context} in two numbers:
 the linearization fails for the fast channels first, and \yarn does not change
 which channels those are.
 
-Figure~\ref{fig:error} is the decisive guard on this conclusion, and it is where
+Figure~\ref{app:fig:error} is the decisive guard on this conclusion, and it is where
 the optimistic reading dies. At $\delta = 8192$ the amplitude-weighted
 error is $1.24572\times10^{6}$ for RoPE and $1.24179\times10^{6}$ for \yarn\,
 a ratio of $0.996840$: \yarn\ buys less than $0.4\%$ on this measure. The
@@ -1377,5 +1373,13 @@ consequence and make no claim about whether it helps or hurts a trained model,
 which we do not measure.
 
 % =====================================================================
+
+
+\paperfigure{fig04_linearizable_fraction}{%
+  Fraction of rotary pairs admitting the first-order linearization, against
+  relative distance, for all four schemes. Plain RoPE reaches zero; \yarn\ and
+  the other schemes retain a shrinking minority. See
+  Section~\ref{sec:context}.%
+}{app:fig:linearizable}
 
 \end{document}
