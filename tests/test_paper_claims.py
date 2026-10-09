@@ -544,6 +544,13 @@ CLAIMS += (
     ),
     Claim("trained_blind_band", r"between \$(0\.\d+)\\%\$ and \$(0\.\d+)\\%\$"),
     Claim("gpt2_no_rope", r"learned absolute table of size \$(\d+)\$"),
+    # fig10: the seed sweep that makes the central claim a claim about the
+    # decomposition rather than about one lucky draw.
+    Claim("seeds_sweep_size", r"sweep of \$(\d+)\$ seeds"),
+    Claim(
+        "seeds_crossing_invariant",
+        r"crossing fraction is \$(1\.\d+)\$ in every seed, with\s+zero spread",
+    ),
     # ---- Section~\ref{sec:worth}: what a position-free scalar costs ---------
     Claim(
         "worth_pooled_flip",

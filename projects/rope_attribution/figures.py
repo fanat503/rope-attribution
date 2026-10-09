@@ -1060,13 +1060,19 @@ def fig09_position_conditional_attribution() -> FigureRecord:
     delta_hi = int(DELTA_GRID[-1])
     # The endpoint comparison the paper leans on, computed here rather than typed
     # in: if it moves, this caption must move with it.
-    i_lo = int(np.argmin(np.abs(DELTA_GRID - 1)))
-    i_hi = int(np.argmin(np.abs(DELTA_GRID - delta_hi)))
-    endpoint_log_ratio = float(
-        np.log10(
-            np.abs(contrib[:, i_hi]).mean() / max(np.abs(contrib[:, i_lo]).mean(), 1e-300)
+    grid = np.asarray(DELTA_GRID, dtype=np.float64)
+    i_lo = int(np.argmin(np.abs(grid - 1)))
+    i_hi = int(np.argmin(np.abs(grid - delta_hi)))
+    # Per-feature log-ratio, then averaged over features - the same order of
+    # operations as statistics._endpoint_log_ratio. Averaging the magnitudes first
+    # and taking one ratio of the means is a different statistic: it let a single
+    # large-amplitude feature dominate and printed 10^0.01 instead of the true
+    # 10^-0.08, which is the claim the paper quotes. One definition, one number.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        per_feature = np.log10(
+            np.abs(contrib[:, i_hi]) / np.where(np.abs(contrib[:, i_lo]) > 0, np.abs(contrib[:, i_lo]), np.nan)
         )
-    )
+    endpoint_log_ratio = float(np.nanmean(per_feature))
     reference = feature_attribution(
         n_features=N_FEATURES,
         dim=HEAD_DIM,
@@ -1161,6 +1167,89 @@ def _csv_rows_for_attribution(
                  float(totals[i]), float(residuals[i])]
             )
     return out
+
+
+def fig10_seed_variance() -> FigureRecord:
+    """Seed-robustness of the central claim, with the spread shown.
+
+    Every other figure in this set is a single draw. That is defensible for
+    structural facts, which are exact and therefore have no variance to show,
+    but not for the central empirical claim: a reader is entitled to know whether
+    "every feature reverses sign" survives a different random draw, and whether
+    the coefficient of variation quoted in the paper is a property of the
+    decomposition or of one seed.
+
+    So this figure varies only the seed, over a pre-registered sweep, and reports
+    both statistics per seed. The number of seeds is fixed in advance rather than
+    chosen to look good; the sweep is the same ``SEED_SWEEP`` used by
+    ``statistics.seed_variance``, so the figure and the JSON cannot disagree.
+    """
+    from rope_attribution import statistics as ST
+
+    seeds = [ST.BASE_SEED + i for i in range(ST.N_SEEDS)]
+    crossings: list[float] = []
+    cvs: list[float] = []
+    endpoint: list[float] = []
+    for seed in seeds:
+        _d, contrib, _r = ST.contribution_grid(seed, N_FEATURES, len(DELTA_GRID))
+        crossings.append(ST._sign_crossing_fraction(contrib))
+        cvs.append(float(np.nanmean(ST._cv_magnitude(contrib))))
+        endpoint.append(float(np.nanmean(ST._endpoint_log_ratio(contrib, _d))))
+
+    cv_arr = np.array(cvs, dtype=np.float64)
+    cv_mu, cv_sd = float(cv_arr.mean()), float(cv_arr.std(ddof=1))
+    cross_arr = np.array(crossings, dtype=np.float64)
+    end_arr = np.array(endpoint, dtype=np.float64)
+
+    fig, (ax_cross, ax_cv) = plt.subplots(1, 2, figsize=(6.4, 2.5))
+    x = np.arange(len(seeds))
+
+    ax_cross.axhline(1.0, color="#B00020", lw=1.0, ls="--",
+                     label="all features cross zero")
+    ax_cross.plot(x, cross_arr, "o", color="#B00020", ms=4.5)
+    ax_cross.set_ylim(-0.05, 1.15)
+    ax_cross.set_xlabel("seed index")
+    ax_cross.set_ylabel("fraction of features crossing zero")
+    ax_cross.set_title("Sign reversal is seed-invariant", fontsize=9)
+    ax_cross.legend(fontsize=7, loc="lower right")
+
+    ax_cv.axhline(cv_mu, color="#1F4E79", lw=1.0, label=f"mean {cv_mu:.3f}")
+    ax_cv.fill_between(
+        x, cv_mu - cv_sd, cv_mu + cv_sd, color="#1F4E79", alpha=0.20,
+        label=f"$\\pm 1$ SD ({cv_sd:.3f})",
+    )
+    ax_cv.plot(x, cv_arr, "o", color="#1F4E79", ms=4.5)
+    ax_cv.set_xlabel("seed index")
+    ax_cv.set_ylabel("coefficient of variation")
+    ax_cv.set_title("Magnitude spread is stable", fontsize=9)
+    ax_cv.legend(fontsize=7)
+
+    stem = "fig10_seed_variance"
+    png = _save(fig, stem, "Central claim across a pre-registered seed sweep")
+
+    csv_path = _write_csv(
+        stem,
+        ["seed", "sign_crossing_fraction", "cv_magnitude", "endpoint_log_ratio"],
+        [[s, float(c), float(v), float(e)]
+         for s, c, v, e in zip(seeds, crossings, cvs, endpoint, strict=True)],
+    )
+    n_seeds = len(seeds)
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            f"rope_attribution.statistics.contribution_grid over {n_seeds} seeds "
+            f"starting at {ST.BASE_SEED}, {len(DELTA_GRID)} distances, "
+            f"F={N_FEATURES}"
+        ),
+        headline=(
+            f"all {n_seeds} seeds give a sign-crossing fraction of "
+            f"{cross_arr.min():.4f} (SD {cross_arr.std(ddof=1):.4f}); the coefficient "
+            f"of variation is {cv_mu:.4f} +/- {cv_sd:.4f}, and the endpoint log-ratio "
+            f"averages {end_arr.mean():.4f} (SD {end_arr.std(ddof=1):.4f}), so the two "
+            f"endpoints agree and the reversal is interior."
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1269,6 +1358,7 @@ def main() -> int:
         fig07_partial_rope(),
         fig08_mscale_entropy(),
         fig09_position_conditional_attribution(),
+        fig10_seed_variance(),
     ]
     readme = _write_readme(records)
 

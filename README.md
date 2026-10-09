@@ -19,7 +19,7 @@ projects/rope_attribution/
   experiments.py  seven measured experiments
   figures.py      the figure set, every value computed at run time
 tests/            1298 tests
-figures/          nine figures, each with a CSV sidecar
+figures/          ten figures, each with a CSV sidecar
 results/          measurements.json
 ```
 
@@ -162,6 +162,7 @@ matters for the mechanism:
 | `fig07_partial_rope` | the exactly position-free sub-score under partial RoPE |
 | `fig08_mscale_entropy` | attention entropy against scale, with and without `mscale` |
 | `fig09_position_conditional_attribution` | per-feature contribution against distance |
+| `fig10_seed_variance` | the central claim across a 12-seed sweep, with the spread shown |
 
 Each figure ships the plotted data as a CSV beside it, and `figures/README.md`
 records which function produced it and its headline number.
