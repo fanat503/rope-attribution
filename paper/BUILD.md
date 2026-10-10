@@ -66,15 +66,18 @@ those files or from `results/measurements.json`.
   least nine embedded images.
 - `tests/test_venue_compliance.py::test_the_main_text_fits_in_nine_pages` measures
   the main text against NeurIPS' nine-page limit. It is currently `xfail`: the
-  main text runs to **12 pages**. Progress so far, from 14: the official style
+  main text runs to **13 pages**. Progress so far, from 14: the official style
   file is tighter than the hand-rolled geometry; the synthesis subsection, the
-  Method protocol, partial-RoPE and mscale moved to appendices; and fig04 and
-  fig05 moved out of the counted part. What remains in the main text is R1, R2, R3
-  and the per-pair decomposition. Closing the last three pages means deleting
-  headline results, which the hostile review explicitly advised against; its
-  alternative reading — that this content belongs in the position track with
-  results in the appendix — is the decision still outstanding, and it is the
-  author's to make.
+  Method protocol, partial-RoPE and mscale moved to appendices; fig04 and fig05
+  moved out of the counted part; and Related Work was compressed after the
+  literature sweep. The last page was added back by the corrected proofs of
+  `prop:blind`, `prop:cond` and `prop:gate`, which were previously absent or
+  wrong and are not compressible without reintroducing the error. What remains in
+  the main text is R1, R2, R3 and the per-pair decomposition. Closing the last
+  four pages means deleting headline results, which the hostile review explicitly
+  advised against; its alternative reading — that this content belongs in the
+  position track with results in the appendix — is the decision still
+  outstanding, and it is the author's to make.
 
 ## Page limit accounting
 

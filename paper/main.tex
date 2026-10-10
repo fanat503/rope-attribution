@@ -330,25 +330,21 @@ sinusoid in $\delta$ whenever $\Rk > 0$.
 \begin{proof}[Proof of Proposition~\ref{prop:blind}]
 Read $\Ak$ and $\Bk$ off Equations~\ref{eq:A}--\ref{eq:B}: each is a sum or
 difference of products $q[\cdot]k[\cdot]$ of content coordinates, and neither
-$\delta$ nor $\invf_k$ appears. So both are $\delta$-independent, and so are
-$\Rk = \operatorname{hypot}(\Ak, \Bk)$ and
-$\psik = \operatorname{atan2}(\Bk, \Ak)$, which are functions of
-$(\Ak, \Bk)$ alone.
+$\delta$ nor $\invf_k$ appears. Both are therefore $\delta$-independent, and so
+are $\Rk = \operatorname{hypot}(\Ak, \Bk)$ and
+$\psik = \operatorname{atan2}(\Bk, \Ak)$, functions of $(\Ak, \Bk)$ alone.
 
-For non-constancy, substitute the closed form:
-$c_k(\delta) = \Rk\cos(\delta\invf_k - \psik)$. The frequency $\invf_k$ is
-strictly positive for every $k < \half$, so as $\delta$ ranges over any interval
-of length exceeding $\pi/\invf_k$ the argument $\delta\invf_k - \psik$ sweeps an
-arc longer than $\pi$, and $\cos$ is not constant on such an arc. A sinusoid of
-positive frequency is therefore non-constant.
+For non-constancy, substitute the closed form $c_k(\delta) = \Rk\cos(\D - \psik)$.
+Since $\invf_k > 0$ for every $k < \half$, $\delta$ ranging over any interval
+longer than $\pi/\invf_k$ sweeps the argument through an arc of more than $\pi$,
+and $\cos$ is not constant on such an arc.
 
-We deliberately state no dichotomy about ``position-blindness'' here, because no
-such exact property exists to state. Note in particular that $\Bk = 0$ is
-\emph{not} a blind case: it makes $\psik = 0$ and leaves
-$c_k(\delta) = \Ak\cos\D$, a full oscillation rather than a constant. The
-threshold notion of a position-blind channel used in
-Section~\ref{sec:trained} is a separate, approximate convention with a stated
-cutoff, and is not a consequence of this proposition.
+We state no dichotomy about ``position-blindness'' here, because none exists.
+In particular $\Bk = 0$ is \emph{not} a blind case: it gives $\psik = 0$ and
+leaves $c_k(\delta) = \Ak\cos\D$, a full oscillation rather than a constant.
+The threshold notion used in Section~\ref{sec:trained} is a separate,
+approximate convention with a stated cutoff, not a consequence of this
+proposition.
 \end{proof}
 
 \begin{proposition}[Conditionality]
@@ -361,31 +357,26 @@ There is no intermediate case in which the contribution is position-free.
 \end{proposition}
 
 \begin{proof}[Proof of Proposition~\ref{prop:cond}]
-Write the contribution as
+The contribution is the trigonometric polynomial
 \[
   g(\delta) \;=\; \sum_{k \in I} \bigl(\Ak\cos(\delta\invf_k)
-    + \Bk\sin(\delta\invf_k)\bigr),
+    + \Bk\sin(\delta\invf_k)\bigr)
 \]
-a trigonometric polynomial whose frequencies are the distinct positive numbers
-$\{\invf_k : k \in I\}$.
+over the distinct positive frequencies $\{\invf_k : k \in I\}$. The functions
+$\{\cos(\alpha\delta), \sin(\alpha\delta)\}_{\alpha \in S}$ for any finite set $S$
+of distinct positive frequencies are linearly independent on every interval of
+positive length: a combination vanishing on such an interval is a trigonometric
+polynomial vanishing on an open set, so the uniqueness theorem forces every
+coefficient to zero. Applying this with $\alpha = \invf_k$ gives
+$g \equiv 0 \Rightarrow \Ak = \Bk = 0$ for all $k \in I$, and any
+$\delta$-independent $g$ is a constant. In particular no proper subset of the
+touched pairs can be the position-free one: a single pair with $\Ak \ne 0$ already
+makes the sum non-constant.
 
-The functions $\{\cos(\alpha\delta), \sin(\alpha\delta)\}_{\alpha \in S}$ over any
-finite set $S$ of distinct positive frequencies are linearly independent on every
-interval of positive length. Indeed, a combination vanishing on such an interval
-is a trigonometric polynomial that vanishes on an open set, and the uniqueness
-theorem for trigonometric polynomials forces every coefficient to zero. Applying
-this with $\alpha = \invf_k$ gives $\Ak = \Bk = 0$ for all $k \in I$ whenever
-$g \equiv 0$.
-
-If some $g(\delta)$ is $\delta$-independent then $g \equiv 0$, so the stated
-``if and only if'' follows from that one direction. In particular no proper
-subset of the touched pairs can be position-blind while the rest carry signal:
-a single pair with $\Ak \ne 0$ already makes the sum non-constant.
-
-When $g$ is not identically zero it is a non-constant trigonometric polynomial,
-hence unbounded in sign behaviour as $\delta$ varies: it takes both signs once
-the window is long enough relative to the smallest $\invf_k$. That is the sign
-reversal we measure in Section~\ref{sec:cond} rather than assume.
+When $g$ is not identically zero it is a non-constant trigonometric polynomial, so
+it takes both signs once the window is long enough relative to the smallest
+$\invf_k$. That is the sign reversal we measure in Section~\ref{sec:cond} rather
+than assume.
 \end{proof}
 
 Proposition~\ref{prop:cond} is the whole of R2, stated before any measurement.

@@ -143,7 +143,11 @@ c_k(delta) = A_k cos(D_k) + B_k sin(D_k) = R_k cos(D_k - psi_k)
 
 `R_k = hypot(A_k, B_k)` is a single sinusoid in distance: an amplitude that does
 not depend on `delta` at all, and a phase that advances exactly linearly in it.
-A pair is completely position-blind precisely when `B_k = 0`.
+`c_k(delta)` is non-constant in `delta` whenever `R_k > 0` — there is no exact
+"position-blind pair". Note that `B_k = 0` is *not* such a case: it zeroes the
+phase offset and leaves `A_k cos(D_k)`, a full oscillation. The threshold notion
+of a position-blind channel used in the measurements is a separate convention
+with a stated cutoff, defined at §4.3 of the paper.
 
 ## Results
 
