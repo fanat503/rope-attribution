@@ -67,6 +67,9 @@ jobs:
           set -euo pipefail
           pip install --quiet pypdf
           python - <<'PY'
+          import pathlib
+          import re
+
           from pypdf import PdfReader
 
           reader = PdfReader("paper/build/main.pdf")
@@ -80,16 +83,26 @@ jobs:
               raise SystemExit("::error::a figure fell back to its \\IfFileExists placeholder")
 
           # One raster image per figure; allow slack for any logo or rule.
-          if images < 9:
+          # The figure count is read from the LaTeX rather than typed in, so
+          # adding fig11 cannot leave these gates silently under-counting the
+          # way they did when fig10 was added.
+          tex = pathlib.Path("paper/main.tex").read_text(encoding="utf-8")
+          figures = len(re.findall(r"\\paperfigure\\{", tex))
+          assert figures > 0, "no paperfigure calls found in paper/main.tex"
+
+          # One raster image per figure; allow slack for any logo or rule.
+          if images < figures:
               raise SystemExit(
-                  f"::error::expected at least 9 embedded images, found {images}; "
+                  f"::error::expected at least {figures} embedded images, found {images}; "
                   "a figure is probably missing"
               )
-          # Every figure typesets a "Figure N:" caption; nine figures means nine.
+          # Every figure typesets a "Figure N:" caption, so figures means figures.
           captions = text.count("Figure ")
-          if captions < 9:
-              raise SystemExit(f"::error::expected 9 figure captions, found {captions}")
-          print("all nine figures present")
+          if captions < figures:
+              raise SystemExit(
+                  f"::error::expected {figures} figure captions, found {captions}"
+              )
+          print(f"all {figures} figures present ({images} embedded images)")
           PY
 
       - uses: actions/upload-artifact@v4

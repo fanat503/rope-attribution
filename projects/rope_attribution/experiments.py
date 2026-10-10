@@ -41,8 +41,12 @@ pair, an exact closed form:
 
 So each pair contributes a single sinusoid in the relative distance: an
 amplitude ``R_k`` that does not depend on ``delta`` at all, and a phase that
-advances exactly linearly in ``delta``. A pair is completely position-blind iff
-``B_k = 0``.
+advances exactly linearly in ``delta``. There is no exact position-blind
+pair: ``c_k(delta)`` is non-constant for every ``R_k > 0``, and
+``B_k = 0`` is not an exception - it zeroes the phase offset and leaves
+``A_k cos(D_k)``, a full oscillation. The measurable notion of a position-blind
+*pair* is a threshold on ``|B_k| / R_k`` with a stated cutoff, used in
+``real_model.BLIND_RATIO``, and is a convention rather than a theorem.
 """
 
 from __future__ import annotations
@@ -533,10 +537,6 @@ def main() -> None:
     print("E2/E3. Exact feature attribution, and its distance dependence")
     print(rule)
     print(f"  score == sum_ij f_i g_j A_ij(delta), max|err| = {_fmt(a['additivity_max_abs_err'])}")
-    print(
-        "  max ratio of |c_i| across distances (same feature) = "
-        f"{a['per_feature_contribution_spread_max_ratio']:.3g}"
-    )
     print("  => a feature's contribution is a FUNCTION of distance, not a scalar.")
     print()
 

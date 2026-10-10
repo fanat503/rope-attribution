@@ -51,9 +51,9 @@ case-insensitively:
 
 | Pattern | Hits | Where they are |
 | --- | --- | --- |
-| `inv_freq` | 24 | `projects/rope_attribution/rope.py` (9), `projects/rope_attribution/__init__.py` (1), `verify_rope*.py` (13) — this project's own new module and its checks — plus one prose formula sketch in `projects/frontier-01-best-plan.md:42` |
-| `rotary` | 9 | `projects/rope_attribution/rope.py` (8), `__init__.py` (1) — this project's own new module — plus one citation line in `projects/frontier-01-PAPER-DRAFT-V13-9PAGES-ORAL.md:85` |
-| `mscale` | 15 | `projects/rope_attribution/rope.py` (12), `__init__.py` (1), `verify_rope.py` (2), `verify_rope4.py` (1) — this project's own new module and its checks |
+| `inv_freq` | 223 | This project's own code and its own test/measurement artefacts: `tests/test_rope.py` (77), `projects/rope_attribution/real_model.py` (29), `results/real_model.json` (24), `tests/test_real_model.py` (19), `projects/rope_attribution/rope.py` (12). |
+| `rotary` | 176 | `results/real_model.json` (55), `projects/rope_attribution/real_model.py` (36), `tests/test_real_model.py` (13), `projects/rope_attribution/rope.py` (10). |
+| `mscale` | 344 | `tests/test_paper_claims.py` (99), `tests/test_rope.py` (71), `tests/test_experiments.py` (43), `projects/rope_attribution/figures.py` (41), `results/measurements.json` (24). |
 | `rotary_emb` | 0 | — |
 | `apply_rotary` | 0 | — |
 | `attention_scaling` | 0 | — |
@@ -62,18 +62,19 @@ case-insensitively:
 | `ported from` | 0 | — |
 | `taken from` | 0 | — |
 
-Every non-zero hit above is either this project's own newly written code or
-prose in this project's own documents. None is a fragment of an upstream
-implementation.
+The counts above are a re-measurement, not the ones this table originally carried. Three things made the earlier figures wrong: they attributed 13 `inv_freq` and 3 `mscale` hits to `verify_rope*.py` scripts that do not exist in this repository, and the repository has since gained `real_model.py`, `usefulness.py`, `statistics.py` and their tests, which legitimately add hits of their own. Patterns are matched case-insensitively over `.py`, `.md`, `.json` and `.txt` files, with `.git/`, `paper/build/` and the untracked `.tmp/` scratch tree excluded, and with this file and `projects/ATTRIBUTION.md` excluded too - they enumerate the patterns, so counting them would make every zero row non-zero and the audit would measure itself.
+
+Every non-zero hit above is either this project's own newly written code, this project's own test of that code, or this project's own emitted measurement artefact. None is a fragment of an upstream implementation, and the zero rows remain zero, which is the part that matters.
 
 Scope of that audit, stated so the claim is not read as broader than it is: it
 covers the text sources `.py`, `.md`, `.json`, `.txt`. The only other non-binary
 text files in the tree are `projects/frontier-01-figures.html` and
 `projects/frontier-01-figures-ideal.html`, which are figure preview pages with no
-scripts (0 hits for `<script`, `import ` and `require(`), and
-`rope-attribution-anthropic.patch`, which is a git diff of *this repository's own*
-history — the Python appearing in it is this project's own earlier code being
-removed, not third-party code.
+scripts (0 hits for `<script`, `import ` and `require(`).
+
+This audit previously claimed to cover `rope-attribution-anthropic.patch`, a git
+diff of this repository's own history. That file does not exist here and never did,
+so the claim was unverifiable and has been removed rather than repeated.
 
 ## The new `rope.py` is an independent implementation
 
@@ -96,9 +97,12 @@ What was consulted is the mathematics: formulas, algorithm steps, and the two
 standard layout conventions that define the method. What was not done is copying
 code. No source file, function body, or line of upstream code was pasted,
 vendored, or mechanically transformed into this repository. The implementation is
-written independently, in NumPy, and its behaviour is checked by the
-`verify_rope.py` … `verify_rope4.py` scripts at the repository root, which
-compare it against closed-form identities rather than against upstream output.
+written independently, in NumPy, and its behaviour is checked by
+`tests/test_rope.py`, 77 of whose assertions reference `inv_freq` and which compare
+the implementation against closed-form identities rather than against upstream
+output. An earlier version of this paragraph credited the check to `verify_rope.py`
+through `verify_rope4.py` at the repository root; those scripts do not exist here,
+and the tests are what actually does the checking.
 
 Where `rope.py` shares a convention with upstream — the split-half pairing of
 dimension `i` with `i + dim/2`, the ramp bounds derived from `beta_fast` and

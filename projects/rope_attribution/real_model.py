@@ -17,8 +17,10 @@ What is measured, per ``(layer, head)``
    ``experiments.pair_terms`` gives the position-free part ``A_k`` and the
    position-carrying part ``B_k`` of every rotary pair. The share of a pair's
    amplitude that carries position is ``|B_k| / R_k``, ``R_k = hypot(A_k, B_k)``.
-   A pair is *exactly* position-blind only when ``B_k = 0``; "effectively"
-   blind is a threshold, stated as :data:`BLIND_RATIO`.
+    No pair is *exactly* position-blind: ``B_k = 0`` leaves ``A_k cos(D_k)``,
+    which still oscillates in ``delta``. "Effectively" blind is therefore a
+    threshold, stated as :data:`BLIND_RATIO`, and is a convention with a cutoff
+    rather than an algebraic fact.
 3. **Whether the linearization survives real data.**
    ``experiments.linearization_error`` on real vectors at the same distances
    ``method_spectrum`` uses, beside the published synthetic values.

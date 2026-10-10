@@ -2,18 +2,28 @@
 
 Why this module exists
 ----------------------
-The paper reports that a single feature's contribution to the attention score
-"swings by 920x" across relative distance. That number is
+An earlier version of the paper led with the claim that a single feature's
+contribution to the attention score "swings by 920x" across relative distance.
 ``max_delta |c_i(delta)| / min_delta |c_i(delta)|`` over a 54-point grid, and it
-is an artefact of the sampling, not a property of the function: ``min_delta
+That number was an artefact of the sampling, not a property of the function:
 |c_i(delta)|`` approaches zero as the grid gets denser, so the ratio grows
-without bound. Measured, same vectors, same seed:
+``min_delta |c_i(delta)|`` approaches zero as the grid gets denser, so the
+ratio grows without bound.
 
-    n_deltas      max/min ratio
-         5               34.98
-        54              920.04
-       332            13710.15
-     2048          4094122.99
+The table below is what THIS module measures. The figures quoted in the review
+that prompted this module (34.98 / 920.04 / 13710.15 / 4094122.99) come from a
+different grid generator - one that samples with logspace and no
+round-to-integer step - and no row of them is reproduced here. Both are
+artefacts; they differ because the artefact belongs to the sampler, which is
+the point. Densities are this module's own GRID_DENSITIES; the requested count
+is what _log_uniform_grid is asked for, not always what it returns after
+de-duplication:
+
+    n_deltas  requested  max/min ratio
+         9           9        1111.73
+        48          54        3162.56
+       235         332       19622.05
+       599        1024       35478.80
 
 A quantity that changes by four orders of magnitude when you sample the same
 continuous function more finely is not a measurement of that function. So this
@@ -61,10 +71,16 @@ support the number the paper leads with:
 * the disputed ``max/min`` ratio drifts by roughly 30x across grid densities and
   is **not even monotone** in density, so it is sampling noise;
 * across 12 seeds that ratio has a standard deviation exceeding its own mean;
-* the endpoint statistic is exactly ``1``, meaning ``|c(1)|`` and ``|c(8192)|``
-  are the same size. The large ratio therefore does not come from the endpoints
-  differing wildly; it comes from ``c`` passing near zero somewhere inside the
-  range, which is a real and interesting effect but is not "a 920x swing".
+* ``sign_crossing_fraction`` is exactly ``1``: every feature crosses zero
+  somewhere inside the range, so no position-free scalar can even get its
+  sign right. This is the claim that survives, and it is the one the paper
+  makes.
+* ``endpoint_log_ratio`` is ``-0.62`` at the base seed (mean ``-0.08 +/- 0.24``
+  over 12 seeds), so ``|c(8192)|`` is about a quarter of ``|c(1)|`` - the same
+  order of magnitude, neither "the same size" nor wildly apart. The large
+  ``max/min`` ratio therefore comes from ``c`` passing near zero somewhere
+  inside the range, which is a real and interesting effect but is not
+  "a 920x swing".
 
 Scope note: this module is numpy-only and does not load any model. It measures
 the synthetic decomposition defined in :mod:`rope_attribution.experiments`, using

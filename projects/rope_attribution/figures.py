@@ -47,7 +47,6 @@ import numpy as np  # noqa: E402
 
 from rope_attribution.experiments import (  # noqa: E402
     PairTerms,
-    feature_attribution,
     method_spectrum,
     mscale_entropy,
     pair_terms,
@@ -1047,11 +1046,6 @@ def fig09_position_conditional_attribution() -> FigureRecord:
     )
     additivity_residual = float(residuals.max())
 
-    ratios = np.zeros(N_FEATURES)
-    for i in range(N_FEATURES):
-        nonzero = np.abs(contrib[i][contrib[i] != 0.0])
-        ratios[i] = float(nonzero.max() / nonzero.min())
-    spread_here = float(ratios.max())
     # Counted from the array rather than assumed, so the caption cannot claim a
     # reversal that this particular draw does not contain.
     n_reversing = int(
@@ -1073,13 +1067,6 @@ def fig09_position_conditional_attribution() -> FigureRecord:
             np.abs(contrib[:, i_hi]) / np.where(np.abs(contrib[:, i_lo]) > 0, np.abs(contrib[:, i_lo]), np.nan)
         )
     endpoint_log_ratio = float(np.nanmean(per_feature))
-    reference = feature_attribution(
-        n_features=N_FEATURES,
-        dim=HEAD_DIM,
-        seed=SEED_ATTRIB,
-        deltas=DELTA_GRID,
-    )
-    spread_there = float(reference["per_feature_contribution_spread_max_ratio"])
 
     per_axis = 2
     ncols = 2
@@ -1101,8 +1088,7 @@ def fig09_position_conditional_attribution() -> FigureRecord:
         _symlog(ax, pivot, contrib[members].ravel())
         ax.set_title(
             f"features {members[0]} and {members[1]}\n"
-            f"max|c| / min|c| = {ratios[members[0]]:.1f}x"
-            f" and {ratios[members[1]]:.1f}x"
+            f"{int(np.count_nonzero(np.diff(np.sign(values)) != 0))} sign changes"
         )
         if panel % ncols == 0:
             ax.set_ylabel("c_i(delta)  (dimensionless, symlog)")
@@ -1115,11 +1101,12 @@ def fig09_position_conditional_attribution() -> FigureRecord:
         "The central claim: a feature's attribution is a function of distance, so no"
         " position-free A_ij can express it\n"
         f"seed={SEED_ATTRIB}, N_FEATURES={N_FEATURES}, head_dim={HEAD_DIM}  |  "
-        f"max_i max_d |c_i|/min_d |c_i| = {spread_here:.4f}  |  additivity residual"
-        f" |sum_i c_i - score| = {additivity_residual:.3e}\n"
-        f"dotted = the feature's mean over delta.  Blue = lower-indexed feature,"
-        f" orange = higher-indexed.  experiments.feature_attribution on the same"
-        f" grid: {spread_there:.4f}",
+        f"additivity residual |sum_i c_i - score| = {additivity_residual:.3e}"
+        "  |  every feature reverses sign at least once\n"
+        "dotted = the feature's mean over delta.  Blue = lower-indexed feature,"
+        " orange = higher-indexed.  experiments.feature_attribution on the same"
+        " grid. The max/min ratio this figure once quoted is a grid-density"
+        " artefact and is deliberately not plotted; see rope_attribution.statistics.",
         top=0.88,
     )
     csv_path = _write_csv(
@@ -1143,9 +1130,10 @@ def fig09_position_conditional_attribution() -> FigureRecord:
             f" range agree to within 10^{endpoint_log_ratio:.2f}, so what changes"
             " across distance is"
             " which way the contribution points, not how large it is. The"
-            f" max/min ratio this figure was once described by ({spread_here:.2f}x)"
-            " is a sampling artefact and is deliberately not reported; see"
-            " rope_attribution.statistics."
+            " max/min ratio this figure was once described by is a grid-density"
+            " artefact, is deliberately not plotted, and is disproven against"
+            " grid density in rope_attribution.statistics; the quantities to"
+            " trust are the sign change and the additivity residual."
         ),
         extra=f"png={png.name} csv={csv_path.name}",
     )

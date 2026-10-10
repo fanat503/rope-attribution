@@ -16,16 +16,17 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 
-# `authors` is deliberately absent. LICENSE line 189 still reads
-# "Copyright [yyyy] [name of copyright owner]" - the appendix placeholder was
-# never filled in - and CITATION.cff carries an empty `authors: []` with a note
-# that two conflicting candidates appear in rope-attribution-anthropic.patch
-# (fanat503 vs "Vitebsk Research") and that neither is authoritative. No holder
-# is invented here. Fill this in together with CITATION.cff before a release.
+# `authors` is a single person, Ilya Slyatski, and nobody else. The earlier
+# comment here claimed the field had to stay empty because LICENSE and
+# CITATION.cff were unfilled and two conflicting candidate names appeared in a
+# patch that does not exist in this repository. All three files are now filled,
+# and tests/test_author_metadata.py pins them together so the field cannot drift
+# from them again.
 #
-# `readme` is deliberately absent too: README.md documents a Russian
-# "Программа подготовки к AI research" curriculum and does not describe this
-# package, so publishing it as the long description would misrepresent it.
+# `readme` points at README.md, which now describes this package rather than the
+# unrelated curriculum document the old comment referred to.
+authors = [{ name = "Ilya Slyatski" }]
+readme = "README.md"
 
 # The library itself only needs numpy. The GPU experiment stack (torch,
 # transformer-lens, nnsight, transformers, ...) stays in
@@ -68,8 +69,9 @@ target-version = "py310"
 #     files contain lines up to 209 characters. Linting them would be a
 #     reformatting project, not a packaging change, and they are not owned by
 #     the change that introduced this file.
-#   * verify_rope*.py at the repository root - manual numerical-check scripts
-#     that print results for a human to read. They are not part of the package.
+#   * projects/frontier-01-*.py at the repository root and one level below -
+#     the frozen archive of exploratory scripts. They are not part of the
+#     package and their constants are illustrative, not measured.
 #
 # Re-run with a wider `include` once the archive is retired.
 include = ["projects/rope_attribution/**/*.py", "tests/**/*.py"]

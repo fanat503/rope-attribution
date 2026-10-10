@@ -58,7 +58,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1306 tests
+pytest -q                                        # 1315 tests
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.figures      # figures/*.png + CSV sidecars
@@ -108,7 +108,7 @@ projects/rope_attribution/
   usefulness.py   cost of the best position-free surrogate, on real checkpoints
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, every value computed at run time
-tests/            1306 tests
+tests/            1315 tests
 figures/          ten figures, each with a CSV sidecar
 results/          measurements.json, statistics.json, usefulness.json
 ```
