@@ -266,6 +266,16 @@ magnitude of the query and of the key is exactly position-independent, and all
 position information in $s(\delta)$ is carried by the rotation angle alone.
 \end{proposition}
 
+\begin{proof}[Proof of Proposition~\ref{prop:gate}]
+$\R_\delta$ is block diagonal with $2\times 2$ rotation blocks
+$\R_\delta^{(k)}$ of Equation~\ref{eq:pair}, and each block is orthogonal since
+its columns are orthonormal: $(\cos\D)^2 + (\sin\D)^2 = 1$. Hence
+$\bigl|\R_\delta k\bigr|^2 = k^{\!\top}\R_\delta^{\!\top}\R_\delta k =
+k^{\!\top}k = \bigl|k\bigr|^2$, and taking the positive square root gives the
+claim. Both statements hold for every $\delta$, so the norms carry no positional
+information while the angle $\D$ is where all of it enters.
+\end{proof}
+
 Proposition~\ref{prop:gate} is the load-bearing statement for the gate/phase
 split used in sparse-feature interpretability: the ``gate'' $|q|$ is not an
 approximation of the position-free part, it is \emph{exactly} the
@@ -285,6 +295,7 @@ $\R_{\delta}$ acts on $(q[k], q[k+\half])$ and $(k[k], k[k+\half])$ as
     \\[-1pt]
     \qquad \D = \delta \invf_k .
   \end{split}
+  \label{eq:pair}
 \end{equation}
 with the same $\D$ on both diagonals. Expanding $q^{\!\top}\R_{\delta}k$ over
 that block and collecting terms gives, exactly,
@@ -307,12 +318,13 @@ Proposition~\ref{prop:blind}, and it is what lets us speak of a per-pair
 ``gate'' at all. Two structural facts follow immediately, and both are exact
 rather than asymptotic.
 
-\begin{proposition}[Position-blindness]
+\begin{proposition}[Amplitude and phase are content-determined]
 \label{prop:blind}
-The two coefficients $\Ak$ of Equation~\ref{eq:A} and $\Bk$ of
-Equation~\ref{eq:B} are functions of the content vectors only, and do not
-depend on $\delta$. Hence $\Rk$ and $\psik$ are position-independent, and the
-pair $k$ is completely position-blind if and only if $\Bk = 0$.
+The coefficients $\Ak$ and $\Bk$ of Equations~\ref{eq:A}--\ref{eq:B}, and
+therefore $\Rk$ and $\psik$, are functions of the content vectors alone: none of
+them depends on $\delta$. The whole of the $\delta$-dependence of $c_k$ lies in the
+single angle $\D = \delta\invf_k$. Moreover $c_k$ is a \emph{non-constant}
+sinusoid in $\delta$ whenever $\Rk > 0$.
 \end{proposition}
 
 \begin{proof}[Proof of Proposition~\ref{prop:blind}]
@@ -323,35 +335,57 @@ $\Rk = \operatorname{hypot}(\Ak, \Bk)$ and
 $\psik = \operatorname{atan2}(\Bk, \Ak)$, which are functions of
 $(\Ak, \Bk)$ alone.
 
-For the only-if direction, note that $\Rk$ is the amplitude of the sinusoid
-$c_k(\delta) = \Rk\cos(\D - \psik)$ with $\D = \delta\invf_k$ ranging over an
-interval of length $|m - n|\cdot\invf_k$ as the relative distance varies. If
-$\Bk = 0$ then $\psik = 0$, $c_k(\delta) = \Ak\cos\D$, which depends on
-$\delta$ only through its sign on the intervals where $\cos$ changes sign; if
-$\Bk \ne 0$ the pair mixes amplitude and phase and $c_k$ is non-constant
-whenever $\invf_k \ne 0$. In the non-degenerate case $\invf_k > 0$ for every
-$k < \half$, so $\Bk = 0$ is exactly the position-blind case, which is what
-Proposition~\ref{prop:gate} uses to separate a per-pair ``gate'' from a
-``phase''.
+For non-constancy, substitute the closed form:
+$c_k(\delta) = \Rk\cos(\delta\invf_k - \psik)$. The frequency $\invf_k$ is
+strictly positive for every $k < \half$, so as $\delta$ ranges over any interval
+of length exceeding $\pi/\invf_k$ the argument $\delta\invf_k - \psik$ sweeps an
+arc longer than $\pi$, and $\cos$ is not constant on such an arc. A sinusoid of
+positive frequency is therefore non-constant.
+
+We deliberately state no dichotomy about ``position-blindness'' here, because no
+such exact property exists to state. Note in particular that $\Bk = 0$ is
+\emph{not} a blind case: it makes $\psik = 0$ and leaves
+$c_k(\delta) = \Ak\cos\D$, a full oscillation rather than a constant. The
+threshold notion of a position-blind channel used in
+Section~\ref{sec:trained} is a separate, approximate convention with a stated
+cutoff, and is not a consequence of this proposition.
 \end{proof}
 
 \begin{proposition}[Conditionality]
 \label{prop:cond}
-Because $c_k(\delta)$ is a non-constant sinusoid in general, a feature's
-contribution to the score is a function of $\delta$, unless every rotary pair
-that feature touches happens to satisfy $\Bk = 0$.
+Let $I$ index the rotary pairs a feature touches, and suppose the frequencies
+$\invf_k$ are distinct and positive over $k \in I$. Then the feature's
+contribution is independent of $\delta$ if and only if $\Ak = \Bk = 0$ for every
+$k \in I$ --- that is, if and only if the feature contributes nothing at all.
+There is no intermediate case in which the contribution is position-free.
 \end{proposition}
 
 \begin{proof}[Proof of Proposition~\ref{prop:cond}]
-A feature's contribution is $\sum_k$ over the rotary pairs it touches, each term
-$\Rk\cos(\delta\invf_k - \psik)$. If every such pair has $\Bk = 0$ then each
-$\psik = 0$ and each term is $\Ak\cos(\delta\invf_k)$, whose dependence on
-$\delta$ is confined to the sign of the cosine --- no amplitude information
-about the relative distance is carried. If some touched pair has $\Bk \ne 0$,
-the sum contains a genuine sinusoid in $\delta$ with nonzero frequency
-$\invf_k > 0$, so it is not $\delta$-independent and in general changes sign as
-$\delta$ ranges over the context window. Section~\ref{sec:cond} measures the
-sign change rather than assuming it.
+Write the contribution as
+\[
+  g(\delta) \;=\; \sum_{k \in I} \bigl(\Ak\cos(\delta\invf_k)
+    + \Bk\sin(\delta\invf_k)\bigr),
+\]
+a trigonometric polynomial whose frequencies are the distinct positive numbers
+$\{\invf_k : k \in I\}$.
+
+The functions $\{\cos(\alpha\delta), \sin(\alpha\delta)\}_{\alpha \in S}$ over any
+finite set $S$ of distinct positive frequencies are linearly independent on every
+interval of positive length. Indeed, a combination vanishing on such an interval
+is a trigonometric polynomial that vanishes on an open set, and the uniqueness
+theorem for trigonometric polynomials forces every coefficient to zero. Applying
+this with $\alpha = \invf_k$ gives $\Ak = \Bk = 0$ for all $k \in I$ whenever
+$g \equiv 0$.
+
+If some $g(\delta)$ is $\delta$-independent then $g \equiv 0$, so the stated
+``if and only if'' follows from that one direction. In particular no proper
+subset of the touched pairs can be position-blind while the rest carry signal:
+a single pair with $\Ak \ne 0$ already makes the sum non-constant.
+
+When $g$ is not identically zero it is a non-constant trigonometric polynomial,
+hence unbounded in sign behaviour as $\delta$ varies: it takes both signs once
+the window is long enough relative to the smallest $\invf_k$. That is the sign
+reversal we measure in Section~\ref{sec:cond} rather than assume.
 \end{proof}
 
 Proposition~\ref{prop:cond} is the whole of R2, stated before any measurement.
