@@ -314,7 +314,7 @@ contribution is a number, and it is the paper's answer to "is this object useful
 or merely correct".
 
 ```bash
-PYTHONPATH=projects python -m rope_attribution.usefulness   # ~4 min, CPU only
+python -m projects.rope_attribution.usefulness   # ~4 min, CPU only
 ```
 
 ### What this repository does not claim

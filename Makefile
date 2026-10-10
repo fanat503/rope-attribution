@@ -8,9 +8,15 @@
 # part of `all`: they need CPU torch, which is not a test dependency, and they
 # take about four minutes each. Run `make checkpoints` when you want them.
 
+# `-m` takes a DOTTED module path, not a filesystem path. This Makefile shipped
+# `projects/rope_attribution.experiments` with slashes and CI rejected it with a
+# ModuleNotFoundError that read like a missing file rather than a typo.
+#
+# `projects/` has no __init__.py and does not need one: Python resolves it as an
+# implicit namespace package, so the dotted form runs straight from the repository
+# root with no PYTHONPATH at all. That is the form every document here uses.
 PYTHON  ?= python
-PKG      = projects/rope_attribution
-PYTHONPATH = projects
+PKG      = projects.rope_attribution
 
 .PHONY: all test results figures paper checkpoints clean help
 
@@ -23,12 +29,12 @@ test:
 
 ## results: regenerate results/measurements.json and results/statistics.json
 results:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m $(PKG).experiments
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m $(PKG).statistics
+	$(PYTHON) -m $(PKG).experiments
+	$(PYTHON) -m $(PKG).statistics
 
 ## figures: regenerate figures/*.png and the CSV sidecars, plus figures/README.md
 figures:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m $(PKG).figures
+	$(PYTHON) -m $(PKG).figures
 
 ## paper: compile paper/main.tex (needs tectonic on PATH, or .tmp/tectonic/)
 paper:
@@ -37,8 +43,8 @@ paper:
 
 ## checkpoints: re-measure on trained checkpoints (needs real_model_requirements.txt)
 checkpoints:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m $(PKG).real_model
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m $(PKG).usefulness
+	$(PYTHON) -m $(PKG).real_model
+	$(PYTHON) -m $(PKG).usefulness
 
 ## clean: remove generated build output (never touches committed artefacts)
 clean:

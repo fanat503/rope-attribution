@@ -981,6 +981,12 @@ def repo_local_tokens() -> dict[str, str]:
       when its first segment is a directory here, and is resolved by turning the
       dots into separators. A single dot is a filename, not a module, which is
       what keeps ``figures.py`` and excludes ``experiments.method_spectrum``;
+    * a dotted module path whose first segment is a directory here is resolved
+      by turning dots into separators. This works even though ``projects/``
+      has no ``__init__.py``: Python resolves it as an implicit namespace
+      package, so ``python -m projects.rope_attribution.X`` really does run.
+      A *slash* in the same position does not, which is the mistake a Makefile
+      here made and the command guard below now pins;
     * a token without ``/`` is repository-local only if it exists at the
       repository root, or if it carries a real file suffix and exactly one file
       in the repository has that basename. That is what accepts the bare
@@ -1066,6 +1072,9 @@ def test_the_path_scan_covers_the_paths_that_matter() -> None:
         "projects/ATTRIBUTION.md",
         "projects.rope_attribution.experiments",
         "projects.rope_attribution.figures",
+        "projects.rope_attribution.statistics",
+        "projects.rope_attribution.real_model",
+        "projects.rope_attribution.usefulness",
         "figures/fig09_position_conditional_attribution.png",
         "figures/fig03",
         "projects/frontier-01-*.py",
@@ -1081,6 +1090,126 @@ def test_the_path_scan_covers_the_paths_that_matter() -> None:
     ):
         assert expected in kinds, f"the path scan missed {expected!r}; it found {sorted(kinds)}"
 
+
+# ---------------------------------------------------------------------------
+# The documented commands have to work
+# ---------------------------------------------------------------------------
+
+_DOCS_SCANNED_FOR_COMMANDS = (
+    "README.md",
+    "figures/README.md",
+    "LEGACY.md",
+    "paper/BUILD.md",
+    "NOTICE.md",
+)
+
+_CMD_RE = re.compile(r"python\s+-m\s+([A-Za-z_][A-Za-z0-9_.]*)")
+
+
+def _documented_module_invocations() -> dict[str, str]:
+    """Every ``python -m <dotted>`` the repository documents, and where.
+
+    ``python -m X`` needs ``X`` to be importable, which is strictly stronger than
+    a file existing at that dotted path. It is the stronger requirement that was
+    silently violated: four places documented
+    ``python -m projects.rope_attribution.X``, which cannot work because
+    ``projects/`` is a source root and not a package. CI proved it with a
+    ModuleNotFoundError, and a reader following the shipped ``figures/README.md``
+    would have hit it immediately.
+    """
+    out: dict[str, str] = {}
+    for rel in _DOCS_SCANNED_FOR_COMMANDS:
+        path = _REPO / rel
+        if not path.exists():
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for module in _CMD_RE.findall(line):
+                module = module.rstrip(".")
+                out.setdefault(module, f"{rel}:{lineno}")
+    return out
+
+
+def test_every_documented_module_invocation_is_importable() -> None:
+    """The strongest cheap check: the documented command's module really imports.
+
+    Importing is not running the entry point, but it is exactly the step
+    ``python -m`` fails at, and it costs a fraction of a second per module rather
+    than the minutes the real generators take.
+    """
+    documented = _documented_module_invocations()
+    assert len(documented) >= 3, f"the scan found too few commands: {documented}"
+    for module, where in sorted(documented.items()):
+        proc = subprocess.run(
+            [sys.executable, "-c", f"import {module}"],
+            cwd=_REPO,
+            env={**os.environ, "PYTHONPATH": str(_REPO / "projects")},
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert proc.returncode == 0, (
+            f"{where} documents `python -m {module}`, which does not import:\n"
+            f"{proc.stderr.strip()[-800:]}"
+        )
+
+
+def _expanded_module_paths(text: str, variables: dict[str, str]) -> list[str]:
+    """Module paths passed to ``-m``, with ``$(VAR)`` substituted.
+
+    Without the substitution the guard is vacuous on a Makefile, which is where
+    the defect actually was: the target is written ``$(PKG).experiments``, so a
+    regex over the raw text sees neither ``python`` nor the path that breaks.
+    """
+    out = []
+    for match in re.finditer(r"-m\s+(\S+)", text):
+        target = match.group(1)
+        for name, value in variables.items():
+            target = target.replace("$(" + name + ")", value)
+            target = target.replace("${" + name + "}", value)
+        out.append(target)
+    return out
+
+
+def _makefile_variables() -> dict[str, str]:
+    makefile = _REPO / "Makefile"
+    if not makefile.exists():
+        return {}
+    found = {}
+    for match in re.finditer(r"^([A-Z_][A-Z0-9_]*)\s*[:?]?=\s*(.+?)\s*$",
+                             makefile.read_text(encoding="utf-8"), re.M):
+        found[match.group(1)] = match.group(2)
+    return found
+
+
+def test_the_module_path_in_a_documented_command_is_dotted() -> None:
+    """Pin the defect a Makefile here actually had: a slash in a ``-m`` path.
+
+    ``python -m projects.rope_attribution.experiments`` runs, because Python
+    resolves ``projects/`` as an implicit namespace package even without an
+    ``__init__.py``. The same path written with slashes is a malformed module
+    name and fails with a ModuleNotFoundError that reads like a missing file
+    rather than a typo. That is how this reached CI, and it would have reached
+    every reader's terminal.
+
+    The docs are scanned too, but they were innocent; the Makefile is not, so
+    its variables are expanded before the check.
+    """
+    variables = _makefile_variables()
+    assert variables, "no Makefile variables parsed; the guard would be vacuous"
+    scanned = list(_DOCS_SCANNED_FOR_COMMANDS) + ["Makefile"]
+    checked = 0
+    for rel in scanned:
+        path = _REPO / rel
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for target in _expanded_module_paths(text, variables):
+            checked += 1
+            assert "/" not in target, (
+                f"{rel} invokes `-m {target}` with a slash; `-m` takes a dotted "
+                f"module path, not a filesystem path"
+            )
+    assert checked >= 5, f"only {checked} module paths checked; guard is thin"
 
 def test_external_and_historical_references_are_not_treated_as_repo_paths() -> None:
     """The rule must not start demanding files that the README calls deleted."""
