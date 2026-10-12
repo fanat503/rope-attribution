@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on: [push, pull_request]
 
@@ -23,7 +23,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          # Full history, because tests/test_authorship.py audits the commit
+          # record across every ref. The default depth-1 clone leaves it with a
+          # single commit and those checks skip instead of running.
+          fetch-depth: 0
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
