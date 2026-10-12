@@ -18,7 +18,7 @@
 PYTHON  ?= python
 PKG      = projects.rope_attribution
 
-.PHONY: all test results figures paper checkpoints clean help
+.PHONY: all test results figures paper checkpoints postedit clean help
 
 ## all: test + results + figures + paper
 all: test results figures paper
@@ -40,6 +40,13 @@ figures:
 paper:
 	cd paper && (command -v tectonic >/dev/null && tectonic -X compile --outdir build main.tex \
 		|| ../.tmp/tectonic/tectonic.exe -X compile --outdir build main.tex)
+
+## postedit: syntax + ruff + the affected module's own tests, on what changed.
+# The check Fan et al. (arXiv:2609.20804) found worth running after every
+# edit rather than at the end of a batch. Use it between edits, not before a
+# commit - by commit time it should already have passed.
+postedit:
+	$(PYTHON) scripts/postedit.py
 
 ## checkpoints: re-measure on trained checkpoints (needs real_model_requirements.txt)
 checkpoints:

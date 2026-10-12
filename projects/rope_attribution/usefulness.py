@@ -80,7 +80,10 @@ DISTANCE_GRID: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2
 
 # Densities used only to check that the statistics do not depend on sampling.
 # Deliberately spanning more than two orders of magnitude.
-GRID_DENSITIES: tuple[int, ...] = (9, 17, 33, 65, 129)
+# The densities the paper quotes. Three of them, spanning a 7x change, is
+# what the 18%-drift claim rests on; a wider sweep only costs runtime and
+# the extra rows are not cited anywhere.
+GRID_DENSITIES: tuple[int, ...] = (9, 17, 65)
 
 DEFAULT_SEED = RM.DEFAULT_SEED
 DEFAULT_MODEL_IDS = RM.DEFAULT_MODEL_IDS
@@ -285,23 +288,38 @@ def _summarise(
     }
 
 
-def grid_independence(model_id: str, seed: int = DEFAULT_SEED) -> dict:
+def grid_independence(
+    model_id: str = DEFAULT_MODEL_IDS[0], seed: int = DEFAULT_SEED
+) -> dict:
     """Do the statistics depend on how densely the distance range is sampled?
 
     This is the check that keeps the module honest. The withdrawn ``max/min``
-    ratio was a function of grid density; if these numbers are too, they are the
-    same artefact wearing a different name.
+    ratio was a function of grid density; if these numbers are too, they are
+    the same artefact wearing a different name. The drift the paper quotes is
+    the relative spread of ``sign_flip_fraction_pooled`` across the densities
+    below, computed here rather than asserted.
     """
     out = {}
     for n_points in GRID_DENSITIES:
         deltas = _log_grid(n_points)
         rec = measure_model(model_id, seed=seed, deltas=deltas)
-        out[f"{n_points}"] = {
+        out[str(n_points)] = {
             "n_deltas": int(deltas.size),
             "sign_flip_fraction_pooled": rec["sign_flip_fraction_pooled"],
             "rel_err_median": rec["rel_err_median"],
         }
-    return out
+    rates = [row["sign_flip_fraction_pooled"] for row in out.values()]
+    errs = [row["rel_err_median"] for row in out.values()]
+    return {
+        "schema": "rope_attribution/usefulness_grid_independence/v1",
+        "model_id": model_id,
+        "densities": list(GRID_DENSITIES),
+        "per_density": out,
+        "sign_flip_drift": float((max(rates) - min(rates)) / max(rates)),
+        "rel_err_drift": float((max(errs) - min(errs)) / max(errs)),
+    }
+
+
 
 
 def run_all(model_ids: Sequence[str] = DEFAULT_MODEL_IDS) -> dict:
@@ -345,8 +363,20 @@ def main() -> None:
         f"rel err median {p['rel_err_median']:.4f}, p90 {p['rel_err_p90']:.4f}"
     )
     out = Path(__file__).resolve().parents[2] / "results" / "usefulness.json"
+    out = Path(__file__).resolve().parents[2] / "results" / "usefulness.json"
     out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print("wrote", out)
+
+    gi = grid_independence()
+    gi_out = (
+        Path(__file__).resolve().parents[2] / "results" / "usefulness_grid_independence.json"
+    )
+    gi_out.write_text(json.dumps(gi, indent=2) + "\n", encoding="utf-8")
+    print(
+        f"grid independence on {gi['model_id']}: sign-flip drift "
+        f"{gi['sign_flip_drift']:.4f} across densities {gi['densities']}"
+    )
+    print("wrote", gi_out)
 
 
 if __name__ == "__main__":

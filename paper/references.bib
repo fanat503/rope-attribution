@@ -166,7 +166,7 @@
              Schiefer, Nicholas and Henighan, Tom and Kravec, Shauna and
              Hatfield-Dodds, Zac and Lasenby, Robert and Drain, Dawn and
              Chen, Carol and Grosse, Roger and McCandlish, Sam and
-             Kaplan, Jacob and Amodei, Dario and Wattenberg, Martin and
+             Kaplan, Jared and Amodei, Dario and Wattenberg, Martin and
              Olah, Christopher},
   journal = {arXiv preprint arXiv:2209.10652},
   year    = {2022},
@@ -230,4 +230,81 @@
   eprint  = {2406.11944},
   archivePrefix = {arXiv},
   primaryClass  = {cs.LG}
+}
+
+% ---------------------------------------------------------------------------
+% Prior work located by an arXiv sweep after the paper's novelty claim was
+% corrected. Every entry below was fetched by eprint ID; titles and author
+% lists are transcribed from the API response rather than from memory.
+% ---------------------------------------------------------------------------
+
+% The closest published relative of the paper's R2: it derives a context-length
+% bound beyond which a fixed attention-score comparison cannot jointly avoid
+% "semantic reversal" and positional insensitivity. Cited so the paper's own
+% claim - per-feature, per-distance, at all distances - can be distinguished
+% from a head-level comparison failure at long context.
+@article{wu2026endofrope,
+  title   = {RoPE at the End of Its Rope? Theory, Diagnosis, and Mitigation of
+             Long-Context Failures},
+  author  = {Wu, Yuyang and Du, Yufeng and Peng, Hao},
+  journal = {arXiv preprint arXiv:2609.39929},
+  year    = {2026},
+  eprint  = {2609.39929},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% The prior work on per-rotary-frequency structure of queries and keys on
+% trained models. It measures norms and angles, not signs, so it does not
+% threaten the novelty - but omitting it would read as an incomplete sweep.
+@article{jonasson2025rotaryoffset,
+  title   = {Rotary Offset Features in Large Language Models},
+  author  = {Jonasson, Andr{\'e}},
+  journal = {arXiv preprint arXiv:2503.01832},
+  year    = {2025},
+  eprint  = {2503.01832},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL}
+}
+
+% A spectral account of which RoPE frequencies carry structured energy, which
+% bears on which parts of the spectrum dominate the linearization error.
+@article{xiong2025dope,
+  title   = {DoPE: Denoising Rotary Position Embedding},
+  author  = {Xiong, Jing and Fan, Liyang and Shen, Hui and Su, Zunhai and
+             Yang, Min and Kong, Lingpeng and Wong, Ngai},
+  journal = {arXiv preprint arXiv:2511.09146},
+  year    = {2025},
+  eprint  = {2511.09146},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL}
+}
+
+% The nearest thing to feature-level attention attribution in the sparse-model
+% line. Not RoPE-aware and not an attribution to a score, but the natural
+% citation for "here is the prior art this paper sits beside".
+@article{he2025lowrank,
+  title   = {Towards Understanding the Nature of Attention with Low-Rank Sparse
+             Decomposition},
+  author  = {He, Zhengfu and Wang, Junxuan and Lin, Rui and Ge, Xuyang and
+             Shu, Wentao and Tang, Qiong and Zhang, Junping and Qiu, Xipeng},
+  journal = {arXiv preprint arXiv:2504.20938},
+  year    = {2025},
+  eprint  = {2504.20938},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% Prior empirical work on which channels carry position, measured on three
+% LLMs. Answers a different question from the paper's share dispersion but a
+% reader mapping the space will look for it.
+@article{chiang2025diminefficiency,
+  title   = {The Rotary Position Embedding May Cause Dimension Inefficiency in
+             Attention Heads for Long-Distance Retrieval},
+  author  = {Chiang, Ting-Rui and Yogatama, Dani},
+  journal = {arXiv preprint arXiv:2502.11276},
+  year    = {2025},
+  eprint  = {2502.11276},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL}
 }

@@ -194,7 +194,7 @@ Note: every one of these V25/V26/V27 files opens with a single ~2 KB audit-banne
 
 | file | note |
 |---|---|
-| `projects/ATTRIBUTION.md` | the provenance table and the "Known caveat: hardcoded illustrative constants" section (`:35-70`) are correct and are the pre-existing statement of this file's subject. **But its status note is stale**: `:20` and `:157-163` say `experiments.py` "did not exist in the working tree at the time this file was written" and that no `verify_rope*.py` figure script exists. Both landed on this branch. Update when acting on §5 |
+| `projects/ATTRIBUTION.md` | the provenance table and the "Known caveat: hardcoded illustrative constants" section (`:35-70`) are correct and are the pre-existing statement of this file's subject. **Its status note is stale, and half of it is false**: `:20` and `:150` say `experiments.py` and `verify_rope*.py` do not exist. `experiments.py` did land; `verify_rope*.py` never did and is not in the repository at all. `NOTICE.md` inherited the same claim and has been corrected; this note is the record that the correction was needed. |
 
 Markdown summary: **38 claim documents, 9 near-duplicate FINAL/README bundles, 4
 reference summaries, 8 runbooks, 1 provenance, and 4 usage/stub files whose content
@@ -546,8 +546,10 @@ reader hits *before* the content rather than after it.
 2. Leaves `projects/ATTRIBUTION.md` and `projects/rope_attribution/` where they
    are. `ATTRIBUTION.md` is current provenance, not legacy material, and it
    already carries the hardcoded-constant caveat at `:35-70`. It does need two
-   edits: its status note (`:20`, `:157-163`) says `experiments.py` and
-   `verify_rope*.py` do not exist, and they now do.
+   edits: its status note (`:20`, `:150`) says `experiments.py` and
+   `verify_rope*.py` do not exist. Only the first part is false: `experiments.py`
+   landed, `verify_rope*.py` never existed. The second half should be removed,
+   not corrected.
 3. Adds `projects/legacy/README.md` — a pointer to this file plus the four
    §4 items, so a reader who opens the directory knows which four files to read
    and which 81 to ignore.

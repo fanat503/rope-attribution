@@ -1065,6 +1065,26 @@ not noise: the sign change is exact and its magnitude is the feature's own
 amplitude. Reporting it as something to be excluded is not the same as measuring
 it across a range and showing that no position-free summary can represent it.
 
+\textbf{What the sweep found next to our claim.} Three bodies of work sit
+close enough that a reviewer is right to ask about them. Wu and colleagues
+\citep{wu2026endofrope} derive a context-length bound beyond which a fixed
+attention-score comparison cannot jointly avoid \emph{semantic reversal} and
+positional insensitivity; that is a head-level comparison failing at long
+context, whereas ours is per-feature, per-distance, and holds at short
+distances too. Jonasson \citep{jonasson2025rotaryoffset} measures the norms
+and angles of rotary offset features across architectures, and Chiang and
+Yogatama \citep{chiang2025diminefficiency} find dimensions that carry position
+without helping retrieval; both concern \emph{how much} position a channel
+carries, not the sign of what it carries. On the sparse side, He and
+colleagues \citep{he2025lowrank} build a low-rank sparse replacement for
+attention layers and study feature interaction across token positions,
+without a rotary-aware decomposition of the score itself. None reports a
+per-feature contribution changing sign with distance, which is why we still
+read the claim as open --- but it is now adjacent to published work rather
+than unmatched, and the credit for the \emph{spectral} view belongs to
+Xiong et al. \citep{xiong2025dope} and to \citet{li2026fingerprint}.
+
+
 \textbf{Position-blindness is a known gap, but not this one.} Haklay and
 colleagues \citep{haklay2025positionaware} observe that circuit-discovery methods
 assume position-invariance and introduce position-aware edge attribution to

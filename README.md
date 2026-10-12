@@ -58,7 +58,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1315 tests
+pytest -q                                        # 1330 tests
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.figures      # figures/*.png + CSV sidecars
@@ -79,8 +79,11 @@ python -m projects.rope_attribution.real_model    # results/real_model.json
 python -m projects.rope_attribution.usefulness    # results/usefulness.json
 ```
 
-Both committed artefacts are verified bit-identical across three independent
-regenerations.
+The two artifacts that carry the structural claims - `measurements.json` and
+`statistics.json` - are verified byte-identical across three independent
+regenerations. The three checkpoint artifacts are larger and take about four
+minutes each, so the same check is not claimed for them; they are regenerated
+by `make checkpoints` and compared only by the tests that read them.
 
 ## Citation
 
@@ -108,9 +111,13 @@ projects/rope_attribution/
   usefulness.py   cost of the best position-free surrogate, on real checkpoints
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, every value computed at run time
-tests/            1315 tests
+tests/            1330 tests
 figures/          ten figures, each with a CSV sidecar
-results/          measurements.json, statistics.json, usefulness.json
+results/          measurements.json  (structural facts)
+                    statistics.json          (grid-independence, seed spread)
+                    real_model.json          (three trained checkpoints)
+                    usefulness.json          (cost of the position-free scalar)
+                    usefulness_grid_independence.json (stale orphan - see below)
 ```
 
 There is an earlier body of exploratory work under `projects/frontier-01-*`.

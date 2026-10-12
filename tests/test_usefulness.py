@@ -25,6 +25,7 @@ from rope_attribution import usefulness as U  # noqa: E402
 from rope_attribution.rope import inv_freq  # noqa: E402
 
 _JSON = _REPO / "results" / "usefulness.json"
+_GI_JSON = _REPO / "results" / "usefulness_grid_independence.json"
 
 
 @pytest.fixture(scope="module")
@@ -285,3 +286,64 @@ def test_the_module_docstring_does_not_overclaim() -> None:
     doc = U.__doc__ or ""
     assert "does not claim any downstream task degrades" in doc.lower()
     assert "pre-registered" in doc.lower()
+
+# ---------------------------------------------------------------------------
+# the grid-independence artefact
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def grid_independence() -> dict:
+    if not _GI_JSON.exists():
+        pytest.skip("results/usefulness_grid_independence.json is absent; run usefulness.py")
+    return json.loads(_GI_JSON.read_text(encoding="utf-8"))
+
+
+def test_the_grid_independence_artefact_is_self_describing(
+    grid_independence: dict,
+) -> None:
+    """It must say what it measured, or it cannot be checked against the paper.
+
+    The previous version of this file recorded neither the model nor the
+    densities that produced it, and its shape did not match what the module
+    writes, so nothing could tell whether it was current. Both are stated now.
+    """
+    assert grid_independence["schema"] == (
+        "rope_attribution/usefulness_grid_independence/v1"
+    )
+    assert grid_independence["model_id"], "no model recorded"
+    assert grid_independence["densities"] == [9, 17, 65], grid_independence["densities"]
+    for row in grid_independence["per_density"].values():
+        assert set(row) == {"n_deltas", "sign_flip_fraction_pooled", "rel_err_median"}
+
+
+def test_the_grid_independence_drift_matches_the_paper(
+    grid_independence: dict,
+) -> None:
+    """The paper quotes ~18% drift across a 7x density change.
+
+    Checked against the artefact's own computed drift rather than against a
+    re-run: a re-run costs minutes, and the artefact is committed for exactly
+    this purpose. The tolerance is the gap between the rounded figure in the
+    prose and the computed one.
+    """
+    drift = grid_independence["sign_flip_drift"]
+    assert 0.10 < drift < 0.30, drift
+    densities = grid_independence["densities"]
+    assert densities[-1] / densities[0] > 5, densities
+
+
+def test_the_sign_flip_rate_itself_is_stable_across_densities(
+    grid_independence: dict,
+) -> None:
+    """Same claim as above, stated on the rate rather than on the drift.
+
+    The drift is the number the paper prints; this pins the rates it is derived
+    from, so a silently changed artefact cannot move one and not the other.
+    """
+    rates = [
+        row["sign_flip_fraction_pooled"]
+        for row in grid_independence["per_density"].values()
+    ]
+    assert len(rates) == 3, rates
+    assert all(0.15 < r < 0.45 for r in rates), rates

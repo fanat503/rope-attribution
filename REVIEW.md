@@ -574,7 +574,9 @@ Total: 0/9 empirical content.
    each quote `3.6×10^{-14}`. Three of the paper's most prominent numbers violate
    the rule the paper states for itself. (The three are all correctly rounded —
    the defect is the rule, not the arithmetic.)
-4. **`README.md:22` and `:31`** claim "1185 tests". `pytest --collect-only` →
+4. **`README.md:22` and `:31`** claim "1185 tests". Left as the review wrote
+   it - a record of what was measured then; the suite has since grown and the
+   README now quotes 1315. `pytest --collect-only` →
    **1234**, and `pytest -q` → **1234 passed in 4.37s**. The repo's own headline
    audit surface is stale by 49 tests.
 5. **`README.md:130-131`** ("That is plain position interpolation, a different
@@ -868,17 +870,29 @@ main text against the 9-page limit, locates the boundary at the final main-text
 section rather than counting PDF pages, and fails on figure placeholders, a
 non-empty bibliography, or a citation key that does not resolve.
 
-*Still outstanding and this is the largest open item:* the main text is **14
-pages against a 9-page limit**, and the paper still uses
-`\documentclass[twocolumn]{article}` rather than `neurips_2026`. Compression
-reduced Related Work, Limitations, the disclaimers and the reproducibility note,
-and moved the synthesis subsection to the appendix. Closing the remaining gap is
-not a writing task: the three largest sections — `Exactness, measured` (92
-lines), `The per-pair closed form` (85) and `What context extension fixes` (163)
-— *are* R1, the central decomposition, and R3. Cutting them to fit would remove
-headline results rather than compress prose. The reviewer's alternative is the
-honest one: reframe as a short position or empirical-methodology note with
-results in an appendix, which is what the content actually fits.
+*Still outstanding, and the largest open item:* the main text is **13 pages
+against a 9-page limit** (measured, not estimated; `paper/BUILD.md` records how).
+The paper loads the official `neurips_2026.sty` as
+`\documentclass[preprint,position]{article}` with `\usepackage{neurips_2026}`,
+because the conference's `.cls` cannot be fetched --- the repositories return 404.
+
+The four pages went as follows. The official style file is tighter than the
+hand-rolled geometry. The Method protocol, the synthesis subsection,
+partial-RoPE and mscale moved to appendices. `fig04` and `fig05` moved out of the
+counted part. Related Work and Limitations were compressed. **A page came back**
+when the two propositions were corrected: `prop:blind` had claimed a pair is
+position-blind iff `B_k = 0`, which is false, and `prop:cond` inherited the same
+exception; neither had a correct proof, and `prop:gate` had none at all. Writing
+the three proofs properly cost a page and was worth it.
+
+Closing the remaining four pages is not a writing task: the three largest
+sections --- `Exactness, measured`, `The per-pair closed form`, and `What context
+extension fixes` --- *are* R1, the central decomposition, and R3. Cutting them to
+fit would remove headline results rather than compress prose. The reviewer's
+alternative is the honest one: reframe as a short position or
+empirical-methodology note with results in an appendix, which is what the content
+actually fits. That is the structural decision still outstanding, and it is the
+author's to make.
 
 ### A defect the review did not find
 
