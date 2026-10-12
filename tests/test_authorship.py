@@ -39,9 +39,11 @@ PRE_EXISTING_AUTHORS = frozenset(
     {"Slyatski Ilya", "fanat503", "Vitebsk Research", "Arena Student"}
 )
 
-# The earliest commit that predates the paper's reconstruction. Bounds the range
-# whose authorship is asserted rather than the whole history.
-FIRST_PAPER_COMMIT = "27698cb"
+# Subject of the earliest commit written for the paper. Located by subject rather
+# than by hash, because the history was rewritten once to strip the co-author
+# trailers and a hard-coded hash would then point at a commit that no longer
+# exists - which is exactly how this test failed.
+FIRST_PAPER_SUBJECT = "feat(statistics): withdraw the 920x claim"
 
 
 def _git(*args: str) -> str:
@@ -64,6 +66,21 @@ def _git_ok(*args: str) -> tuple[bool, str]:
         ["git", *args], cwd=_REPO, capture_output=True, text=True, encoding="utf-8"
     )
     return proc.returncode == 0, proc.stdout
+
+
+def _first_paper_commit() -> str | None:
+    """The hash of the earliest commit written for the paper, or None.
+
+    Located by grepping for its subject. Returns None when the history is not
+    present, which is what a shallow clone looks like.
+    """
+    ok, out = _git_ok(
+        "log", "--all", "--format=%H%x01%s", "--grep=" + FIRST_PAPER_SUBJECT, "--fixed-strings"
+    )
+    if not ok or not out.strip():
+        return None
+    rows = [r for r in out.splitlines() if r.strip()]
+    return rows[-1].split("\x01")[0] if rows else None
 
 
 def _history_is_shallow() -> bool:
@@ -170,12 +187,16 @@ def test_no_ref_attributes_the_work_to_an_ai_assistant() -> None:
 
 def test_the_commits_written_for_the_paper_name_only_the_author() -> None:
     """Of the commits made for the paper, every one names one author."""
+    base = _first_paper_commit()
+    if base is None:
+        pytest.skip(
+            "the earliest paper commit is not in this history; the range this "
+            "check owns cannot be located"
+        )
     out = _git(
         "log", "--format=%h%x01%an%x01%(trailers:key=Co-Authored-By,valueonly)",
-        f"{FIRST_PAPER_COMMIT}^..HEAD",
+        f"{base}^..HEAD",
     )
-    if _history_is_shallow():
-        pytest.skip("shallow clone: the range this check owns is not present")
     rows = [r.split("\x01") for r in out.splitlines() if r.strip()]
     assert len(rows) >= 26, f"expected at least 26 rewritten commits, found {len(rows)}"
     for sha, author, trailers in rows:
