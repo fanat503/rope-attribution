@@ -711,14 +711,41 @@ band $22.4\%$ to $34.9\%$, so this is not one bad head but the ordinary case. Th
 relative error is larger than the signal itself: median $1.13$ against a peak of
 $1$.
 
+The headline deserves three qualifications it did not previously carry.
+\emph{First}, $26.8\%$ is the equal-weight mean of the three per-checkpoint
+rates; the mean over all $2790$ heads is $26.70\%$, lower because
+\texttt{SmolLM-135M} contributes $1350$ heads against $720$ each for the other two.
+The two differ by more than the half-width of the interval below, so they are
+not interchangeable, and this is the one used throughout.
+\emph{Second}, an interval. Resampling with replacement over heads --- over
+\emph{heads} and not over the cells inside them, because cells within a head
+share a query and a key and so are not independent --- gives a $95\%$ percentile
+interval of $[0.2665, 0.2674]$ around $0.2670$, with standard deviation
+$0.0129$. The interval is narrow because head-to-head variation is small; it
+says nothing about variation across prompts or across the distance grid, which
+is a real limitation of the estimate and is stated as one.
+\emph{Third}, and most substantively, the three checkpoints do \emph{not}
+agree. A bootstrap over the per-head rates rejects equality for every pair:
+pythia vs llama $+1.34$ points $[+1.19, +1.48]$, pythia vs SmolLM
+$+1.22$ $[+1.08, +1.36]$, llama vs SmolLM $-0.12$ $[-0.18, -0.05]$. The effect
+is about a percentage point, which is small next to the $26.8\%$ itself but
+larger than the head-level noise floor, so it is model dependence rather than
+sampling. We report it rather than average it away: what survives is the claim
+that a position-free scalar is wrong on roughly a quarter of cells, and the
+per-model figures are what a reader should quote if the number matters.
+
 Two things are worth being precise about. The rate is counted only over cells
 where the exact term carries at least $5\%$ of its own peak --- beyond that the
 exact value is numerically indistinguishable from zero and ``sign'' is not
 meaningful. And the statistic is mildly sensitive to how densely the distance
 range is sampled, because a coarser grid misses the cells nearest the zero
-crossings; the drift is about $18\%$ across a $14\times$ change in density, which
-is two orders of magnitude better behaved than the withdrawn
-$\max/\min$ ratio and is reported rather than hidden.
+crossings; the drift is $0.1779$ across the sweep actually run, which spans
+densities $9$, $17$ and $65$ --- a $7\times$ change. An earlier version of this
+sentence claimed a $14\times$ span, referring to a five-density sweep that is no
+longer the one measured; the narrower sweep is what the artefact contains and
+the number is quoted against it. Either way it is two orders of magnitude
+better behaved than the withdrawn $\max/\min$ ratio, and it is reported
+rather than hidden.
 
 So the choice is not between an exact object and an approximate one. It is
 between an object that is right, and the best competing scalar being wrong by a

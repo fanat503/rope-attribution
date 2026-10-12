@@ -317,9 +317,11 @@ def test_the_materiality_cut_is_disclosed(usefulness: dict) -> None:
     """A threshold that helps the result must be stated where it is used."""
     assert int(literal("worth_materiality")) == 5
     assert "numerically indistinguishable from zero" in TEX_FLAT
-    # And the sensitivity to it was measured, not assumed.
-    assert "mildly sensitive" in TEX_FLAT
-    drift = int(literal("worth_grid_drift"))
+    # The grid-density sensitivity is now disclosed with the sweep it was measured
+    # on, and the earlier 14x span is named as the earlier version's error.
+    assert "the sweep actually run" in TEX_FLAT
+    assert "An earlier version of this" in TEX_FLAT
+    drift = float(literal("worth_grid_drift"))
     assert 0 < drift < 50, drift
 
 

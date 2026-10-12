@@ -573,7 +573,8 @@ CLAIMS += (
     Claim("worth_materiality", r"at least \$(\d+)\\%\$ of its own peak"),
     Claim(
         "worth_grid_drift",
-        r"drift is about \$(18)\\%\$ across a \$(14)\\times\$ change in density",
+        r"drift is \$(0\.1779)\$ across the sweep actually run, which spans\s+"
+        r"densities \$(9)\$, \$(17)\$ and \$(65)\$",
     ),
     # The scale sweep the mscale appendix result rests on, restated in the
     # pointer that replaced that section in the main text.
@@ -2738,9 +2739,33 @@ def test_the_only_accuracy_number_in_the_paper_is_the_one_it_refuses_to_report()
     assert "We cannot and do not report anything of the form" in sentence
 
 
+# Sections that report checkpoint measurements and may therefore name a checkpoint
+# affirmatively. Everything else in the paper must speak about checkpoints only to
+# disclaim them, which is the rule this list carves the exception out of.
+CHECKPOINT_REPORTING_SECTIONS = ("sec:trained", "sec:worth")
+
+
 def test_no_model_or_activation_is_reported_anywhere_outside_a_denial() -> None:
-    """Belt and braces: every 'checkpoint'/'activation' mention is a denial."""
+    """Belt and braces: a checkpoint mention is a denial, outside the two sections
+    that own the measurements.
+
+    The original version of this test applied the rule to the whole document,
+    which was correct while the paper reported no model at all. It now reports
+    three trained checkpoints, so the rule has to be scoped: an affirmative
+    mention inside `sec:trained` or `sec:worth` is a result, and elsewhere it
+    would be a claim the paper does not make. Scoping it rather than deleting it
+    is what keeps the check useful - a new affirmative checkpoint claim anywhere
+    else still fails.
+    """
+    # paper_sentences() yields whitespace-collapsed sentences, so the exempt text
+    # has to be collapsed the same way or the containment test silently fails.
+    exempt = "\n".join(
+        re.sub(r"\s+", " ", _section_text(label))
+        for label in CHECKPOINT_REPORTING_SECTIONS
+    )
     for sentence in paper_sentences():
+        if sentence.strip() and sentence.strip() in exempt:
+            continue
         if re.search(r"\b(checkpoint|trained network|forward pass)\b", sentence, re.IGNORECASE):
             assert _NEGATION.search(sentence), f"a checkpoint/forward-pass mention is affirmative: {sentence!r}"
 
@@ -2769,6 +2794,26 @@ _BIBLIOGRAPHY_MARKERS = (
     "\\bibliography{",
     "\\printbibliography",
 )
+
+
+def _section_text(label: str) -> str:
+    """The body of the section carrying ``label``, from its heading to the next
+    section or subsection. Used to scope the checkpoint-denial rule to the parts
+    of the paper that do not report checkpoint work.
+    """
+    body = _body_only(TEX)
+    marker = "\\label{" + label + "}"
+    i = body.find(marker)
+    if i < 0:
+        return ""
+    j = body.find("\\section{", i + 1)
+    k = body.find("\\end{document}", i + 1)
+    end = min(x for x in (j, k) if x > 0) if (j > 0 or k > 0) else len(body)
+    if j < 0:
+        j = end
+    if k < 0:
+        k = end
+    return body[i : min(j, k)]
 
 
 def _body_only(text: str) -> str:
