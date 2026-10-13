@@ -87,7 +87,7 @@ jobs:
           # adding fig11 cannot leave these gates silently under-counting the
           # way they did when fig10 was added.
           tex = pathlib.Path("paper/main.tex").read_text(encoding="utf-8")
-          figures = len(re.findall(r"\\paperfigure\\{", tex))
+          figures = len(re.findall(r"(?m)^\\paperfigure\{", tex))
           assert figures > 0, "no paperfigure calls found in paper/main.tex"
 
           # One raster image per figure; allow slack for any logo or rule.
