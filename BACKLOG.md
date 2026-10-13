@@ -87,6 +87,24 @@ the author's call and is not one I should make.
 
 ---
 
+## The spotlight question, answered in SPOTLIGHT.md
+
+Not as things stand, and the reasons are ranked there. The one that is a hard
+gate rather than a judgement call: **the main text is 13 pages against a
+9-page limit**, which is a desk-reject before a reviewer reads the science.
+Closing it needs roughly 300 lines moved out of the counted part.
+
+The other two are substance. The paper has no demonstrated consequence - it
+characterises an object correctly and shows nothing downstream changing - which
+is the shape of a workshop paper. And the recovery work caps the novelty: the
+algebra is published, the sign reversal is narrow.
+
+What raises the odds, in order: fix the page limit; find one consequence (a
+trained SAE on a real model, where the position-free attribution gets a
+documented statement wrong and the per-distance one gets it right, is the
+cheapest version); broaden beyond three small checkpoints; and turn the
+one-sentence distinction from arXiv:2609.39929 into a paragraph.
+
 ## Rejected, with the reason
 
 ### Hydra / structured argparse for configuration
