@@ -384,64 +384,28 @@ Section~\ref{sec:cond} measures how large the effect is.
 
 \subsection{Context extension, and what \yarn\ actually does}
 
-\yarn\ \citep{peng2023yarn} extends context by leaving $\mathrm{base}$ alone and,
-per Equation~\ref{eq:mscale}, modifying the inverse frequencies per channel: short-wavelength (high-frequency)
-channels keep their $\invf$, long-wavelength (low-frequency) channels are
-divided by the extension factor $s$, and the two are blended linearly in
-between. It then multiplies all cosines and sines by a magnitude factor
-\begin{equation}
-  \mathrm{mscale} = 0.1 \ln s + 1 .
-  \label{eq:mscale}
-\end{equation}
-Note what is \emph{not} here: $\mathrm{base}$ is unchanged, and the fastest
-channel is explicitly left alone. This is the source of R3.
+\yarn\ \citep{peng2023yarn} leaves $\mathrm{base}$ alone and modifies the
+inverse frequencies per channel: high-frequency channels keep their $\invf$,
+low-frequency channels are divided by the extension factor $s$, and the two
+are blended linearly in between, with every cosine and sine then multiplied by
+$\mathrm{mscale} = 0.1\ln s + 1$ (Equation~\ref{eq:mscale}). What is
+\emph{not} here matters most: the fastest channel is explicitly left
+untouched, and that is the mechanism behind R3.
 
-\paperfigure{fig01_frequency_ladder}{%
-  Inverse frequency against rotary-pair index for the four schemes. RoPE is
-  the reference ladder; position interpolation divides every entry by $32$;
-  \yarn\ leaves the fastest $9$ of $32$ entries bit-for-bit identical to RoPE
-  and ramps only the slow tail down by exactly $32\times$; the
-  ``$\mathrm{base}=500000$'' ladder is a uniform reshaping. See
-  Section~\ref{sec:context}.%
-}{fig:ladder}
+Two facts from the derivation are worth stating before the measurements.
+Under \yarn\ at $s = 32$ the fastest $9$ of the $32$ rotary pairs have inverse
+frequencies \emph{bit-for-bit identical} to plain RoPE, so the scheme is a
+ramp over the slow tail rather than a uniform rescaling --- and position
+interpolation \citep{chen2023positionalinterp}, which divides every position
+by $s$, differs from RoPE in all $32$ entries. Raising $
+\mathrm{base}$ is a third scheme again: it multiplies entry $k$ by
+$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
+$\max_k |D_k|$ unchanged, while dividing positions divides it. The three are
+routinely conflated, so all four are measured as separate rows.
+The full derivation, the frequency ladder of
+Figure~\ref{app:fig:ladder}, and the algebra of why they never coincide on
+any channel are in Appendix~\ref{app:context}.
 
-The frequency ladder of Figure~\ref{fig:ladder} makes the asymmetry explicit.
-Under \yarn\ at $s = 32$, the fastest $9$ of the $32$ rotary pairs have inverse
-frequencies \emph{bit-for-bit identical} to plain RoPE, and the slowest pair is
-slowed by exactly a factor of $32.00$. The scheme is thus not a uniform
-rescaling at all: it is a ramp that leaves $9$ of $32$ entries untouched.
-Position interpolation, by contrast, differs from RoPE in all $32$ entries.
-
-Position interpolation \citep{chen2023positionalinterp} instead divides
-positions by $s$ uniformly. It is worth being precise that this is
-\emph{not} the same scheme as raising $\mathrm{base}$. Dividing positions
-divides every entry by $s$, whereas raising $\mathrm{base}$ to
-$\mathrm{base}\cdot s$ multiplies entry $k$ by $s^{-2k/d}$:
-\[
-  \mathrm{inv\_freq}_k \;\mapsto\; \mathrm{base}^{-2k/d}\,s^{-1}
-  \qquad\text{versus}\qquad
-  \mathrm{base}^{-2k/d}\,s^{-2k/d}.
-\]
-The two agree only where $2k/d = 1$, that is at $k = d/2$, which lies outside
-the ladder $k = 0,\dots,d/2-1$. They therefore never coincide on any channel.
-The sharpest instance is the fastest channel: $\theta_0 = \mathrm{base}^{0} = 1$
-for \emph{every} base, so raising the base from $10000$ to $500000$ leaves
-$\theta_0$, and hence $\max_k |D_k|$, completely unchanged, while dividing
-positions by $s$ divides it. This is exactly what our table shows: at
-$\delta = 512$ position interpolation reaches $\max_k|D_k| = 16$ and the
-$\mathrm{base} = 500000$ ladder still sits at $512$. We nonetheless measure all
-four as separate rows, because they are frequently conflated.
-
-All measurements come from a from-scratch float64 NumPy implementation, at
-$d = 64$, $\mathrm{base} = 10000$, extension factor $s = 32$, and pre-extension
-context $2048$, unless a table says otherwise. Two grids are used and are kept
-distinct throughout: a $5$-point grid for the structural and scheme-comparison
-tables, and a $54$-point log-spaced grid from $1$ to $8192$ for the figures. No
-claim is read off a pixel, and Appendix~\ref{app:provenance} records which file
-and key every quoted number came from; the full protocol is in
-Appendix~\ref{app:method}.
-
-% =====================================================================
 \section{Results}
 
 \subsection{Where the non-additivity actually is}
@@ -1457,5 +1421,73 @@ which we do not measure.
   the other schemes retain a shrinking minority. See
   Section~\ref{sec:context}.%
 }{app:fig:linearizable}
+
+% =====================================================================
+\section{Context extension: the derivations}
+\label{app:context}
+
+This appendix carries what the main text summarises: the full per-channel
+description of what \yarn\ does, the frequency ladder it produces, and the
+algebra showing why raising $\theta_0$ is not the same scheme as dividing
+positions. Section~\ref{sec:context} reports the measurements.
+
+
+\yarn\ \citep{peng2023yarn} extends context by leaving $\mathrm{base}$ alone and,
+per Equation~\ref{eq:mscale}, modifying the inverse frequencies per channel: short-wavelength (high-frequency)
+channels keep their $\invf$, long-wavelength (low-frequency) channels are
+divided by the extension factor $s$, and the two are blended linearly in
+between. It then multiplies all cosines and sines by a magnitude factor
+\begin{equation}
+  \mathrm{mscale} = 0.1 \ln s + 1 .
+  \label{eq:mscale}
+\end{equation}
+Note what is \emph{not} here: $\mathrm{base}$ is unchanged, and the fastest
+channel is explicitly left alone. This is the source of R3.
+
+\paperfigure{fig01_frequency_ladder}{%
+  Inverse frequency against rotary-pair index for the four schemes. RoPE is
+  the reference ladder; position interpolation divides every entry by $32$;
+  \yarn\ leaves the fastest $9$ of $32$ entries bit-for-bit identical to RoPE
+  and ramps only the slow tail down by exactly $32\times$; the
+  ``$\mathrm{base}=500000$'' ladder is a uniform reshaping. See
+  Section~\ref{sec:context}.%
+}{app:fig:ladder}
+
+The frequency ladder of Figure~\ref{app:fig:ladder} makes the asymmetry explicit.
+Under \yarn\ at $s = 32$, the fastest $9$ of the $32$ rotary pairs have inverse
+frequencies \emph{bit-for-bit identical} to plain RoPE, and the slowest pair is
+slowed by exactly a factor of $32.00$. The scheme is thus not a uniform
+rescaling at all: it is a ramp that leaves $9$ of $32$ entries untouched.
+Position interpolation, by contrast, differs from RoPE in all $32$ entries.
+
+Position interpolation \citep{chen2023positionalinterp} instead divides
+positions by $s$ uniformly. It is worth being precise that this is
+\emph{not} the same scheme as raising $\mathrm{base}$. Dividing positions
+divides every entry by $s$, whereas raising $\mathrm{base}$ to
+$\mathrm{base}\cdot s$ multiplies entry $k$ by $s^{-2k/d}$:
+\[
+  \mathrm{inv\_freq}_k \;\mapsto\; \mathrm{base}^{-2k/d}\,s^{-1}
+  \qquad\text{versus}\qquad
+  \mathrm{base}^{-2k/d}\,s^{-2k/d}.
+\]
+The two agree only where $2k/d = 1$, that is at $k = d/2$, which lies outside
+the ladder $k = 0,\dots,d/2-1$. They therefore never coincide on any channel.
+The sharpest instance is the fastest channel: $\theta_0 = \mathrm{base}^{0} = 1$
+for \emph{every} base, so raising the base from $10000$ to $500000$ leaves
+$\theta_0$, and hence $\max_k |D_k|$, completely unchanged, while dividing
+positions by $s$ divides it. This is exactly what our table shows: at
+$\delta = 512$ position interpolation reaches $\max_k|D_k| = 16$ and the
+$\mathrm{base} = 500000$ ladder still sits at $512$. We nonetheless measure all
+four as separate rows, because they are frequently conflated.
+
+All measurements come from a from-scratch float64 NumPy implementation, at
+$d = 64$, $\mathrm{base} = 10000$, extension factor $s = 32$, and pre-extension
+context $2048$, unless a table says otherwise. Two grids are used and are kept
+distinct throughout: a $5$-point grid for the structural and scheme-comparison
+tables, and a $54$-point log-spaced grid from $1$ to $8192$ for the figures. No
+claim is read off a pixel, and Appendix~\ref{app:provenance} records which file
+and key every quoted number came from; the full protocol is in
+Appendix~\ref{app:method}.
+
 
 \end{document}
