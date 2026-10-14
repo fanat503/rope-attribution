@@ -217,194 +217,30 @@ head can be linearized.
 \section{Background}
 \label{sec:background}
 
-\subsection{Rotary position embeddings}
+\subsection{Setup}
+\label{sec:background}
 
-Let $d$ be an even head dimension and let $x_m \in \mathbb{R}^d$ be the
-pre-projection content at absolute position $m$. RoPE defines
-\begin{equation}
-  \begin{split}
-    \invf_k &= \mathrm{base}^{-2k/d},\; k = 0, \dots, \half - 1,\\
-    \mathrm{base} &= 10000 .
-  \end{split}
-\end{equation}
-and applies a block-diagonal rotation $\R_m$ whose $k$-th $2\times2$ block
-rotates by the angle $m \cdot \invf_k$. With $q = W_Q x_m$ and $k = W_K x_n$ the
-projections taken before rotation, the score at query position $m$ and key
-position $n$ is
-\begin{equation}
-  s(m,n) \;=\; \bigl(\R_m q\bigr)^{\!\top} \bigl(\R_n k\bigr).
-  \label{eq:rope}
-\end{equation}
-This is the formulation of \citet{su2021ropeformer}. Our implementation follows
-the split-half convention, pairing channel $i$ with $i + \half$, so that one
-frequency vector of length $\half$ drives all $d$ channels.
+Let $d$ be an even head dimension and $x_m$ the pre-projection content at
+absolute position $m$. RoPE assigns channel $k < \half$ the frequency
+$\invf_k = \mathrm{base}^{-2k/d}$ at $9_0 = 1$ and rotates the
+pair $(k, k + \half)$ by $m\cdot\invf_k$. With $q = W_Q x_m$ and
+$k = W_K x_n$ taken before rotation, the score is
 
-\subsection{The relative frame}
-
-The rotation matrices $\R_m$ are orthogonal, hence $\R_m^{\!\top}\R_m = I$.
-Factoring through the relative frame gives
 \begin{equation}
-  \begin{split}
-    \R_m^{\!\top} \bigl(\R_n k\bigr) \;=\; \R_m^{\!\top}\R_n k \;=\; \R_{n-m} k,\\
-    \R_m^{\!\top} \bigl(\R_m q\bigr) \;=\; q .
-  \end{split}
-\end{equation}
-and therefore
-\begin{equation}
-  s(m,n) \;=\; q^{\!\top} \R_{\delta} k, \qquad \delta = n - m,
+  s(m,n) = q^{\!\top}\R_{\delta} k, \qquad \delta = n - m,
   \label{eq:relative}
 \end{equation}
-which depends on the two absolute positions only through their difference,
-reducing the score of Equation~\ref{eq:rope} to a function of one number. This is
-the relative-position property, and it is what makes the rest of the paper
-possible: from here on, ``position'' means $\delta$ and nothing else.
 
-\begin{proposition}[The gate is position-free]
-\label{prop:gate}
-$\bigl|\R_{\delta} k\bigr| = \bigl|k\bigr|$ for all $\delta$. Consequently the
-magnitude of the query and of the key is exactly position-independent, and all
-position information in $s(\delta)$ is carried by the rotation angle alone.
-\end{proposition}
-
-\begin{proof}[Proof of Proposition~\ref{prop:gate}]
-$\R_\delta$ is block diagonal with $2\times 2$ rotation blocks
-$\R_\delta^{(k)}$ of Equation~\ref{eq:pair}, and each block is orthogonal since
-its columns are orthonormal: $(\cos\D)^2 + (\sin\D)^2 = 1$. Hence
-$\bigl|\R_\delta k\bigr|^2 = k^{\!\top}\R_\delta^{\!\top}\R_\delta k =
-k^{\!\top}k = \bigl|k\bigr|^2$, and taking the positive square root gives the
-claim. Both statements hold for every $\delta$, so the norms carry no positional
-information while the angle $\D$ is where all of it enters.
-\end{proof}
-
-Proposition~\ref{prop:gate} is the load-bearing statement for the gate/phase
-split used in sparse-feature interpretability: the ``gate'' $|q|$ is not an
-approximation of the position-free part, it is \emph{exactly} the
-position-free part, and the ``phase'' is the entire remainder. We measure the
-numerical residual of this orthogonality in Section~\ref{sec:exact}.
-
-\subsection{The per-pair closed form}
-\label{sec:pair}
-
-Group the head into rotary pairs $(k, k + \half)$, so that $\R_{\delta}$ mixes
-exactly these two channels. In the split-half convention, the $k$-th block of
-$\R_{\delta}$ acts on $(q[k], q[k+\half])$ and $(k[k], k[k+\half])$ as
-\begin{equation}
-  \begin{split}
-    \R_\delta^{(k)} \;=\;
-    \begin{pmatrix} \cos \D & -\sin \D \\ \sin \D & \cos \D \end{pmatrix},
-    \\[-1pt]
-    \qquad \D = \delta \invf_k .
-  \end{split}
-  \label{eq:pair}
-\end{equation}
-with the same $\D$ on both diagonals. Expanding $q^{\!\top}\R_{\delta}k$ over
-that block and collecting terms gives, exactly,
-\begin{align}
-  \Ak &= q[k]\,k[k] \;+\; q[k+\half]\,k[k+\half] \label{eq:A}\\
-  \Bk &= q[k+\half]\,k[k] \;-\; q[k]\,k[k+\half] \label{eq:B}\\
-  c_k(\delta) &= \Ak \cos\D + \Bk \sin\D \\
-  &= \Rk\cos(\D - \psik), \\
-  \Rk &= \operatorname{hypot}(\Ak, \Bk), \\
-  \psik &= \operatorname{atan2}(\Bk, \Ak).
-\end{align}
-and the score is $s(\delta) = \sum_{k < \half} c_k(\delta)$. The two
-coefficients are therefore fixed by the content vectors alone, and the whole of
-the $\delta$-dependence sits in the single angle $\D$.
-
-Note also what the closed form does \emph{not} depend on. $\Rk$ is a
-hypot of two products of content coordinates; it is the same number at
-$\delta = 1$ and at $\delta = 8192$. That is the content of
-Proposition~\ref{prop:blind}, and it is what lets us speak of a per-pair
-``gate'' at all. Two structural facts follow immediately, and both are exact
-rather than asymptotic.
-
-\begin{proposition}[Amplitude and phase are content-determined]
-\label{prop:blind}
-The coefficients $\Ak$ and $\Bk$ of Equations~\ref{eq:A}--\ref{eq:B}, and
-therefore $\Rk$ and $\psik$, are functions of the content vectors alone: none of
-them depends on $\delta$. The whole of the $\delta$-dependence of $c_k$ lies in the
-single angle $\D = \delta\invf_k$. Moreover $c_k$ is a \emph{non-constant}
-sinusoid in $\delta$ whenever $\Rk > 0$.
-\end{proposition}
-
-\begin{proof}[Proof of Proposition~\ref{prop:blind}]
-Read $\Ak$ and $\Bk$ off Equations~\ref{eq:A}--\ref{eq:B}: each is a sum or
-difference of products $q[\cdot]k[\cdot]$ of content coordinates, and neither
-$\delta$ nor $\invf_k$ appears. Both are therefore $\delta$-independent, and so
-are $\Rk = \operatorname{hypot}(\Ak, \Bk)$ and
-$\psik = \operatorname{atan2}(\Bk, \Ak)$, functions of $(\Ak, \Bk)$ alone.
-
-For non-constancy, substitute the closed form $c_k(\delta) = \Rk\cos(\D - \psik)$.
-Since $\invf_k > 0$ for every $k < \half$, $\delta$ ranging over any interval
-longer than $\pi/\invf_k$ sweeps the argument through an arc of more than $\pi$,
-and $\cos$ is not constant on such an arc.
-
-We state no dichotomy about ``position-blindness'' here, because none exists.
-In particular $\Bk = 0$ is \emph{not} a blind case: it gives $\psik = 0$ and
-leaves $c_k(\delta) = \Ak\cos\D$, a full oscillation rather than a constant.
-The threshold notion used in Section~\ref{sec:trained} is a separate,
-approximate convention with a stated cutoff, not a consequence of this
-proposition.
-\end{proof}
-
-\begin{proposition}[Conditionality]
-\label{prop:cond}
-Let $I$ index the rotary pairs a feature touches, and suppose the frequencies
-$\invf_k$ are distinct and positive over $k \in I$. Then the feature's
-contribution is independent of $\delta$ if and only if $\Ak = \Bk = 0$ for every
-$k \in I$ --- that is, if and only if the feature contributes nothing at all.
-There is no intermediate case in which the contribution is position-free.
-\end{proposition}
-
-\begin{proof}[Proof of Proposition~\ref{prop:cond}]
-The contribution is the trigonometric polynomial
-\[
-  g(\delta) \;=\; \sum_{k \in I} \bigl(\Ak\cos(\delta\invf_k)
-    + \Bk\sin(\delta\invf_k)\bigr)
-\]
-over the distinct positive frequencies $\{\invf_k : k \in I\}$. The functions
-$\{\cos(\alpha\delta), \sin(\alpha\delta)\}_{\alpha \in S}$ for any finite set $S$
-of distinct positive frequencies are linearly independent on every interval of
-positive length: a combination vanishing on such an interval is a trigonometric
-polynomial vanishing on an open set, so the uniqueness theorem forces every
-coefficient to zero. Applying this with $\alpha = \invf_k$ gives
-$g \equiv 0 \Rightarrow \Ak = \Bk = 0$ for all $k \in I$, and any
-$\delta$-independent $g$ is a constant. In particular no proper subset of the
-touched pairs can be the position-free one: a single pair with $\Ak \ne 0$ already
-makes the sum non-constant.
-
-When $g$ is not identically zero it is a non-constant trigonometric polynomial, so
-it takes both signs once the window is long enough relative to the smallest
-$\invf_k$. That is the sign reversal we measure in Section~\ref{sec:cond} rather
-than assume.
-\end{proof}
-
-Proposition~\ref{prop:cond} is the whole of R2, stated before any measurement.
-Section~\ref{sec:cond} measures how large the effect is.
-
-\subsection{Context extension, and what \yarn\ actually does}
-
-\yarn\ \citep{peng2023yarn} leaves $\mathrm{base}$ alone and modifies the
-inverse frequencies per channel: high-frequency channels keep their $\invf$,
-low-frequency channels are divided by the extension factor $s$, and the two
-are blended linearly in between, with every cosine and sine then multiplied by
-$\mathrm{mscale} = 0.1\ln s + 1$ (Equation~\ref{eq:mscale}). What is
-\emph{not} here matters most: the fastest channel is explicitly left
-untouched, and that is the mechanism behind R3.
-
-Two facts from the derivation are worth stating before the measurements.
-Under \yarn\ at $s = 32$ the fastest $9$ of the $32$ rotary pairs have inverse
-frequencies \emph{bit-for-bit identical} to plain RoPE, so the scheme is a
-ramp over the slow tail rather than a uniform rescaling --- and position
-interpolation \citep{chen2023positionalinterp}, which divides every position
-by $s$, differs from RoPE in all $32$ entries. Raising $
-\mathrm{base}$ is a third scheme again: it multiplies entry $k$ by
-$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
-$\max_k |D_k|$ unchanged, while dividing positions divides it. The three are
-routinely conflated, so all four are measured as separate rows.
-The full derivation, the frequency ladder of
-Figure~\ref{app:fig:ladder}, and the algebra of why they never coincide on
-any channel are in Appendix~\ref{app:context}.
+which depends on the two absolute positions only through their difference.
+Three exact facts follow, and they are what the rest of the paper uses: the
+norms $|\R_\delta k| = |k|$ carry no position information
+(Proposition~\ref{prop:gate}); $A_k$, $B_k$, $R_k$ and $\psik$ are functions of
+the content vectors alone and $c_k$ is a non-constant sinusoid in $\delta$
+whenever $R_k > 0$ (Proposition~\ref{prop:blind}); and a feature's contribution
+is $\delta$-independent only if every rotary pair it touches vanishes
+(Proposition~\ref{prop:cond}). The frequency ladder, the relative-frame
+factorisation, the per-pair closed form and the three proofs are in
+Appendix~\ref{app:setup}.
 
 \section{Results}
 
@@ -943,158 +779,128 @@ touching its per-pair structure, which is why it cannot repair R2.
 
 \section{Limitations}
 
-R1, R2 and R3 are usually discussed as three separate observations, and they are
-not: R1 and R2 pull in opposite directions, and R3 is orthogonal to both.
-Appendix~\ref{sec:synthesis} sets out how they relate, and why context extension
-is \emph{indifferent} on the axis that matters most.
-
 In decreasing order of how much they constrain the conclusions.
 
-\textbf{No downstream model, and no learned features.} The algebraic claims rest
-on synthetic vectors with fixed seeds, and Section~\ref{sec:trained} confirms the
-central identities on activations from three trained checkpoints at
+\textbf{No downstream model, and no learned features.} The algebraic claims
+rest on synthetic vectors with fixed seeds; Section~\ref{sec:trained} confirms
+the central identities on activations from three trained checkpoints at
 $135$--$160$M parameters. Neither connects to a task: there is no retrieval
-benchmark, no language-modelling evaluation and no causal patching anywhere in
-this work. The $8$ directions our attribution runs over are random with
-non-negative coefficients: they have the shape of a sparse code and none of its
-content, so nothing here is evidence about real feature geometry or circuit
-structure. Where we say \yarn\ is better on linearizable fraction, we mean better
-on that number, and Section~\ref{sec:context} shows it does not track the
-amplitude-weighted error. In particular, the sign reversal in
-Section~\ref{sec:cond} is a property of random directions in a
-$64$-dimensional head, and although Section~\ref{sec:trained} measures the
-head-to-head dispersion of feature shares on real weights, we have not measured
-the sign reversal itself for real features.
+benchmark, no language-modelling evaluation and no causal patching anywhere
+here. The $8$ directions our attribution runs over are random with
+non-negative coefficients --- the shape of a sparse code and none of its
+content --- so nothing here is evidence about real feature geometry. Where we
+say \yarn\ is better on linearizable fraction we mean better on that
+number, and Section~\ref{sec:context} shows it does not track the
+amplitude-weighted error. In particular the sign reversal in
+Section~\ref{sec:cond} is a property of random directions in a $64$-dimensional
+head; we have measured the head-to-head dispersion of feature shares on real
+weights, but not the sign reversal itself for real features.
 
-\textbf{Single configuration.} All measurements use $d = 64$, $\mathrm{base} =
-10000$, $s = 32$, pre-extension context $2048$, and one query/key draw per
-experiment. We have not swept head dimension, and the claim about which channels
-dominate the error should be expected to depend on $d$ through the number of
-pairs $\half$; we did not measure that dependence and do not claim it. The
-entropy result of Section~\ref{sec:mscale} uses a random query against $256$
-random keys, so it is a property of that synthetic configuration rather than of
-any trained distribution; we claim only that $\mathrm{mscale}$ acts as a
-temperature there, which is monotone across $18$ scales.
+\textbf{Single configuration.} All measurements use $d = 64$,
+$\mathrm{base} = 10000$, $s = 32$, pre-extension context $2048$,
+and one query/key draw per experiment. We have
+not swept head dimension, and the claim about which channels dominate the
+error should be expected to depend on $d$ through $\half$; we did not measure
+that dependence and do not claim it. The entropy result of
+Section~\ref{sec:mscale} uses a random query against $256$ random keys, so it is
+a property of that synthetic configuration; we claim only that
+$\mathrm{mscale}$ acts as a temperature there, monotone across $18$ scales.
 
-\textbf{Approximation choices.} Linearization is one particular first-order
-approximation: we test $\cos \D \mapsto 1 - \D^2/2$, $\sin \D \mapsto \D$ with
-a $0.1\rad$ threshold. A different truncation, or a per-channel threshold, would
-move the linearizable fractions, and would leave the amplitude-weighted
-conclusion intact only if it did not change which channels dominate. We verified
-that qualitatively through the per-pair error but did not sweep thresholds.
+\textbf{Approximation choices.} Linearization is one first-order
+approximation: $\cos\D \mapsto 1 - \D^2/2$, $\sin\D \mapsto\D$ with a
+$0.1\rad$ threshold. A different truncation, or a per-channel threshold, would
+move the linearizable fractions and would leave the amplitude-weighted
+conclusion intact only if it did not change which channels dominate; we
+verified that qualitatively through the per-pair error but did not sweep
+thresholds.
 
 \textbf{Scope of the exactness claim.} Exactness at the score level is a
-statement about a bilinear map, and its practical reach is bounded by three
-things we have not crossed. It does not survive the softmax: attention
+statement about a bilinear map. It does not survive the softmax --- attention
 \emph{weights} are not additive, so a feature's share of attention mass is not
-its share of the score, and we do not measure the discrepancy. It does not
-survive multi-head composition, where the position-conditional structure we
-describe is per-head and no head shares our synthetic projections. And it does
-not license a claim about attribution methods we did not run; we take
-attribution patching as a reference point, not as something we reproduce. A
-reader should treat exactness as removing one stated objection to RoPE-based
-attribution, not as validating the method. Relatedly, Section~\ref{sec:cond}
-shows that a position-free scalar $A_{ij}$ is mis-specified; it does not show
-that per-distance attribution is practically useful, which would require
-circuits, patching, and a trained model.
-
-% =====================================================================
+its share of the score --- and it does not survive multi-head composition,
+where the position-conditional structure is per-head. A reader should treat
+exactness as removing one stated objection to RoPE-based attribution, not as
+validating the method. Relatedly, Section~\ref{sec:cond} shows that a
+position-free scalar $A_{ij}$ is mis-specified; it does not show that
+per-distance attribution is practically useful, which would require circuits,
+patching, and a trained model.
 \section{Related Work}
 
 \textbf{Position encodings and length extrapolation.} RoPE
-\citep{su2021ropeformer} is the scheme studied here. \alpibib\
-\citep{press2021train} is an instructive contrast: it removes position from the
-attention pattern via a linear bias, so it has no per-channel angle spectrum and
-no version of the linearization problem of Section~\ref{sec:context}. On
-extension, position interpolation \citep{chen2023positionalinterp} rescales
-positions uniformly --- the scheme measured as \texttt{position\_interpolation},
-which our table shows is geometrically the most favourable on linearizable
-fraction. \yarn\ \citep{peng2023yarn} keeps the base and ramps per frequency,
-which is what makes $\max_k|\D|$ invariant under it; to our knowledge this is a
-point on which the framing of ``\yarn\ damps large angles'' is easily misread.
-\lengthxtrap\ \citep{sun2022lengthextrap} covers the partial case of
-Section~\ref{sec:partial}, \longrope\ \citep{ding2024longrope} per-channel
-non-uniform extension, and \ropetheory\ \citep{barbero2024roundandround} RoPE's
-frequency content from an optimization perspective. Finally, the ``raise
-$\mathrm{base}$ from $10000$ to $500000$'' recipe is not \yarn, and is also not
-position interpolation: raising the base multiplies channel $k$ by $s^{-2k/d}$
-rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence $\max_k|\D|$
-untouched. We measure it separately as \texttt{base\_500k\_legacy\_claim} for that
-reason.
+\citep{su2021ropeformer} is the scheme studied here. \alpibib\ 
+\citep{press2021train} removes position from the attention pattern by a linear
+bias, so it has no per-channel angle spectrum and no version of the
+linearization problem of Section~\ref{sec:context}. Among extension schemes,
+position interpolation \citep{chen2023positionalinterp} rescales positions
+uniformly and is the most favourable on linearizable fraction in our table;
+\yarn\ \citep{peng2023yarn} keeps the base and ramps per frequency, which is
+what makes $\max_k|\D|$ invariant under it. \lengthxtrap\ 
+\citep{sun2022lengthextrap} covers the partial case of Section~\ref{sec:partial},
+\longrope\ \citep{ding2024longrope} per-channel non-uniform extension,
+and \ropetheory\ \citep{barbero2024roundandround} RoPE's frequency
+content from an optimization perspective. The ``raise $\mathrm{base}$ from
+$10000$ to $500000$'' recipe is a fourth scheme: it multiplies channel $k$ by
+$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
+$\max_k|\D|$ untouched. We measure it separately for that reason.
 
 \textbf{Feature-level attribution.} The additive decomposition of activations
 into learned features originates in the superposition line
 \citep{elhage2022toymodels}, with sparse autoencoders as an operational extractor
-\citep{cunningham2023sparseautoencoders}; attribution on attention heads runs
-from attribution patching \citep{syed2023attributionpatching}, our methodological
-reference for ``which features contributed to this computation'', to the tuned
-lens \citep{belrose2023tunedlens}, sparse feature circuits
+\citep{cunningham2023sparseautoencoders}. Attribution on attention heads runs
+from attribution patching \citep{syed2023attributionpatching} to the tuned lens
+\citep{belrose2023tunedlens}, sparse feature circuits
 \citep{marks2024sparsefeaturecircuits} and transcoder-based discovery
-\citep{dunefsky2024transcoders}. What is common to all of them is that they
-operate at a \emph{fixed} position, or integrate over positions treating each as
-an independent example: the positional encoding is part of the forward pass, not
-the attribution target.
+\citep{dunefsky2024transcoders}. All of them operate at a \emph{fixed} position
+or integrate over positions as independent examples: the positional encoding is
+part of the forward pass, not the attribution target.
 
 \textbf{The algebra is not new, and we do not claim it is.} Chachamovits
 \citep{chachamovits2026phase} writes a rotary head as a sum of per-pair terms
-$\rho\cos(\alpha - \beta + (m-n)\theta)$ with $\rho = |q_j||k_j|$ --- our closed
-form --- and remarks that the term goes negative near $\pi$. The same identity
-appears in KV-cache quantization work \citep{liang2026roaware}, and the
-per-frequency spectral structure of attention has been measured on pretrained
+$\rho\cos(\alpha - \beta + (m-n)\theta)$ with $\rho = |q_j||k_j|$ ---
+our closed form --- and remarks that the term goes negative near $\pi$; the
+same identity appears in KV-cache quantization work \citep{liang2026roaware}, and
+the per-frequency spectral structure has been measured on pretrained
 checkpoints in weight space \citep{li2026fingerprint}. What is claimed here is
-not the identity or the frequency content: it is the attribution semantics, the
-well-posedness argument below, and the measurements.
+the attribution semantics and its consequence, not the identity.
 
-\textbf{The sign reversal appears unreported.} Our searches, including a
-systematic pass over the above, returned no paper reporting that a feature's
-contribution to a rotary score changes sign as the relative distance grows. The
-closest is Jedryszek and Crook \citep{jedryszek2026retrieval}, who attribute a
-rotary score per frequency pair with verified additivity and then \emph{exclude}
-sign-inconsistent bands as numerically unreliable. We read that as the phenomenon
-we are describing being discarded as noise. On the decompositions we test it is
-not noise: the sign change is exact and its magnitude is the feature's own
-amplitude. Reporting it as something to be excluded is not the same as measuring
-it across a range and showing that no position-free summary can represent it.
+\textbf{The sign reversal appears unreported.} Our searches returned no paper
+reporting that a feature's contribution to a rotary score changes sign as the
+relative distance grows. The closest is Jedryszek and Crook
+\citep{jedryszek2026retrieval}, who attribute per frequency pair with verified
+additivity and then \emph{exclude} sign-inconsistent bands as numerically
+unreliable. We read that as our phenomenon being discarded as noise; on the
+decompositions we test it is exact and its magnitude is the feature's own
+amplitude. Reporting it as something to exclude is not the same as measuring it
+across a range and showing that no position-free summary can represent it.
 
-\textbf{What the sweep found next to our claim.} Three bodies of work sit
-close enough that a reviewer is right to ask about them. Wu and colleagues
+\textbf{What the sweep found next to our claim.} Wu and colleagues
 \citep{wu2026endofrope} derive a context-length bound beyond which a fixed
 attention-score comparison cannot jointly avoid \emph{semantic reversal} and
-positional insensitivity; that is a head-level comparison failing at long
-context, whereas ours is per-feature, per-distance, and holds at short
-distances too. Jonasson \citep{jonasson2025rotaryoffset} measures the norms
-and angles of rotary offset features across architectures, and Chiang and
-Yogatama \citep{chiang2025diminefficiency} find dimensions that carry position
-without helping retrieval; both concern \emph{how much} position a channel
-carries, not the sign of what it carries. On the sparse side, He and
-colleagues \citep{he2025lowrank} build a low-rank sparse replacement for
-attention layers and study feature interaction across token positions,
-without a rotary-aware decomposition of the score itself. None reports a
-per-feature contribution changing sign with distance, which is why we still
-read the claim as open --- but it is now adjacent to published work rather
-than unmatched, and the credit for the \emph{spectral} view belongs to
-Xiong et al. \citep{xiong2025dope} and to \citet{li2026fingerprint}.
-
+positional insensitivity: a head-level comparison failing at long context,
+whereas ours is per-feature, per-distance, and holds at short distances too.
+Jonasson \citep{jonasson2025rotaryoffset} measures the norms and angles of
+rotary offset features across architectures, Chiang and Yogatama
+\citep{chiang2025diminefficiency} find dimensions that carry position without
+helping retrieval, and He and colleagues \citep{he2025lowrank} build a low-rank
+sparse replacement for attention layers. Each concerns \emph{how much}
+position a channel carries, not the sign of what it carries. The spectral view
+belongs to Xiong et al. \citep{xiong2025dope} and \citet{li2026fingerprint}.
 
 \textbf{Position-blindness is a known gap, but not this one.} Haklay and
-colleagues \citep{haklay2025positionaware} observe that circuit-discovery methods
-assume position-invariance and introduce position-aware edge attribution to
-relax it. That is the strongest existing support for our framing, and we cite it
-as such. It is a different blindness, though: they distinguish \emph{which token
+colleagues \citep{haklay2025positionaware} observe that circuit-discovery
+methods assume position-invariance and introduce position-aware edge
+attribution to relax it, which is the strongest existing support for our
+framing. It is a different blindness: they distinguish \emph{which token
 position} a component matters at, whereas we are concerned with the score's
-geometric dependence on the distance between two positions. Relaxing the first
-does not give you the second.
+geometric dependence on the distance between two positions.
 
-\textbf{Our relationship to the attribution literature.} Those methods ask which
-features caused a behaviour in a trained model. We ask a prior question about the
-position encoding alone: given a RoPE head, what is the exact algebraic form of a
-feature's contribution, and is it a scalar? Our answer --- no, it is a function of
-distance --- is a structural precondition any of those methods must handle. It is
-not a competing attribution method and it evaluates none. We mention the relation
-because it is a limitation of this paper rather than of the field: our
-per-distance attribution has not been connected to a circuit, and we have not
-shown that measuring it identifies anything about a trained model.
-
+\textbf{Our relationship to the attribution literature.} Those methods ask
+which features caused a behaviour in a trained model. We ask a prior question
+about the position encoding alone: given a RoPE head, is a feature's
+contribution a scalar? Our answer --- no, it is a function of distance --- is a
+structural precondition any of those methods must handle. Our per-distance
+attribution has not been connected to a circuit, and we have not shown that
+measuring it identifies anything about a trained model.
 % =====================================================================
 \section{Conclusion}
 
@@ -1488,6 +1294,204 @@ tables, and a $54$-point log-spaced grid from $1$ to $8192$ for the figures. No
 claim is read off a pixel, and Appendix~\ref{app:provenance} records which file
 and key every quoted number came from; the full protocol is in
 Appendix~\ref{app:method}.
+
+
+% =====================================================================
+\section{Setup: definitions, derivations and proofs}
+\label{app:setup}
+
+The main text states the three propositions the results rest on. This appendix
+carries what they are derived from: the frequency ladder, the relative-frame
+factorisation, the per-pair closed form, and the proofs themselves.
+
+\subsection{Rotary position embeddings}
+
+Let $d$ be an even head dimension and let $x_m \in \mathbb{R}^d$ be the
+pre-projection content at absolute position $m$. RoPE defines
+\begin{equation}
+  \begin{split}
+    \invf_k &= \mathrm{base}^{-2k/d},\; k = 0, \dots, \half - 1,\\
+    \mathrm{base} &= 10000 .
+  \end{split}
+\end{equation}
+and applies a block-diagonal rotation $\R_m$ whose $k$-th $2\times2$ block
+rotates by the angle $m \cdot \invf_k$. With $q = W_Q x_m$ and $k = W_K x_n$ the
+projections taken before rotation, the score at query position $m$ and key
+position $n$ is
+\begin{equation}
+  s(m,n) \;=\; \bigl(\R_m q\bigr)^{\!\top} \bigl(\R_n k\bigr).
+  \label{eq:rope}
+\end{equation}
+This is the formulation of \citet{su2021ropeformer}. Our implementation follows
+the split-half convention, pairing channel $i$ with $i + \half$, so that one
+frequency vector of length $\half$ drives all $d$ channels.
+
+\subsection{The relative frame}
+
+The rotation matrices $\R_m$ are orthogonal, hence $\R_m^{\!\top}\R_m = I$.
+Factoring through the relative frame gives
+\begin{equation}
+  \begin{split}
+    \R_m^{\!\top} \bigl(\R_n k\bigr) \;=\; \R_m^{\!\top}\R_n k \;=\; \R_{n-m} k,\\
+    \R_m^{\!\top} \bigl(\R_m q\bigr) \;=\; q .
+  \end{split}
+\end{equation}
+and therefore
+\begin{equation}
+  s(m,n) \;=\; q^{\!\top} \R_{\delta} k, \qquad \delta = n - m,
+  \label{eq:relative}
+\end{equation}
+which depends on the two absolute positions only through their difference,
+reducing the score of Equation~\ref{eq:rope} to a function of one number. This is
+the relative-position property, and it is what makes the rest of the paper
+possible: from here on, ``position'' means $\delta$ and nothing else.
+
+\begin{proposition}[The gate is position-free]
+\label{prop:gate}
+$\bigl|\R_{\delta} k\bigr| = \bigl|k\bigr|$ for all $\delta$. Consequently the
+magnitude of the query and of the key is exactly position-independent, and all
+position information in $s(\delta)$ is carried by the rotation angle alone.
+\end{proposition}
+
+\begin{proof}[Proof of Proposition~\ref{prop:gate}]
+$\R_\delta$ is block diagonal with $2\times 2$ rotation blocks
+$\R_\delta^{(k)}$ of Equation~\ref{eq:pair}, and each block is orthogonal since
+its columns are orthonormal: $(\cos\D)^2 + (\sin\D)^2 = 1$. Hence
+$\bigl|\R_\delta k\bigr|^2 = k^{\!\top}\R_\delta^{\!\top}\R_\delta k =
+k^{\!\top}k = \bigl|k\bigr|^2$, and taking the positive square root gives the
+claim. Both statements hold for every $\delta$, so the norms carry no positional
+information while the angle $\D$ is where all of it enters.
+\end{proof}
+
+Proposition~\ref{prop:gate} is the load-bearing statement for the gate/phase
+split used in sparse-feature interpretability: the ``gate'' $|q|$ is not an
+approximation of the position-free part, it is \emph{exactly} the
+position-free part, and the ``phase'' is the entire remainder. We measure the
+numerical residual of this orthogonality in Section~\ref{sec:exact}.
+
+\subsection{The per-pair closed form}
+\label{sec:pair}
+
+Group the head into rotary pairs $(k, k + \half)$, so that $\R_{\delta}$ mixes
+exactly these two channels. In the split-half convention, the $k$-th block of
+$\R_{\delta}$ acts on $(q[k], q[k+\half])$ and $(k[k], k[k+\half])$ as
+\begin{equation}
+  \begin{split}
+    \R_\delta^{(k)} \;=\;
+    \begin{pmatrix} \cos \D & -\sin \D \\ \sin \D & \cos \D \end{pmatrix},
+    \\[-1pt]
+    \qquad \D = \delta \invf_k .
+  \end{split}
+  \label{eq:pair}
+\end{equation}
+with the same $\D$ on both diagonals. Expanding $q^{\!\top}\R_{\delta}k$ over
+that block and collecting terms gives, exactly,
+\begin{align}
+  \Ak &= q[k]\,k[k] \;+\; q[k+\half]\,k[k+\half] \label{eq:A}\\
+  \Bk &= q[k+\half]\,k[k] \;-\; q[k]\,k[k+\half] \label{eq:B}\\
+  c_k(\delta) &= \Ak \cos\D + \Bk \sin\D \\
+  &= \Rk\cos(\D - \psik), \\
+  \Rk &= \operatorname{hypot}(\Ak, \Bk), \\
+  \psik &= \operatorname{atan2}(\Bk, \Ak).
+\end{align}
+and the score is $s(\delta) = \sum_{k < \half} c_k(\delta)$. The two
+coefficients are therefore fixed by the content vectors alone, and the whole of
+the $\delta$-dependence sits in the single angle $\D$.
+
+Note also what the closed form does \emph{not} depend on. $\Rk$ is a
+hypot of two products of content coordinates; it is the same number at
+$\delta = 1$ and at $\delta = 8192$. That is the content of
+Proposition~\ref{prop:blind}, and it is what lets us speak of a per-pair
+``gate'' at all. Two structural facts follow immediately, and both are exact
+rather than asymptotic.
+
+\begin{proposition}[Amplitude and phase are content-determined]
+\label{prop:blind}
+The coefficients $\Ak$ and $\Bk$ of Equations~\ref{eq:A}--\ref{eq:B}, and
+therefore $\Rk$ and $\psik$, are functions of the content vectors alone: none of
+them depends on $\delta$. The whole of the $\delta$-dependence of $c_k$ lies in the
+single angle $\D = \delta\invf_k$. Moreover $c_k$ is a \emph{non-constant}
+sinusoid in $\delta$ whenever $\Rk > 0$.
+\end{proposition}
+
+\begin{proof}[Proof of Proposition~\ref{prop:blind}]
+Read $\Ak$ and $\Bk$ off Equations~\ref{eq:A}--\ref{eq:B}: each is a sum or
+difference of products $q[\cdot]k[\cdot]$ of content coordinates, and neither
+$\delta$ nor $\invf_k$ appears. Both are therefore $\delta$-independent, and so
+are $\Rk = \operatorname{hypot}(\Ak, \Bk)$ and
+$\psik = \operatorname{atan2}(\Bk, \Ak)$, functions of $(\Ak, \Bk)$ alone.
+
+For non-constancy, substitute the closed form $c_k(\delta) = \Rk\cos(\D - \psik)$.
+Since $\invf_k > 0$ for every $k < \half$, $\delta$ ranging over any interval
+longer than $\pi/\invf_k$ sweeps the argument through an arc of more than $\pi$,
+and $\cos$ is not constant on such an arc.
+
+We state no dichotomy about ``position-blindness'' here, because none exists.
+In particular $\Bk = 0$ is \emph{not} a blind case: it gives $\psik = 0$ and
+leaves $c_k(\delta) = \Ak\cos\D$, a full oscillation rather than a constant.
+The threshold notion used in Section~\ref{sec:trained} is a separate,
+approximate convention with a stated cutoff, not a consequence of this
+proposition.
+\end{proof}
+
+\begin{proposition}[Conditionality]
+\label{prop:cond}
+Let $I$ index the rotary pairs a feature touches, and suppose the frequencies
+$\invf_k$ are distinct and positive over $k \in I$. Then the feature's
+contribution is independent of $\delta$ if and only if $\Ak = \Bk = 0$ for every
+$k \in I$ --- that is, if and only if the feature contributes nothing at all.
+There is no intermediate case in which the contribution is position-free.
+\end{proposition}
+
+\begin{proof}[Proof of Proposition~\ref{prop:cond}]
+The contribution is the trigonometric polynomial
+\[
+  g(\delta) \;=\; \sum_{k \in I} \bigl(\Ak\cos(\delta\invf_k)
+    + \Bk\sin(\delta\invf_k)\bigr)
+\]
+over the distinct positive frequencies $\{\invf_k : k \in I\}$. The functions
+$\{\cos(\alpha\delta), \sin(\alpha\delta)\}_{\alpha \in S}$ for any finite set $S$
+of distinct positive frequencies are linearly independent on every interval of
+positive length: a combination vanishing on such an interval is a trigonometric
+polynomial vanishing on an open set, so the uniqueness theorem forces every
+coefficient to zero. Applying this with $\alpha = \invf_k$ gives
+$g \equiv 0 \Rightarrow \Ak = \Bk = 0$ for all $k \in I$, and any
+$\delta$-independent $g$ is a constant. In particular no proper subset of the
+touched pairs can be the position-free one: a single pair with $\Ak \ne 0$ already
+makes the sum non-constant.
+
+When $g$ is not identically zero it is a non-constant trigonometric polynomial, so
+it takes both signs once the window is long enough relative to the smallest
+$\invf_k$. That is the sign reversal we measure in Section~\ref{sec:cond} rather
+than assume.
+\end{proof}
+
+Proposition~\ref{prop:cond} is the whole of R2, stated before any measurement.
+Section~\ref{sec:cond} measures how large the effect is.
+
+\subsection{Context extension, and what \yarn\ actually does}
+
+\yarn\ \citep{peng2023yarn} leaves $\mathrm{base}$ alone and modifies the
+inverse frequencies per channel: high-frequency channels keep their $\invf$,
+low-frequency channels are divided by the extension factor $s$, and the two
+are blended linearly in between, with every cosine and sine then multiplied by
+$\mathrm{mscale} = 0.1\ln s + 1$ (Equation~\ref{eq:mscale}). What is
+\emph{not} here matters most: the fastest channel is explicitly left
+untouched, and that is the mechanism behind R3.
+
+Two facts from the derivation are worth stating before the measurements.
+Under \yarn\ at $s = 32$ the fastest $9$ of the $32$ rotary pairs have inverse
+frequencies \emph{bit-for-bit identical} to plain RoPE, so the scheme is a
+ramp over the slow tail rather than a uniform rescaling --- and position
+interpolation \citep{chen2023positionalinterp}, which divides every position
+by $s$, differs from RoPE in all $32$ entries. Raising $
+\mathrm{base}$ is a third scheme again: it multiplies entry $k$ by
+$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
+$\max_k |D_k|$ unchanged, while dividing positions divides it. The three are
+routinely conflated, so all four are measured as separate rows.
+The full derivation, the frequency ladder of
+Figure~\ref{app:fig:ladder}, and the algebra of why they never coincide on
+any channel are in Appendix~\ref{app:context}.
 
 
 \end{document}

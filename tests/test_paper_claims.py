@@ -227,9 +227,9 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("method_bilin_checks", r"bilinearity over \$(\d+)\$ score checks"),
     Claim("method_entropy_scales", r"\$\\mathrm\{mscale\}\$, over \$(\d+)\$ extension"),
     Claim("sec_entropy_scales", r"range of \$(\d+)\$ extension"),
-    Claim("limitations_entropy_scales", r"which is monotone across \$(\d+)\$ scales"),
+    Claim("limitations_entropy_scales", r"monotone across \$(\d+)\$ scales"),
     Claim("threshold_rad", r"\$\|\\D\| \\le (0\.1)\\rad\$"),
-    Claim("threshold_rad_limitations", r"\$\\sin \\D \\mapsto \\D\$ with a \$(0\.1)\\rad\$"),
+    Claim("threshold_rad_limitations", r"\$\\sin\s*\\D \\mapsto\s*\\D\$ with a\s*\$(0\.1)\\rad\$"),
     Claim("threshold_rad_table", r"\$\|\\D\| \\le (0\.1)\\rad\$, with the exact count out of \$\\half = (\d+)\$"),
     Claim("half_def", r"\\newcommand\{\\half\}\{d/(\d+)\}"),
     # ---- feature additivity / position-conditionality -----------------------
@@ -320,7 +320,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("base_scale_entry_div", r"divides every entry by \$(s)\$"),
     Claim(
         "base_scale_related",
-        r"raising the base multiplies channel \$k\$ by \$(s\^\{-2k/d\})\$ rather than by \$(s\^\{-1\})\$",
+        r"it multiplies channel \$k\$ by \$(s\^\{-2k/d\})\$ rather than by \$(s\^\{-1\})\$",
     ),
     Claim(
         "base_scale_corr",
@@ -337,7 +337,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("yarn_untouched_entries", r"a ramp that leaves \$(\d+)\$ of \$(\d+)\$ entries untouched"),
     Claim(
         "legacy_base_related",
-        r"to \$(500000)\$'' recipe is not \\yarn, and is also not",
+        r"to \$(500000)\$'' recipe is a fourth scheme",
     ),
     Claim("legacy_base_corr", r"raising the base from \$(10000)\$ to \$(500000)\$''\. It does not\."),
     # ---- the comparison table's caption --------------------------------------
@@ -2781,7 +2781,12 @@ def test_no_model_or_activation_is_reported_anywhere_outside_a_denial() -> None:
 # pattern above; this list is the whole remainder, and
 # :func:`test_the_exempt_list_is_small_and_every_entry_still_occurs` fails both
 # if a new one is added and if an old one stops being needed.
-EXEMPT_ALGEBRA = frozenset({"-1", "0", "1", "2"})
+# Empty. The algebraic literals this list covered moved to the appendix with
+# the Background, and no number in the main text currently escapes the claim
+# scan, so there is nothing to exempt. The guard below fails if a new one is
+# added, which is the intended behaviour: an exemption is a claim that a
+# number needs no evidence.
+EXEMPT_ALGEBRA: frozenset[str] = frozenset()
 
 # `tabular` blocks whose every cell is verified by a dedicated test.
 VERIFIED_TABLES = ("tab:spectrum", "tab:exact")
