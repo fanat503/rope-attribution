@@ -704,19 +704,15 @@ $128\rad$.
 \paragraph{Neither rescues a global linearization.}
 Plain RoPE retains no linearizable channel at all from $\delta = 861$ onward,
 where it is exactly $0.0000$ at every subsequent grid point, while \yarn\ retains
-$11/32$ there and $4/32$ at $\delta = 8192$. So \yarn\ does not rescue the
-linearization either; it lengthens the range over which a majority of channels
-can be linearized. The per-channel mechanism is in
-Figure~\ref{app:fig:pairs}: the fastest rotary pair's error reaches the size of its
-own contribution at $\delta = 3$, identically under RoPE and \yarn\ --- the same
-$\delta$, because \yarn\ does not touch that channel. Note how early that is.
-The fastest channel turns a full revolution per token, so it is out of the
-linear regime within three tokens of separation and stays out. No amount of
-ramping the slow tail repairs a channel that is wrong that soon. The
-fraction-linearizable curve for all four schemes is in
-Figure~\ref{app:fig:linearizable}, and the amplitude-weighted error in
-Figure~\ref{app:fig:error}. Plain RoPE holds no channel linearizable across the
-$54$-point grid past $\delta = 861$.
+$11/32$ there and $4/32$ at $\delta = 8192$; so \yarn\ lengthens the range over
+which a majority of channels can be linearized without rescuing the whole head.
+The mechanism is in Figure~\ref{app:fig:pairs}: the fastest rotary pair's error
+reaches the size of its own contribution at $\delta = 3$, identically under both
+schemes, because \yarn\ does not touch that channel. The fastest channel turns a
+revolution per token, so it leaves the linear regime within three tokens and
+never returns; no amount of ramping the slow tail repairs it. The
+fraction-linearizable curve and the amplitude-weighted error for all four
+schemes are in Figures~\ref{app:fig:linearizable} and~\ref{app:fig:error}.
 
 \paperfigure{fig05_linearization_error}{%
   Amplitude-weighted and per-pair linearization error against relative distance,
@@ -734,29 +730,26 @@ $54$-point grid past $\delta = 861$.
 }{app:fig:pairs}
 
 The same figure localizes the damage. At $\delta = 1$ the fastest pair $k = 0$
-has an exact contribution of $-0.9525$ against a linearized value of
-$-1.0607$, a normalized error of $0.1136$; the mid-frequency pair $k = 12$ has
-normalized error $4.3\times10^{-6}$ at the same distance, roughly $26000$
-times smaller. By $\delta = 3$ the fastest pair's normalized error is
-$1.1099$ --- past $1$, meaning the approximation is now worse than simply
-deleting the term --- while the slower pairs are still comfortably inside the
-linear regime. This is the whole of Section~\ref{sec:context} in two numbers:
-the linearization fails for the fast channels first, and \yarn does not change
-which channels those are.
+has an exact contribution of $-0.9525$ against a linearized $-1.0607$, a
+normalized error of $0.1136$; the mid-frequency pair $k = 12$ has
+$4.3\times10^{-6}$ at the same distance, roughly $26000$ times smaller. By
+$\delta = 3$ the fastest pair's normalized error is $1.1099$ --- past $1$, i.e.
+worse than deleting the term --- while the slower pairs remain comfortably
+linear. That is Section~\ref{sec:context} in two numbers: the linearization fails
+for the fast channels first, and \yarn does not change which channels those
+are.
 
-Figure~\ref{app:fig:error} is the decisive guard on this conclusion, and it is where
-the optimistic reading dies. At $\delta = 8192$ the amplitude-weighted
-error is $1.24572\times10^{6}$ for RoPE and $1.24179\times10^{6}$ for \yarn\,
-a ratio of $0.996840$: \yarn\ buys less than $0.4\%$ on this measure. The
-per-pair RMS ratio is $0.999977$, i.e.\ no meaningful change. The reason is
-visible in the spectrum and follows from Proposition~\ref{prop:blind}: the error
-is dominated by the few fast channels, whose amplitudes are comparable to the
-slow channels' but whose angles are enormous, and \yarn\ scales those channels
-by exactly $1$. Position interpolation does better on this axis ($1225.06$ at
-$\delta = 8192$, roughly $1000\times$ below RoPE) precisely because it also
-shrinks the fast channel --- which is the same reason it compresses the whole
-spectrum into a regime a trained model does not natively use. That trade-off is
-a modelling question about trained models, and we do not measure it.
+Figure~\ref{app:fig:error} is the decisive guard on this conclusion. At
+$\delta = 8192$ the amplitude-weighted error is $1.24572\times10^{6}$ for RoPE
+and $1.24179\times10^{6}$ for \yarn\, a ratio of $0.996840$: \yarn\ buys less
+than $0.4\%$. The per-pair RMS ratio is $0.999977$, i.e.\ no meaningful change.
+The reason follows from Proposition~\ref{prop:blind}: the error is dominated by
+the few fast channels, whose amplitudes are comparable to the slow channels'
+but whose angles are enormous, and \yarn\ scales those channels by exactly $1$.
+Position interpolation does better here ($1225.06$ at $\delta = 8192$, roughly
+$1000\times$ below RoPE) precisely because it also shrinks the fast channel ---
+which is the same reason it compresses the spectrum into a regime a trained
+model does not natively use. We do not measure that trade-off.
 
 \begin{remark}
 The correct summary of R3 is: context extension changes \emph{which channels}
@@ -767,15 +760,14 @@ whole head safe, and neither is a rescue for position-free attribution --- that
 failure is in R2, which no amount of angle damping addresses.
 \end{remark}
 
-Two further findings are recorded in the appendices rather than here, because
-neither is part of R1--R3 and both are consequences of the same
-characterization. Appendix~\ref{sec:partial} shows that partial RoPE yields an
-\emph{exactly} position-free sub-score, which is the one place the gate/phase
-split is usable in practice, and a useful diagnostic for which convention a given
-implementation uses. Appendix~\ref{sec:mscale} shows that \yarn's magnitude
-factor acts exactly as a temperature on the attention distribution, monotone in
-entropy across $18$ scales --- so it changes the score's sharpness without
-touching its per-pair structure, which is why it cannot repair R2.
+Two further findings are in the appendices, neither being part of R1--R3.
+Appendix~\ref{sec:partial}: partial RoPE yields an \emph{exactly} position-free
+sub-score, the one place the gate/phase split is usable in practice and a
+diagnostic for which convention an implementation uses.
+Appendix~\ref{sec:mscale}: \yarn's magnitude factor acts exactly as a
+temperature, monotone in entropy across $18$ scales --- so it changes the
+score's sharpness without touching its per-pair structure, which is why it
+cannot repair R2.
 
 \section{Limitations}
 
@@ -824,6 +816,7 @@ validating the method. Relatedly, Section~\ref{sec:cond} shows that a
 position-free scalar $A_{ij}$ is mis-specified; it does not show that
 per-distance attribution is practically useful, which would require circuits,
 patching, and a trained model.
+
 \section{Related Work}
 
 \textbf{Position encodings and length extrapolation.} RoPE

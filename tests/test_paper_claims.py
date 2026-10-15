@@ -285,10 +285,7 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("ngrid_54", r"bit-identical to plain RoPE at every one of \$(\d+)\$ tested"),
     Claim("ngrid_54_point", r"across a \$(\d+)\$-point distance grid"),
-    Claim(
-        "ngrid_54_linearizable",
-        r"no channel linearizable across the\s+\$(\d+)\$-point grid past \$\\delta = (\d+)\$",
-    ),
+    Claim("ngrid_54_linearizable", r"Plain RoPE retains no linearizable channel at all from \$\\delta = (-?\d+(?:\.\d+)?)\$ onward"),
     Claim(
         "ngrid_54_fig06",
         r"single value \$([\d.]+)\$ at every one of the \$(\d+)\$ distances",
@@ -366,11 +363,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("lin_base500k", r"different numbers again \(\$(0\.3438)\$ and \$(0\.1875)\$\),"),
     # ---- fig04 tail ------------------------------------------------------------
     Claim("fig04_first_zero", r"at all from \$\\delta = (\d+)\$ onward"),
-    Claim(
-        "fig04_zero_value",
-        r"is exactly \$(0\.0000)\$ at every subsequent grid point, while \\yarn\\ retains "
-        r"\$(\d+)/(\d+)\$ there and \$(\d+)/(\d+)\$ at \$\\delta = (\d+)\$",
-    ),
+    Claim("fig04_zero_value", r"retains no linearizable channel at all from \$\\delta = 861\$ onward, where it is exactly \$(-?\d+(?:\.\d+)?)\$ at every subsequent grid point, while \\yarn\\ retains \$(-?\d+(?:\.\d+)?)/(-?\d+(?:\.\d+)?)\$ there and \$(-?\d+(?:\.\d+)?)/(-?\d+(?:\.\d+)?)\$ at \$\\delta = (-?\d+(?:\.\d+)?)\$"),
     Claim(
         "synthesis_ramp",
         r"from \$(\d+)/(\d+)\$ to \$(\d+)/(\d+)\$ at \$\\delta \\approx (\d+)\$",
@@ -382,14 +375,14 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("amp_ratio", r"a ratio of \$(0\.996840)\$"),
     Claim("amp_ratio_r3", r"error ratio \\yarn/RoPE is \$(0\.99684)\$ at \$\\delta = (\d+)\$"),
     Claim("amp_ratio_conclusion", r"amplitude-weighted error ratio of only \$(0\.996840)\$"),
-    Claim("amp_percent", r"buys less than \$(0\.4)\\\%\$ on this measure"),
+    Claim("amp_percent", r"buys less than \$(-?\d+(?:\.\d+)?)\\%\$"),
     Claim("rms_ratio", r"per-pair RMS ratio is \$(0\.999977)\$"),
-    Claim("pi_amp", r"this axis \(\$(\d+\.\d+)\$ at \$\\delta = (\d+)\$, roughly \$(\d+)\\times\$ below RoPE\)"),
+    Claim("pi_amp", r"here \(\$(-?\d+(?:\.\d+)?)\$ at \$\\delta = (-?\d+(?:\.\d+)?)\$, roughly \$(-?\d+(?:\.\d+)?)\\times\$ below RoPE\)"),
     # ---- fig06 per-pair --------------------------------------------------------
     Claim("pair_amp_k0", r"rotary pair, \$k = 0\$, takes the single value \$([\d.]+)\$"),
     Claim("pair_amp_k12", r"pair \$k = (\d+)\$ has amplitude \$([\d.]+)\$"),
-    Claim("pair_exact_d1", r"exact contribution of \$(-0\.9525)\$ against a linearized value of \$(-1\.0607)\$, a normalized error of \$(0\.1136)\$"),
-    Claim("pair_lin_d1", r"the mid-frequency pair \$k = (\d+)\$ has normalized error \$(4\.3)\\times10\^\{(-6)\}\$ at the same distance, roughly \$(\d+)\$ times smaller"),
+    Claim("pair_exact_d1", r"contribution of \$(-?\d+(?:\.\d+)?)\$ against a linearized \$(-?\d+(?:\.\d+)?)\$, a normalized error of \$(-?\d+(?:\.\d+)?)\$"),
+    Claim("pair_lin_d1", r"the mid-frequency pair \$k = (-?\d+(?:\.\d+)?)\$ has \$(-?\d+(?:\.\d+)?)\\times10\^\{(-?\d+(?:\.\d+)?)\}\$ at the same distance, roughly \$(-?\d+(?:\.\d+)?)\$ times smaller"),
     Claim("pair_err_d3", r"By \$\\delta = (\d+)\$ the fastest pair's normalized error is \$(\d\.\d+)\$"),
     Claim("pair_err_d3_caption", r"error reaches \$1\$, meaning an error as large as the term itself, at \$\\delta = (\d+)\$ under both schemes"),
     Claim("pair_delta_1", r"At \$\\delta = (\d+)\$ the fastest pair \$k = 0\$"),
