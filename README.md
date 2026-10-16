@@ -58,7 +58,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1360 tests
+pytest -q                                        # 1361 tests
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.figures      # figures/*.png + CSV sidecars
@@ -77,11 +77,12 @@ a test dependency:
 pip install -r real_model_requirements.txt
 python -m projects.rope_attribution.real_model    # results/real_model.json
 python -m projects.rope_attribution.usefulness    # results/usefulness.json
+python -m projects.rope_attribution.agreement     # results/agreement.json
 ```
 
 The two artifacts that carry the structural claims - `measurements.json` and
 `statistics.json` - are verified byte-identical across three independent
-regenerations. The three checkpoint artifacts are larger and take about four
+regenerations. The four checkpoint artifacts are larger and take about four
 minutes each, so the same check is not claimed for them; they are regenerated
 by `make checkpoints` and compared only by the tests that read them.
 
@@ -109,15 +110,19 @@ projects/rope_attribution/
   experiments.py  seven measured experiments
   statistics.py   grid-independence and seed-variance statistics
   usefulness.py   cost of the best position-free surrogate, on real checkpoints
+  agreement.py    how the surrogate's pair rankings disagree with the exact
+                  ones, on the same checkpoints
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, every value computed at run time
-tests/            1360 tests
+tests/            1361 tests
 figures/          ten figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
                     real_model.json          (three trained checkpoints)
                     usefulness.json          (cost of the position-free scalar)
-                    usefulness_grid_independence.json (stale orphan - see below)
+                    usefulness_grid_independence.json (the grid sweep behind
+                                              the cost section's drift number)
+                    agreement.json           (ranking agreement, same checkpoints)
 ```
 
 There is an earlier body of exploratory work under `projects/frontier-01-*`.

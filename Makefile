@@ -4,9 +4,10 @@
 # figure set, and recompiles the paper. Every step is byte-reproducible: the two
 # JSON artefacts are verified identical across three independent runs.
 #
-# The checkpoint measurements (real_model.py, usefulness.py) are deliberately not
-# part of `all`: they need CPU torch, which is not a test dependency, and they
-# take about four minutes each. Run `make checkpoints` when you want them.
+# The checkpoint measurements (real_model.py, usefulness.py, agreement.py) are
+# deliberately not part of `all`: they need CPU torch, which is not a test
+# dependency, and they take about four minutes each. Run `make checkpoints`
+# when you want them.
 
 # `-m` takes a DOTTED module path, not a filesystem path. This Makefile shipped
 # `projects/rope_attribution.experiments` with slashes and CI rejected it with a
@@ -52,6 +53,7 @@ postedit:
 checkpoints:
 	$(PYTHON) -m $(PKG).real_model
 	$(PYTHON) -m $(PKG).usefulness
+	$(PYTHON) -m $(PKG).agreement
 
 ## clean: remove generated build output (never touches committed artefacts)
 clean:
