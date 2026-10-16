@@ -553,15 +553,19 @@ margin larger than the quantity it is describing, on one cell in four. That is
 what it costs to insist that a RoPE feature's contribution is a number.
 
 Sign is one commitment; which pair \emph{leads} is the one a reader acts on, so
-each head's rotary pairs were ranked by exact contribution at the grid distances
-and by the position-free constant, per (query, key, distance) triple. The two
+each head's rotary pairs were ranked by exact contribution and by the
+position-free constant, per (query, key, distance) triple at the distances of
+the pre-registered grid --- distances that reach past the training context,
+where the decomposition stays defined analytically. The two
 name the same first pair on $55.7\%$ of the triples of \texttt{pythia-160m},
 $56.6\%$ on \texttt{llama-160m} and $60.1\%$ on \texttt{SmolLM-135M}, against
 $12.5\%$ and $3.1\%$ for random choice over the $8$- and $32$-pair heads. On the
 larger heads the surrogate's pick lands inside the exact top three on $77.8\%$
 and $77.2\%$ of triples --- close, but first place is what is claimed, and the
-position-free object misses it on more than a third of the votes. Rows whose
-exact contributions are identically zero cast no vote, and their count is
+position-free object misses it on more than a third of the votes. Per head the
+rate spans $7.1\%$ to $93.6\%$ --- wide, but no head dips to its checkpoint's
+random choice; the aggregate conceals spread, not an all-or-nothing split. Rows
+whose exact contributions are identically zero cast no vote, and their count is
 recorded in the artefact.
 
 \subsection{The same identities on trained weights}

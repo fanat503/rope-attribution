@@ -21,20 +21,24 @@ What is measured
     Fraction of (query, key, distance) triples where the two rankings put the same
     pair first.
 ``rank_correlation``
-    Spearman rho between the two orderings over all pairs, per triple.
+    Spearman rho between the two orderings over all pairs, per triple. A library
+    statistic: the committed checkpoint artifact reports no rank correlation and
+    the paper does not quote one.
 ``top1_agreement_top_decile``
-    The same, restricted to the pairs the exact ranking places in its top decile
-    - the pairs a reader is most likely to act on, which is where a disagreement
-    is most expensive.
+    The rate at which the surrogate's pick lands inside the exact ranking's top
+    decile - the pairs a reader is most likely to act on, which is where a
+    disagreement is most expensive. On an 8-pair head the decile holds one pair,
+    so there the statistic equals the top-1 agreement.
 ``top1_agreement_material``
-    The same, restricted to cells where the exact term carries at least a stated
-    fraction of its own peak, so the small-magnitude objection cannot be answered
-    by pointing at near-zero terms.
+    A library variant over arrays - the same restricted to cells whose exact term
+    carries at least a stated fraction of its own peak. It is not part of the
+    committed artifact and the paper does not quote it.
 
 Scope, stated once
 ------------------
-All of this is computed on the same three trained checkpoints and the same
-synthetic construction the rest of the repository uses. It is not a claim about
+The checkpoint measurement (the lower half of this module) runs on the same
+three trained checkpoints and the same content-pair sampling the rest of the
+repository uses, and commits ``results/agreement.json``. It is not a claim about
 any downstream task's accuracy; it is a claim about how often the position-free
 object answers a question about the exact one incorrectly.
 """
@@ -253,6 +257,11 @@ def ranking_votes(exact: np.ndarray, surrogate: np.ndarray) -> dict:
       produced the false 100% on llama before it was fixed;
     * an all-zero surrogate does the same by a second route, and it is
       recorded per row because one content pair can exclude the whole grid.
+
+    The two exclusion counters overlap when both degeneracies hold at once,
+    so neither counter, nor their sum, is claimed to be the number of
+    excluded rows; a row casts at most one vote because ``live`` conjoins
+    both negations.
     """
     e = np.asarray(exact, dtype=np.float64)
     s = np.asarray(surrogate, dtype=np.float64)

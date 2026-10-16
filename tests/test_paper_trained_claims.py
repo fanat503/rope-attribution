@@ -400,6 +400,32 @@ def test_the_zero_rows_the_ranking_never_counts_are_recorded(agreement_data: dic
         assert excluded < 0.2 * model["n_votes"], model["model_id"]
 
 
+def test_the_ranking_per_head_band_is_as_printed(agreement_data: dict) -> None:
+    """The printed band, re-derived from every head record in the artifact."""
+    low = float(literal("worth_rank_head_band", 1))
+    high = float(literal("worth_rank_head_band", 2))
+    rates = [
+        100.0 * h["n_agree"] / h["n_live"]
+        for model in agreement_data["models"]
+        for pp in model["per_prompt"]
+        for h in pp["heads"]
+        if h["n_live"]
+    ]
+    assert_paper_number_matches(min(rates), f"{low:.1f}", "the lowest per-head rate")
+    assert_paper_number_matches(max(rates), f"{high:.1f}", "the highest per-head rate")
+    # The passage's second clause: every head stays above its own checkpoint's
+    # random choice, so the pooled rate conceals spread rather than pathology.
+    for model in agreement_data["models"]:
+        floor = 100.0 * model["chance_top1"]
+        head_rates = [
+            100.0 * h["n_agree"] / h["n_live"]
+            for pp in model["per_prompt"]
+            for h in pp["heads"]
+            if h["n_live"]
+        ]
+        assert min(head_rates) > floor, (model["model_id"], min(head_rates), floor)
+
+
 def test_the_section_does_not_claim_a_downstream_result(trained: dict) -> None:
     """The limit of the evidence is part of the claim, so it is tested too."""
     for phrase in (

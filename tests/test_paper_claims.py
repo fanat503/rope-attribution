@@ -589,6 +589,10 @@ CLAIMS += (
         "worth_rank_decile",
         r"lands inside the exact top three on \$(77\.8)\\%\$ and \$(77\.2)\\%\$ of triples",
     ),
+    Claim(
+        "worth_rank_head_band",
+        r"Per head the rate spans \$(7\.1)\\%\$ to \$(93\.6)\\%\$",
+    ),
     # The scale sweep the mscale appendix result rests on, restated in the
     # pointer that replaced that section in the main text.
     Claim("appendix_mscale_scales", r"monotone in\s+entropy across \$(18)\$ scales"),
