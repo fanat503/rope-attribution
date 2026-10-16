@@ -28,7 +28,7 @@ same tokens across bases, so the base sweep is paired, not re-drawn.
 Scope, stated once
 ------------------
 All numbers here are properties of the synthetic construction: they say the
-paper's statistic is not balanced on one configuration. They do not say what
+paper's statistic does not hinge on one configuration. They do not say what
 the rate is on trained weights; those numbers live in ``usefulness.py``.
 """
 
