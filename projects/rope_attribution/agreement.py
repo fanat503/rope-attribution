@@ -41,9 +41,16 @@ object answers a question about the exact one incorrectly.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
+
+from rope_attribution import real_model as RM
+from rope_attribution.experiments import pair_terms
+from rope_attribution.rope import inv_freq
+from rope_attribution.usefulness import DISTANCE_GRID, cos_sin_means
 
 __all__ = [
     "TOP_DECILE",
@@ -52,6 +59,11 @@ __all__ = [
     "top1_agreement",
     "rank_correlation",
     "agreement_profile",
+    "ranking_votes",
+    "measure_head_agreement",
+    "measure_model",
+    "run_all",
+    "main",
 ]
 
 # The decile the exact ranking must place a pair in for ``top_decile`` to count it.
@@ -201,3 +213,229 @@ def agreement_profile(
         "n_material_rows": int(top_is_material.sum()),
         "rank_correlation": rank_correlation(e, s),
     }
+
+
+# --------------------------------------------------------------------------
+# Measurement on trained checkpoints
+# --------------------------------------------------------------------------
+#
+# The library above operates on arrays; this half drives it over the same
+# three trained checkpoints and the same content-pair sampling the rest of
+# the repository uses, in the shape of ``usefulness.py``: pre-registered
+# distance grid, deterministic per-head seeds, exclusions counted rather
+# than hidden, and one committed results file the paper's numbers come from.
+
+_VOTE_KEYS = (
+    "n_rows",
+    "n_live",
+    "n_agree",
+    "n_decile",
+    "n_excluded_exact_zero",
+    "n_excluded_surrogate_zero",
+)
+
+
+def ranking_votes(exact: np.ndarray, surrogate: np.ndarray) -> dict:
+    """One content pair's vote counts.
+
+    ``exact`` is ``(n_deltas, n_pairs)`` -- the exact per-rotary-pair
+    contribution of one ``(query, key)`` pair, one row per distance on the
+    pre-registered grid. ``surrogate`` is ``(n_pairs,)`` -- the best
+    position-free constant, the same values for every distance. A live row
+    votes "agree" when both rankings put the same pair first, and votes
+    "decile" when the surrogate's pick lies inside that row's exact top
+    decile.
+
+    Rows that are not votes are counted, never dropped silently:
+
+    * an all-zero exact row would hand argmax to pair 0 in *both* rankings
+      and record a false agreement -- the same degenerate-head trap that
+      produced the false 100% on llama before it was fixed;
+    * an all-zero surrogate does the same by a second route, and it is
+      recorded per row because one content pair can exclude the whole grid.
+    """
+    e = np.asarray(exact, dtype=np.float64)
+    s = np.asarray(surrogate, dtype=np.float64)
+    if e.ndim != 2:
+        raise ValueError(f"exact must be 2-D (deltas, pairs), got {e.ndim}D")
+    if s.ndim != 1 or s.shape[0] != e.shape[1]:
+        raise ValueError(
+            f"surrogate must be 1-D of length {e.shape[1]}, got shape {s.shape}"
+        )
+    if e.shape[1] < 2:
+        raise ValueError(f"a ranking needs at least 2 pairs, got {e.shape[1]}")
+
+    n_rows = int(e.shape[0])
+    argmax_s = int(np.argmax(s))
+    rows_zero = np.all(e == 0.0, axis=1)
+    surrogate_zero = bool(np.all(s == 0.0))
+    live = ~rows_zero & ~surrogate_zero
+    argmax_e = np.argmax(e, axis=1)
+    agree = (argmax_e == argmax_s) & live
+    k = max(1, int(round(TOP_DECILE * e.shape[1])))
+    threshold = np.partition(e, -k, axis=1)[:, -k]
+    in_decile = e >= threshold[:, None]
+    decile = in_decile[np.arange(n_rows), argmax_s] & live
+    return {
+        "n_rows": n_rows,
+        "n_live": int(live.sum()),
+        "n_agree": int(agree.sum()),
+        "n_decile": int(decile.sum()),
+        "n_excluded_exact_zero": int(rows_zero.sum()),
+        "n_excluded_surrogate_zero": n_rows if surrogate_zero else 0,
+    }
+
+
+def _zero_counts() -> dict:
+    return dict.fromkeys(_VOTE_KEYS, 0)
+
+
+def _add_counts(acc: dict, add: dict) -> None:
+    for key in _VOTE_KEYS:
+        acc[key] += add[key]
+
+
+def measure_head_agreement(
+    hv: RM.HeadVectors,
+    freqs: np.ndarray,
+    rope_dim: int,
+    deltas: np.ndarray,
+    n_pairs: int,
+    seed: int,
+    layer: int,
+    head: int,
+) -> dict:
+    """Pooled vote counts over one head's content pairs."""
+    rng = np.random.default_rng(seed)
+    q = hv.q_hat[layer, head, :, :rope_dim]
+    k = hv.k_hat[layer, head, :, :rope_dim]
+    cos_mean, sin_mean = cos_sin_means(deltas, freqs)
+    acc = _zero_counts()
+    n_used = 0
+    for m, n in RM._content_pairs(hv.n_tokens, n_pairs, rng):
+        terms = pair_terms(q[m], k[n], freqs, int(deltas[0]))
+        a_k, b_k = terms.aligned, terms.crossed
+        angles = np.outer(freqs, deltas.astype(np.float64))
+        exact = a_k[:, None] * np.cos(angles) + b_k[:, None] * np.sin(angles)
+        surrogate = a_k * cos_mean + b_k * sin_mean
+        _add_counts(acc, ranking_votes(exact.T, surrogate))
+        n_used += 1
+    if not n_used:
+        return {}
+    return {"layer": int(layer), "head": int(head), "n_content_pairs": n_used, **acc}
+
+
+def measure_model(
+    model_id: str = RM.DEFAULT_MODEL_IDS[0],
+    seed: int = RM.DEFAULT_SEED,
+    prompts: Sequence[str] = RM.DEFAULT_PROMPTS,
+    deltas: np.ndarray | None = None,
+    n_pairs: int = RM.N_CONTENT_PAIRS,
+) -> dict:
+    """The ranking-agreement measurement, on one trained checkpoint."""
+    loaded = RM.load_model(model_id, seed=seed)
+    cfgv = RM.validate_config(loaded.model)
+    if not cfgv["checkpoint_inv_freq_found"]:
+        raise RuntimeError(f"{model_id} has no rotary module, so it has no rotary pairs")
+    rope_dim = int(cfgv["rope_dim"])
+    freqs = inv_freq(rope_dim, float(cfgv["rope_theta_declared"]))
+
+    if deltas is None:
+        deltas = np.array(DISTANCE_GRID, dtype=np.int64)
+
+    per_prompt = []
+    for i, text in enumerate(prompts):
+        hv = RM.collect_head_vectors(loaded.model, loaded.tokenizer, text)
+        heads = []
+        for layer in range(hv.n_layers):
+            for head in range(hv.n_heads):
+                rec = measure_head_agreement(
+                    hv, freqs, rope_dim, deltas, n_pairs,
+                    seed + i * 1000 + layer * 31 + head,
+                    layer, head,
+                )
+                if rec:
+                    heads.append(rec)
+        per_prompt.append({"prompt_index": i, "n_tokens": hv.n_tokens, "heads": heads})
+
+    return _summarise_model(model_id, rope_dim, deltas, per_prompt)
+
+
+def _summarise_model(
+    model_id: str, rope_dim: int, deltas: np.ndarray, per_prompt: list
+) -> dict:
+    acc = _zero_counts()
+    n_heads = 0
+    for entry in per_prompt:
+        for h in entry["heads"]:
+            _add_counts(acc, h)
+            n_heads += 1
+    votes = acc["n_live"]
+    if not votes:
+        raise RuntimeError(f"{model_id}: no live votes were cast")
+    n_pairs = rope_dim // 2
+    return {
+        "model_id": model_id,
+        "rope_dim": rope_dim,
+        "n_rotary_pairs": n_pairs,
+        "chance_top1": 1.0 / n_pairs,
+        "n_deltas": int(deltas.size),
+        "deltas": [int(d) for d in deltas],
+        "n_heads": n_heads,
+        "n_votes": votes,
+        "n_agree": acc["n_agree"],
+        "n_decile": acc["n_decile"],
+        "n_excluded_exact_zero": acc["n_excluded_exact_zero"],
+        "n_excluded_surrogate_zero": acc["n_excluded_surrogate_zero"],
+        "top1_agreement": acc["n_agree"] / votes,
+        "top1_agreement_top_decile": acc["n_decile"] / votes,
+        "per_prompt": per_prompt,
+    }
+
+
+def run_all(model_ids: Sequence[str] = RM.DEFAULT_MODEL_IDS) -> dict:
+    models = [measure_model(m) for m in model_ids]
+    # The per-model summaries report their own counts (``n_votes`` holds the
+    # live-vote total); the pooled record keeps the same vocabulary the model
+    # summary uses, and the fractions are recomputed from the summed counts.
+    agree = int(sum(m["n_agree"] for m in models))
+    decile = int(sum(m["n_decile"] for m in models))
+    live = int(sum(m["n_votes"] for m in models))
+    ex_zero = int(sum(m["n_excluded_exact_zero"] for m in models))
+    ex_szero = int(sum(m["n_excluded_surrogate_zero"] for m in models))
+    if not live:
+        raise RuntimeError("no live votes were cast on any checkpoint")
+    return {
+        "schema": "rope_attribution/agreement/v1",
+        "distance_grid": list(DISTANCE_GRID),
+        "seed": RM.DEFAULT_SEED,
+        "top_decile": TOP_DECILE,
+        "models": models,
+        "pooled": {
+            "n_live": live,
+            "n_agree": agree,
+            "n_decile": decile,
+            "n_excluded_exact_zero": ex_zero,
+            "n_excluded_surrogate_zero": ex_szero,
+            "top1_agreement": agree / live,
+            "top1_agreement_top_decile": decile / live,
+        },
+    }
+
+
+def main() -> None:
+    data = run_all()
+    for m in data["models"]:
+        print(
+            f"  {m['model_id']}: top1 {100.0 * m['top1_agreement']:.1f}% of "
+            f"{m['n_votes']} votes (chance {100.0 * m['chance_top1']:.2f}%, "
+            f"top decile {100.0 * m['top1_agreement_top_decile']:.1f}%), "
+            f"excluded {m['n_excluded_exact_zero']} all-zero rows"
+        )
+    print(
+        f"pooled: top1 {100.0 * data['pooled']['top1_agreement']:.1f}% of "
+        f"{data['pooled']['n_live']} live votes"
+    )
+    out = Path(__file__).resolve().parents[2] / "results" / "agreement.json"
+    out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    print("wrote", out)

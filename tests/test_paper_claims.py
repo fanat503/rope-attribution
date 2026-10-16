@@ -569,6 +569,26 @@ CLAIMS += (
         r"drift is \$(0\.1779)\$ across the sweep actually run, which spans\s+"
         r"densities \$(9)\$, \$(17)\$ and \$(65)\$",
     ),
+    # The ranking-agreement measurement on the same three checkpoints: the
+    # position-free surrogate ranks the head's rotary pairs, and the paper
+    # quotes how often the exact and the surrogate ranking name the same lead,
+    # how often that lead is merely near the exact top, and what random choice
+    # would have scored on heads with 8 and 32 pairs.
+    Claim(
+        "worth_rank_top1",
+        r"name the same first pair on \$(55\.7)\\%\$ of the triples of "
+        r"\\texttt\{pythia-160m\}, \$(56\.6)\\%\$ on \\texttt\{llama-160m\} and "
+        r"\$(60\.1)\\%\$ on \\texttt\{SmolLM-135M\}",
+    ),
+    Claim(
+        "worth_rank_chance",
+        r"against \$(12\.5)\\%\$ and \$(3\.1)\\%\$ for random choice over the "
+        r"\$(8)\$- and \$(32)\$-pair heads",
+    ),
+    Claim(
+        "worth_rank_decile",
+        r"lands inside the exact top three on \$(77\.8)\\%\$ and \$(77\.2)\\%\$ of triples",
+    ),
     # The scale sweep the mscale appendix result rests on, restated in the
     # pointer that replaced that section in the main text.
     Claim("appendix_mscale_scales", r"monotone in\s+entropy across \$(18)\$ scales"),

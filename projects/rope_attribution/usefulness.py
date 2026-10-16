@@ -67,6 +67,7 @@ from rope_attribution.rope import inv_freq
 __all__ = [
     "DISTANCE_GRID",
     "GRID_DENSITIES",
+    "cos_sin_means",
     "measure_pair_cost",
     "measure_head_cost",
     "measure_model",
@@ -94,12 +95,15 @@ def _log_grid(n_points: int, lo: int = 1, hi: int = 4096) -> np.ndarray:
     return np.unique(np.round(np.geomspace(lo, hi, n_points)).astype(np.int64))
 
 
-def _cos_mean_sin_mean(deltas: np.ndarray, inv_f: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def cos_sin_means(deltas: np.ndarray, inv_f: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Per-pair ``mean(cos d)`` and ``mean(sin d)`` over the grid.
 
     These two numbers are the whole of the optimal position-free surrogate: for
     the exact term ``A_k cos(d) + B_k sin(d)``, the constant minimising the sum of
     squared differences over the grid is ``A_k * mean(cos) + B_k * mean(sin)``.
+
+    Made public so the ranking-agreement measurement in ``agreement.py`` uses
+    the identical surrogate instead of a re-typed copy of it.
     """
     angles = np.outer(inv_f, deltas.astype(np.float64))
     return np.cos(angles).mean(axis=1), np.sin(angles).mean(axis=1)
@@ -116,7 +120,7 @@ def measure_pair_cost(
     ``inv_f`` is the checkpoint's own ladder; ``deltas`` the pre-registered grid.
     Returns per-pair arrays so a caller can aggregate without re-running.
     """
-    cos_mean, sin_mean = _cos_mean_sin_mean(deltas, inv_f)
+    cos_mean, sin_mean = cos_sin_means(deltas, inv_f)
 
     # A_k and B_k do not depend on distance, so the whole distance sweep is one
     # outer product. Calling pair_terms once per delta - as the original version
@@ -362,7 +366,6 @@ def main() -> None:
         f"pooled: sign flips {p['sign_flip_fraction']:.4f}, "
         f"rel err median {p['rel_err_median']:.4f}, p90 {p['rel_err_p90']:.4f}"
     )
-    out = Path(__file__).resolve().parents[2] / "results" / "usefulness.json"
     out = Path(__file__).resolve().parents[2] / "results" / "usefulness.json"
     out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print("wrote", out)

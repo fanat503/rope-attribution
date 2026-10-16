@@ -12,6 +12,7 @@ Every test on known answers is checkable without a checkpoint.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -23,6 +24,8 @@ if str(_REPO / "projects") not in sys.path:
     sys.path.insert(0, str(_REPO / "projects"))
 
 from rope_attribution import agreement as A  # noqa: E402
+from rope_attribution import real_model as RM  # noqa: E402
+from rope_attribution import usefulness as U  # noqa: E402
 
 
 def test_average_ranks_breaks_ties_by_averaging() -> None:
@@ -163,3 +166,152 @@ def test_the_profile_reports_every_statistic_it_documents() -> None:
 def test_the_decile_is_fixed_in_advance() -> None:
     """A threshold chosen after seeing the result is not a threshold."""
     assert A.TOP_DECILE == 0.10
+
+
+# ==========================================================================
+# ranking_votes -- the vote counter the checkpoint measurement pools
+# ==========================================================================
+
+
+def test_ranking_votes_agree_when_both_rankings_name_the_same_pair() -> None:
+    """One surrogate per content pair, so its argmax is fixed; every exact row
+    that also peaks at that pair agrees. Building the rows that way is what the
+    checkpoint data does with a dominant pair."""
+    rng = np.random.default_rng(31)
+    e = rng.normal(size=(13, 8))
+    e[:, 2] += 100.0
+    s = np.zeros(8)
+    s[2] = 50.0
+    votes = A.ranking_votes(e, s)
+    assert votes["n_live"] == 13
+    assert votes["n_agree"] == 13
+    assert votes["n_decile"] == 13
+    assert votes["n_excluded_exact_zero"] == 0
+    assert votes["n_excluded_surrogate_zero"] == 0
+
+
+def test_ranking_votes_never_agree_when_the_surrogate_names_a_different_pair() -> None:
+    """The exact ranking always peaks at pair 2, the surrogate always at pair 6.
+
+    This is the strongest disagreement the statistic can see, and on the 8-pair
+    heads the decile is the top-1, so both counts must be zero rather than
+    merely small.
+    """
+    rng = np.random.default_rng(32)
+    e = rng.normal(size=(13, 8))
+    e[:, 2] += 100.0
+    s = np.zeros(8)
+    s[6] = 50.0
+    votes = A.ranking_votes(e, s)
+    assert votes["n_agree"] == 0
+    assert votes["n_decile"] == 0
+    assert votes["n_live"] == 13
+
+
+def test_ranking_votes_excludes_an_all_zero_exact_row_and_counts_it() -> None:
+    """The degenerate case that produced a false 100%: argmax 0 vs argmax 0.
+
+    The row must not vote, and the exclusion must be visible in the counts --
+    an excluded row that vanished silently would be the same bug one level down.
+    """
+    e = np.zeros((13, 8))
+    e[3] = [3.0, 1.0, 2.0, 0.5, 0.1, 0.2, 0.4, 2.5]
+    s = e[3]
+    votes = A.ranking_votes(e, s)
+    assert votes["n_rows"] == 13
+    assert votes["n_live"] == 1
+    assert votes["n_agree"] == 1
+    assert votes["n_excluded_exact_zero"] == 12
+
+
+def test_ranking_votes_excludes_an_all_zero_surrogate_and_counts_every_row() -> None:
+    e = np.random.default_rng(33).normal(size=(13, 8))
+    votes = A.ranking_votes(e, np.zeros(8))
+    assert votes["n_live"] == 0
+    assert votes["n_agree"] == 0
+    assert votes["n_excluded_surrogate_zero"] == 13
+    assert votes["n_excluded_exact_zero"] == 0
+
+
+def test_ranking_votes_top_decile_differs_from_top1_for_larger_rows() -> None:
+    """With 32 pairs the decile holds 3: a second-best pick is decile but not top1.
+
+    On the 8-pair heads the two statistics are the same number by construction;
+    this is the case where they must come apart, so the pooling cannot hide a
+    broken decile behind a correct top1.
+    """
+    exact = np.zeros((1, 32))
+    exact[0, :5] = [10.0, 9.0, 8.0, 1.0, 0.5]
+    surrogate = exact[0].copy()
+    surrogate[0] = 9.4
+    surrogate[1] = 9.5  # the surrogate's best pair is the one the exact row ranks second
+    votes = A.ranking_votes(exact, surrogate)
+    assert votes["n_agree"] == 0
+    assert votes["n_decile"] == 1
+
+
+def test_ranking_votes_rejects_shape_mismatches_and_a_single_pair() -> None:
+    with pytest.raises(ValueError):
+        A.ranking_votes(np.zeros((4, 8)), np.zeros(9))
+    with pytest.raises(ValueError):
+        A.ranking_votes(np.zeros(8), np.zeros(8))
+    with pytest.raises(ValueError):
+        A.ranking_votes(np.zeros((4, 1)), np.zeros(1))
+
+
+# ==========================================================================
+# The committed artifact, results/agreement.json
+# ==========================================================================
+
+
+_JSON = _REPO / "results" / "agreement.json"
+
+
+def _committed() -> dict:
+    if not _JSON.exists():
+        pytest.skip("results/agreement.json is absent; run agreement.py")
+    return json.loads(_JSON.read_text(encoding="utf-8"))
+
+
+def test_the_committed_agreement_artifact_is_self_describing() -> None:
+    data = _committed()
+    assert data["schema"] == "rope_attribution/agreement/v1"
+    assert data["distance_grid"] == list(U.DISTANCE_GRID)
+    assert data["top_decile"] == A.TOP_DECILE
+    assert data["seed"] == RM.DEFAULT_SEED
+    assert {m["model_id"] for m in data["models"]} == set(RM.DEFAULT_MODEL_IDS)
+
+
+def test_every_committed_model_record_is_internally_consistent() -> None:
+    data = _committed()
+    for m in data["models"]:
+        assert m["n_rotary_pairs"] == m["rope_dim"] // 2, m["model_id"]
+        assert m["chance_top1"] == pytest.approx(1.0 / m["n_rotary_pairs"]), m["model_id"]
+        assert m["deltas"] == list(U.DISTANCE_GRID), m["model_id"]
+        assert m["n_agree"] <= m["n_votes"], m["model_id"]
+        assert m["n_decile"] <= m["n_votes"], m["model_id"]
+        # Every agreement is also a decile hit: if the surrogate names the exact
+        # top pair, its pick is trivially inside the exact top decile.
+        assert m["n_agree"] <= m["n_decile"], m["model_id"]
+        assert m["top1_agreement"] == pytest.approx(m["n_agree"] / m["n_votes"]), m
+        assert (
+            m["top1_agreement_top_decile"]
+            == pytest.approx(m["n_decile"] / m["n_votes"])
+        ), m
+        # The scientific claim, checked where the numbers live: the surrogate
+        # names the exact top pair more often than chance on every checkpoint.
+        assert m["top1_agreement"] > m["chance_top1"], m["model_id"]
+
+
+def test_the_pooled_agreement_is_the_vote_weighted_mean_of_the_models() -> None:
+    data = _committed()
+    pooled = data["pooled"]
+    assert pooled["n_agree"] == sum(m["n_agree"] for m in data["models"])
+    assert pooled["n_live"] == sum(m["n_votes"] for m in data["models"])
+    assert pooled["top1_agreement"] == pytest.approx(
+        pooled["n_agree"] / pooled["n_live"]
+    )
+    assert (
+        pooled["top1_agreement_top_decile"]
+        == pytest.approx(pooled["n_decile"] / pooled["n_live"])
+    )

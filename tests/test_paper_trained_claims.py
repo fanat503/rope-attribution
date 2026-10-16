@@ -44,6 +44,7 @@ FLOAT32_EPS = 1.1920928955078125e-07
 
 
 _USEFULNESS = _REPO / "results" / "usefulness.json"
+_AGREEMENT = _REPO / "results" / "agreement.json"
 
 
 @pytest.fixture(scope="module")
@@ -51,6 +52,13 @@ def trained() -> dict:
     if not _JSON.exists():
         pytest.skip("results/real_model.json is absent; run real_model.py")
     return json.loads(_JSON.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def agreement_data() -> dict:
+    if not _AGREEMENT.exists():
+        pytest.skip("results/agreement.json is absent; run agreement.py")
+    return json.loads(_AGREEMENT.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
@@ -259,7 +267,7 @@ def test_the_worth_section_prices_the_best_surrogate_not_a_strawman(
     # And the optimum really is what the module computes: rescaling the surrogate
     # cannot improve the fit, which is what ``test_the_surrogate_is_the_least_
     # squares_optimum`` checks pair by pair.
-    assert U._cos_mean_sin_mean is not None
+    assert U.cos_sin_means is not None
 
 
 def test_the_sign_error_rate_is_as_printed(usefulness: dict) -> None:
@@ -323,6 +331,73 @@ def test_the_materiality_cut_is_disclosed(usefulness: dict) -> None:
     assert "An earlier version of this" in TEX_FLAT
     drift = float(literal("worth_grid_drift"))
     assert 0 < drift < 50, drift
+
+
+def test_the_ranking_agreement_rates_are_as_printed(agreement_data: dict) -> None:
+    """Every rate the ranking passage quotes, re-derived from results/agreement.json."""
+    order = ("pythia-160m", "llama-160m", "SmolLM-135M")
+    # The json's model list is the paper's order; a reordering would silently
+    # attach the wrong rate to each checkpoint otherwise.
+    assert [m["model_id"].endswith(s) for m, s in zip(
+        agreement_data["models"], order, strict=True
+    )] == [True, True, True]
+    for index, model in zip((1, 2, 3), agreement_data["models"], strict=True):
+        written = float(literal("worth_rank_top1", index))
+        assert_paper_number_matches(
+            100.0 * model["top1_agreement"],
+            f"{written:.1f}",
+            f"the top-1 ranking agreement on {model['model_id']}",
+        )
+
+
+def test_the_ranking_chance_and_near_top_rates_are_as_printed(
+    agreement_data: dict,
+) -> None:
+    chance_a, chance_b, pairs_a, pairs_b = (
+        float(x) for x in groups("worth_rank_chance")[0]
+    )
+    # Chance is 1/n_pairs; the paper prints one decimal, so the comparison
+    # allows the half of the last printed digit the rounding could produce.
+    assert chance_a == pytest.approx(100.0 / 8, abs=0.05), chance_a
+    assert chance_b == pytest.approx(100.0 / 32, abs=0.05), chance_b
+    by_pairs = {8: "EleutherAI/pythia-160m", 32: "JackFram/llama-160m"}
+    for _chance, n_pairs in ((chance_a, pairs_a), (chance_b, pairs_b)):
+        model = next(
+            m for m in agreement_data["models"] if m["model_id"] == by_pairs[int(n_pairs)]
+        )
+        assert model["n_rotary_pairs"] == int(n_pairs), model["model_id"]
+    llama = next(
+        m for m in agreement_data["models"] if m["model_id"].endswith("llama-160m")
+    )
+    smollm = next(
+        m for m in agreement_data["models"] if m["model_id"].endswith("SmolLM-135M")
+    )
+    # The two 32-pair checkpoints carry the two printed near-top rates, in the
+    # paper's order; pythia's 8-pair decile equals its top-1 and is not quoted.
+    for written, model in zip(
+        (float(x) for x in groups("worth_rank_decile")[0]), (llama, smollm),
+        strict=True,
+    ):
+        assert model["n_rotary_pairs"] == 32, model["model_id"]
+        assert_paper_number_matches(
+            100.0 * model["top1_agreement_top_decile"],
+            f"{written:.1f}",
+            f"the near-top ranking rate on {model['model_id']}",
+        )
+
+
+def test_the_zero_rows_the_ranking_never_counts_are_recorded(agreement_data: dict) -> None:
+    """The passage disclaims all-zero rows; the artifact must show a real count."""
+    llama = next(
+        m for m in agreement_data["models"] if m["model_id"].endswith("llama-160m")
+    )
+    assert llama["n_excluded_exact_zero"] > 0, llama["model_id"]
+    assert agreement_data["pooled"]["n_excluded_exact_zero"] > 0
+    # And the disclaimer is not covering a large silent drop: the excluded rows
+    # are a small fraction of the votes actually cast.
+    for model in agreement_data["models"]:
+        excluded = model["n_excluded_exact_zero"] + model["n_excluded_surrogate_zero"]
+        assert excluded < 0.2 * model["n_votes"], model["model_id"]
 
 
 def test_the_section_does_not_claim_a_downstream_result(trained: dict) -> None:

@@ -198,7 +198,7 @@ def test_the_sign_error_rate_is_insensitive_to_the_materiality_threshold(
     cost = U.measure_pair_cost(q, k, freqs, grid)
     exact_peak = cost["peak"]
     terms = U.pair_terms(q, k, freqs, int(grid[0]))
-    cos_mean, sin_mean = U._cos_mean_sin_mean(grid, freqs)
+    cos_mean, sin_mean = U.cos_sin_means(grid, freqs)
     surrogate = terms.aligned * cos_mean + terms.crossed * sin_mean
     angles = np.outer(freqs, grid.astype(np.float64))
     exact = terms.aligned[:, None] * np.cos(angles) + terms.crossed[:, None] * np.sin(angles)
