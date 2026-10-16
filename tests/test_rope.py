@@ -1012,7 +1012,16 @@ def test_per_dim_angle_is_the_outer_product_of_delta_and_inv_freq(dim):
 
 @pytest.mark.parametrize("dim", DIMS)
 def test_per_dim_angle_agrees_with_rotary_angles(dim):
-    """Both are the same quantity under two names; the module must not disagree."""
+    """Both are the same quantity under two names; the module must not disagree.
+
+    ``per_dim_angle`` now *delegates* to :func:`rotary_angles`, so agreement is
+    guaranteed by construction. This test stays as the detector for the
+    regression where someone reintroduces a second, independently written
+    formula behind the alias: any drift between the two names then shows up
+    here, and any accidental divergence of the shared formula from the outer
+    product is caught by the outer-product test above, which is written
+    against the definition rather than against the other function.
+    """
     inv_f = R.inv_freq(dim)
     delta = np.array([0.0, 2.0, -17.25, 4096.0])
     np.testing.assert_array_equal(R.per_dim_angle(delta, inv_f), R.rotary_angles(delta, inv_f))

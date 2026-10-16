@@ -189,7 +189,14 @@ def find_correction_range(
     max_position_embeddings: int,
     truncate: bool = True,
 ) -> tuple[float, float]:
-    """Bounds of the ramp, in units of *pair index* (0 .. dim//2)."""
+    """Bounds of the ramp, in units of *pair index* (0 .. dim//2).
+
+    Clamping to ``[0, dim - 1]`` is unconditional, exactly as in both sources
+    (jquesnelle/yarn has no ``truncate`` parameter and clamps always;
+    ``transformers`` does the same). ``truncate=False`` is an extension this
+    module adds for analysis: it returns the values without ``floor``/``ceil``
+    but never unclamped, and the tests pin that.
+    """
     low = find_correction_dim(low_rot, dim, base, max_position_embeddings)
     high = find_correction_dim(high_rot, dim, base, max_position_embeddings)
     if truncate:
@@ -246,5 +253,11 @@ def per_dim_angle(delta: float | np.ndarray, inv_f: np.ndarray) -> np.ndarray:
     """Rotation angle ``D_k = delta * inv_freq_k`` for every frequency channel.
 
     This is the quantity that decides whether ``cos``/``sin`` can be linearized.
+
+    It is the same computation as :func:`rotary_angles` under the name the paper
+    uses, so it delegates. Both formulas lived here in full until now -- two
+    copies of one expression in one module -- and five tests existed to assert
+    they never drift apart, which is what a test does when the module itself
+    cannot guarantee it.
     """
-    return np.asarray(delta, dtype=np.float64)[:, None] * inv_f[None, :]
+    return rotary_angles(delta, inv_f)
