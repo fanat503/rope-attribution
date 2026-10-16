@@ -1,8 +1,9 @@
 # One-command reproduction for the rope-attribution repository.
 #
-# `make all` runs the test suite, regenerates both committed artefacts and the
-# figure set, and recompiles the paper. Every step is byte-reproducible: the two
-# JSON artefacts are verified identical across three independent runs.
+# `make all` runs the test suite, regenerates the committed structural
+# artefacts and the figure set, and recompiles the paper. Every step is
+# byte-reproducible: the structural JSON artefacts are verified identical
+# across three independent runs.
 #
 # The checkpoint measurements (real_model.py, usefulness.py, agreement.py) are
 # deliberately not part of `all`: they need CPU torch, which is not a test
@@ -28,10 +29,11 @@ all: test results figures paper
 test:
 	$(PYTHON) -m pytest -q
 
-## results: regenerate results/measurements.json and results/statistics.json
+## results: regenerate measurements.json, statistics.json, sensitivity.json
 results:
 	$(PYTHON) -m $(PKG).experiments
 	$(PYTHON) -m $(PKG).statistics
+	$(PYTHON) -m $(PKG).sensitivity
 
 ## figures: regenerate figures/*.png and the CSV sidecars, plus figures/README.md
 figures:

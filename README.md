@@ -58,9 +58,10 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1361 tests
+pytest -q                                        # 1375 tests
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
+python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
 python -m projects.rope_attribution.figures      # figures/*.png + CSV sidecars
 ```
 
@@ -112,9 +113,11 @@ projects/rope_attribution/
   usefulness.py   cost of the best position-free surrogate, on real checkpoints
   agreement.py    how the surrogate's pair rankings disagree with the exact
                   ones, on the same checkpoints
+  sensitivity.py  the cost statistic across rotary bases and head dimensions
+                  (synthetic - is it balanced on one configuration?)
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, every value computed at run time
-tests/            1361 tests
+tests/            1375 tests
 figures/          ten figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
@@ -123,6 +126,8 @@ results/          measurements.json  (structural facts)
                     usefulness_grid_independence.json (the grid sweep behind
                                               the cost section's drift number)
                     agreement.json           (ranking agreement, same checkpoints)
+                    sensitivity.json         (the cost rate across configs,
+                                              synthetic sweep)
 ```
 
 There is an earlier body of exploratory work under `projects/frontier-01-*`.

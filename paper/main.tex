@@ -973,6 +973,15 @@ $s = 32$, pre-extension context $2048$, $T = 256$ keys; from
 \texttt{mscale\_entropy.n\_keys}, and the shared-configuration section of
 \texttt{figures/README.md}.
 
+\paragraph{Robustness to the configuration.} The rate is not balanced on the
+published choice. Sweeping the synthetic construction of
+Section~\ref{sec:cond} over the rotary base, from $10^{3}$ to $5\times10^{5}$
+at head dimension $64$, moves the pooled rate monotonically from $32.0\%$ down
+to $18.3\%$ --- slower rotation fits the constant better --- and sweeping head
+dimension $32$ to $128$ at base $10^{4}$ leaves it at $25.6\%$ to $26.3\%$. The
+median relative error stays above $1.0$ everywhere, from $1.03$ to $1.18$; the
+artifact is \texttt{results/sensitivity.json}.
+
 \paragraph{Claims and their source files.}
 % Full-width float: this three-column audit table is ~216pt wider than a
 % single \columnwidth. Layout-only; every row is unchanged.

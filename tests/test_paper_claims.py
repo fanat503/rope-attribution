@@ -593,6 +593,25 @@ CLAIMS += (
         "worth_rank_head_band",
         r"Per head the rate spans \$(7\.1)\\%\$ to \$(93\.6)\\%\$",
     ),
+    # Appendix: the cost statistic is not an artifact of the published
+    # configuration. The sweep is synthetic (sensitivity.py) and reuses
+    # usefulness.measure_pair_cost's cell definition verbatim, so a disagreement
+    # here could only be a difference in the tokens, never in the definition.
+    Claim(
+        "sensitivity_base",
+        r"from \$(10\^\{3\})\$ to \$(5\\times10\^\{5\})\$ at head dimension "
+        r"\$(64)\$, moves the pooled rate monotonically from \$(32\.0)\\%\$ "
+        r"down to \$(18\.3)\\%\$",
+    ),
+    Claim(
+        "sensitivity_dim",
+        r"sweeping head dimension \$(32)\$ to \$(128)\$ at base "
+        r"\$(10\^\{4\})\$ leaves it at \$(25\.6)\\%\$ to \$(26\.3)\\%\$",
+    ),
+    Claim(
+        "sensitivity_relerr",
+        r"stays above \$(1\.0)\$ everywhere, from \$(1\.03)\$ to \$(1\.18)\$",
+    ),
     # The scale sweep the mscale appendix result rests on, restated in the
     # pointer that replaced that section in the main text.
     Claim("appendix_mscale_scales", r"monotone in\s+entropy across \$(18)\$ scales"),
