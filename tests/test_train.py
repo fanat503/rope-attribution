@@ -26,9 +26,6 @@ if str(_REPO / "projects") not in sys.path:
 from rope_attribution import train as T  # noqa: E402
 from rope_attribution.rope import apply_rope  # noqa: E402
 
-torch = pytest.importorskip("torch", reason="torch not installed")
-
-
 # ==========================================================================
 # The torch-free arithmetic
 # ==========================================================================
@@ -113,6 +110,10 @@ def test_every_config_is_a_complete_call() -> None:
 
 def test_the_model_realizes_the_counted_parameters() -> None:
     """The closed-form count and the actual tensors must agree exactly."""
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
     config = T.CONFIGS["smoke"]
     torch.manual_seed(0)
     model = T.build_model(config)
@@ -132,6 +133,10 @@ def test_the_ref_rope_helper_matches_rope_dot_py() -> None:
 
 def test_the_rotation_is_faithful_and_the_algebra_is_exact() -> None:
     """Probe floors: float32 rotation ~1e-7, closed form is machine epsilon."""
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
     config = T.CONFIGS["smoke"]
     torch.manual_seed(1)
     model = T.build_model(config)
@@ -149,6 +154,8 @@ def test_the_rotation_is_faithful_and_the_algebra_is_exact() -> None:
 
 def test_smoke_run_logs_every_metric_and_finishes(tmp_path: Path) -> None:
     """The whole loop -- train, eval, diagnostics, summary -- on CPU seconds."""
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
     tokens = np.random.default_rng(11).integers(0, 512, size=8192)
     summary = T.train("smoke", tmp_path / "run", tokens, device="cpu")
     assert summary["steps"] == T.CONFIGS["smoke"]["n_steps"]
@@ -171,6 +178,8 @@ def test_smoke_run_logs_every_metric_and_finishes(tmp_path: Path) -> None:
 
 def test_two_smoke_runs_log_identical_series(tmp_path: Path) -> None:
     """Same seed, same machine: only the wall-clock field may differ."""
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
     tokens = np.random.default_rng(11).integers(0, 512, size=8192)
     T.train("smoke", tmp_path / "a", tokens, device="cpu")
     tokens_b = np.random.default_rng(11).integers(0, 512, size=8192)
@@ -188,6 +197,8 @@ def test_two_smoke_runs_log_identical_series(tmp_path: Path) -> None:
 
 def test_second_scale_configs_refuse_cpu(tmp_path: Path) -> None:
     """The named configs must not be launchable onto the owner's cores."""
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
     tokens = np.random.default_rng(3).integers(0, 16, size=4096)
     with pytest.raises(RuntimeError, match="GPU territory"):
         T.train("train_124m", tmp_path / "run", tokens, device="cpu", max_steps=1)
