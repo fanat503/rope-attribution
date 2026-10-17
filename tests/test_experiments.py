@@ -1336,11 +1336,13 @@ def test_mscale_entropy_is_reproducible_from_the_documented_construction():
 
     reported = E.mscale_entropy()
     assert entropy(scores) == pytest.approx(reported["entropy_unscaled"], rel=1e-12)
-    assert entropy(scores * mscale) == pytest.approx(reported["entropy_mscaled"], rel=1e-12)
+    # mscale scales the cos/sin tables and RoPE applies them to both q and k, so
+    # a logit -- and with it the softmax -- carries mscale ** 2, not mscale.
+    assert entropy(scores * mscale**2) == pytest.approx(reported["entropy_mscaled"], rel=1e-12)
     assert reported["entropy_unscaled"] == pytest.approx(5.1198125583580145, rel=1e-9)
-    assert reported["entropy_mscaled"] == pytest.approx(4.797042631875421, rel=1e-9)
+    assert reported["entropy_mscaled"] == pytest.approx(4.262667547726755, rel=1e-9)
     assert reported["entropy_ratio_unscaled"] == pytest.approx(0.9232910235280181, rel=1e-9)
-    assert reported["entropy_ratio_mscaled"] == pytest.approx(0.8650837019924513, rel=1e-9)
+    assert reported["entropy_ratio_mscaled"] == pytest.approx(0.7687161665079636, rel=1e-9)
 
 
 # ==========================================================================

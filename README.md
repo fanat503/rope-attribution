@@ -273,8 +273,9 @@ instead leaves every touched pair half rotated and half not; that variant is not
 orthogonal and is not what any published model does.
 
 **YaRN's magnitude term is a temperature.** `mscale = 0.1 * ln(factor) + 1`
-(`1.3466` at `scale = 32`) multiplies all logits, pulling attention entropy from
-`H/ln T = 0.923` to `0.865` (`figures/fig08`).
+(`1.3466` at `scale = 32`) scales the cos/sin tables RoPE applies to both the
+query and the key, so every logit carries `mscale^2`, pulling attention entropy
+from `H/ln T = 0.923` to `0.769` (`figures/fig08`).
 
 ## Correcting the earlier drafts
 

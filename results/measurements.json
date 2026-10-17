@@ -250,8 +250,8 @@
     "mscale": 1.3465735902799727,
     "max_possible_entropy": 5.545177444479562,
     "entropy_unscaled": 5.1198125583580145,
-    "entropy_mscaled": 4.797042631875421,
+    "entropy_mscaled": 4.262667547726755,
     "entropy_ratio_unscaled": 0.9232910235280181,
-    "entropy_ratio_mscaled": 0.8650837019924513
+    "entropy_ratio_mscaled": 0.7687161665079636
   }
 }

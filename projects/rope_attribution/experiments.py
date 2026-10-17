@@ -456,7 +456,12 @@ def mscale_entropy(
     n_keys: int = 256,
     seed: int = 4,
 ) -> dict:
-    """YaRN's magnitude scaling as a temperature change on the attention distribution."""
+    """YaRN's magnitude scaling as a temperature change on the attention distribution.
+
+    ``rope_cos_sin`` scales the cos/sin tables by ``mscale`` and ``apply_rope``
+    consumes those tables for *both* the query and the key, so every attention
+    logit carries ``mscale ** 2`` -- the factor is applied once per operand.
+    """
     rng = _rng(seed)
     _, mscale = yarn_parameters(dim, 10000.0, scale, original_max_position_embeddings)
     freqs = inv_freq(dim)
@@ -465,19 +470,21 @@ def mscale_entropy(
     deltas = np.arange(1, n_keys + 1)
 
     pos = np.concatenate([[0], deltas])
-    cos, sin = rope_cos_sin(pos, freqs)
-    scores = apply_rope(q_hat[None, :], cos[0:1], sin[0:1])[0] @ apply_rope(
-        k_hat, cos[1:], sin[1:]
-    ).T
-    scores = scores / math.sqrt(dim)
+
+    def logits(table_scale: float) -> np.ndarray:
+        cos, sin = rope_cos_sin(pos, freqs, table_scale)
+        scores = apply_rope(q_hat[None, :], cos[0:1], sin[0:1])[0] @ apply_rope(
+            k_hat, cos[1:], sin[1:]
+        ).T
+        return scores / math.sqrt(dim)
 
     def entropy(s: np.ndarray) -> float:
         p = np.exp(s - s.max())
         p /= p.sum()
         return float(-(p * np.log(p + 1e-300)).sum())
 
-    h_base = entropy(scores)
-    h_scaled = entropy(scores * mscale)
+    h_base = entropy(logits(1.0))
+    h_scaled = entropy(logits(mscale))
     return {
         "n_keys": n_keys,
         "scale": scale,

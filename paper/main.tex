@@ -706,7 +706,7 @@ position-free attribution, whose failure is in R2.
 
 Two further findings are in the appendices, neither part of R1--R3:
 Appendix~\ref{sec:partial} (partial RoPE yields an \emph{exactly} position-free
-sub-score) and Appendix~\ref{sec:mscale} (\yarn's magnitude factor is exactly a
+sub-score) and Appendix~\ref{sec:mscale} (\yarn's magnitude factor acts as a
 temperature, monotone in entropy across $18$ scales).
 
 \section{Limitations}
@@ -888,8 +888,8 @@ Sec.~\ref{sec:partial} & $0.0$, $11.34$, $24.20$ & \texttt{measurements.json :: 
  & $0.302$, $0.187$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
  & $<10^{-13}$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; full-RoPE floor \\
 Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entropy.mscale} \\
- & $0.9233 \to 0.8651$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
- & $0.8383$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
+ & $0.9233 \to 0.7687$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
+ & $0.6792$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1086,10 +1086,11 @@ suggestion that partial rotation damages the magnitude gate.
 \subsection{$\mathrm{mscale}$ is a temperature}
 \label{sec:mscale}
 
-\yarn's magnitude factor of Equation~\ref{eq:mscale} multiplies every logit,
-which is precisely a temperature on the attention distribution. At $s = 32$ we
-measure $\mathrm{mscale} = 1.3465736$, matching the closed form
-$0.1\ln 32 + 1$ to all printed digits.
+\yarn's magnitude factor of Equation~\ref{eq:mscale} scales the $\cos$ and
+$\sin$ tables, which RoPE applies to both the query and the key, so every logit
+carries $\mathrm{mscale}^2$ --- precisely a temperature on the attention
+distribution. At $s = 32$ we measure $\mathrm{mscale} = 1.3465736$, matching the
+closed form $0.1\ln 32 + 1$ to all printed digits.
 
 \paperfigure{fig08_mscale_entropy}{%
   Normalized attention entropy $H/\ln T$ against extension factor, with and
@@ -1100,9 +1101,9 @@ $0.1\ln 32 + 1$ to all printed digits.
 
 Figure~\ref{fig:entropy} plots this. With one query against $T = 256$ keys,
 $\mathrm{mscale}$ moves the normalized entropy from $H/\ln T = 0.9233$ to
-$0.8651$, a drop of $0.0582$ in absolute
-nats, from $5.1198$ to $4.7970$. Across the full range of $18$ extension
-factors from $1$ to $128$, the effect is monotone: $H/\ln T$ falls to $0.8383$
+$0.7687$, a drop of $0.1546$; the raw entropy
+falls from $5.1198$ to $4.2627$ nats. Across the full range of $18$ extension
+factors from $1$ to $128$, the effect is monotone: $H/\ln T$ falls to $0.6792$
 as $\mathrm{mscale}$ rises to $1.4852$. Lowering entropy is a sharpening of the
 attention distribution: fewer keys receive appreciable mass. This is a real,
 measurable, and easily overlooked side effect of context extension that is not
