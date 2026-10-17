@@ -19,8 +19,8 @@ so ``R_m^T R_m = I`` and the relative-frame query is simply unrotated:
 Two consequences drive every experiment below.
 
 1. For a fixed ``(m, n)`` the score is **exactly bilinear** in the content vectors.
-   Anthropic-style additive attribution ``sum_ij f_i g_j A_ij(delta)`` is therefore
-   exact at the score level. The non-additivity in attention comes from the softmax
+   The additive attribution ``sum_ij f_i g_j A_ij(delta)`` is therefore exact
+   at the score level. The non-additivity in attention comes from the softmax
    downstream, not from RoPE.
 
 2. Because ``R_delta`` is orthogonal, ``|R_delta k_hat| = |k_hat|``. The magnitude

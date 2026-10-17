@@ -11,6 +11,36 @@ every number it reports. The legacy tree mostly does not.
 Read this file before quoting anything from `projects/frontier-01-*`. When the
 legacy documents and `results/measurements.json` disagree, the measurements win.
 
+### Cleanup executed after this audit (2026-10-17)
+
+Section §4 recommends a full move to `projects/legacy/` and, as the narrow
+fallback, the removal of two classes of files. The fallback branch was taken,
+plus one addition, in one commit:
+
+- `projects/settings.json` and `projects/settings-ideal.json` — removed. They
+  were outputs of `frontier-01-eval-numpy-ideal.py:193` and are regenerable by
+  re-running it; they were also the most citable objects in the tree.
+- the six "FINAL" bundles enumerated in the near-duplicate table above —
+  removed.
+- in addition to §4: `COMMIT-SAFE-INSTRUCTION.md`,
+  `COMMIT-SAFE-CODESPACE-PATCH.md` and `PUSH-INSTRUCTIONS-FASTEST.md` —
+  removed. They instruct operating against a `projects/bundle/` directory that
+  does not exist, and two of them assert the fabricated outputs; the third is
+  classified clean by the audit above and was removed as process scaffolding,
+  not as a contaminated document. One consequence:
+  `projects/README-V13-TOPLAB-FINAL.md:11` now points at a removed bundle; it
+  is left as the record of what was claimed.
+
+The counts in §1 above (54 markdown, 31 legacy Python) describe the audit state
+`a2f9792`; after the removals, the same commands over this tree report 45
+markdown files and no `projects/*.json` (the legacy Python count is unchanged).
+Where this document cites one of the removed files (the V27 bundle is cited in
+§3.3 as the single source of its own audit), the citation refers to that state,
+and the file is recoverable with `git show a2f9792:<path>`. Everything else —
+including the fabricated numbers inside the remaining legacy documents — is
+deliberately left in place: those documents are the record that makes the
+corrections in `README.md` checkable.
+
 ### A factual claim in the legacy tree that is now known to be false
 
 Many legacy documents assert, as a headline result, a "search proof" that nobody
@@ -557,6 +587,9 @@ reader hits *before* the content rather than after it.
    material" section, pointing at `projects/legacy/README.md` and at this file.
 
 **Two narrower calls, if the full move is too disruptive:**
+
+(*Both were executed on 2026-10-17, together with the three process documents;
+see "Cleanup executed after this audit" at the top of this file.*)
 
 - **Delete `projects/settings.json` and `settings-ideal.json` outright.** They
   are outputs of `eval-numpy-ideal.py`, they are regenerable by re-running that

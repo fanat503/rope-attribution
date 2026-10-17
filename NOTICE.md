@@ -86,10 +86,6 @@ from, not a code-provenance marker), and no file among them carries a
 `copyright` or `SPDX` marker. The two `projects/frontier-01-figures*.html`
 preview pages hold no scripts (0 hits for `<script`, `import ` and `require(`).
 
-This audit previously claimed to cover `rope-attribution-anthropic.patch`, a git
-diff of this repository's own history. That file does not exist here and never did,
-so the claim was unverifiable and has been removed rather than repeated.
-
 ## The new `rope.py` is an independent implementation
 
 `projects/rope_attribution/rope.py` is original to this project. It is ordinary
