@@ -58,7 +58,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1375 tests
+pytest -q                                        # 1387 tests
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -86,6 +86,35 @@ The two artifacts that carry the structural claims - `measurements.json` and
 regenerations. The four checkpoint artifacts are larger and take about four
 minutes each, so the same check is not claimed for them; they are regenerated
 by `make checkpoints` and compared only by the tests that read them.
+
+## Training your own models
+
+The measurement suite runs on checkpoints others trained. `train.py` trains the
+same object -- a bias-free RMSNorm decoder with a tied head and full RoPE at
+head dimension 64 -- and logs every metric, including the attribution
+diagnostics, at each evaluation:
+
+```bash
+pip install -r train_requirements.txt
+python -m projects.rope_attribution.train --config train_124m --run-name my_124m
+```
+
+Named configurations: `train_124m` (123,551,232 parameters), `train_208m`
+(208,504,320), `train_303m` (303,163,392) -- GPT-2-tokenized wikitext-103 at
+context 1024. The counts are computed in closed form and asserted in the test
+suite, so the names are honest. The named configurations expect a GPU: on a CPU
+device they refuse to start unless `--force-cpu` is passed, because a run of
+this size pegs every core of the machine for days. The tiny `smoke`
+configuration runs the whole loop in seconds and is what the suite exercises.
+
+Each run writes `runs/<name>/metrics.jsonl` -- per evaluation: schedule and
+gradient norm, train/validation loss, throughput, tokens seen, and the
+attribution diagnostics on one fixed probe batch (`closed_form_resid_max`,
+`rope_probe_resid_max`, the position-free `sign_flip_rate`,
+`rel_err_median_probe`) -- plus `runs/<name>/summary.json`. Two runs of the
+same command with the same seed produce identical records except the
+throughput field; `tests/test_train.py` pins that, and the torch-free tests
+pin the parameter arithmetic even where torch is absent.
 
 ## Citation
 
@@ -115,9 +144,11 @@ projects/rope_attribution/
                   ones, on the same checkpoints
   sensitivity.py  the cost statistic across rotary bases and head dimensions
                   (synthetic - is it balanced on one configuration?)
+  train.py        trains 100M-300M models, logging every metric including the
+                  attribution diagnostics
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, every value computed at run time
-tests/            1375 tests
+tests/            1387 tests
 figures/          ten figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)

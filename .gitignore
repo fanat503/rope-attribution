@@ -9,3 +9,7 @@ __pycache__/
 
 # LaTeX build output; CI produces paper/build/main.pdf as an artifact.
 paper/build/
+
+# Training runs (train.py). metrics.jsonl grows with the run; regenerate with
+# `python -m projects.rope_attribution.train --config <name>`.
+runs/

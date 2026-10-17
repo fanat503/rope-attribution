@@ -1,0 +1,21 @@
+# Extra dependencies for projects/rope_attribution/train.py ONLY.
+#
+# The library, the rest of the package, the structural test suite and the
+# measurement modules need numpy alone (see [project].dependencies in
+# pyproject.toml). train.py trains the model family the paper's claims are
+# about and logs every metric; it resolves torch with importlib.util.find_spec
+# and exposes TRAINING_AVAILABLE so the test suite skips cleanly without it.
+#
+# Install a CPU torch for the smoke configuration only:
+#
+#     pip install --index-url https://download.pytorch.org/whl/cpu torch
+#     pip install -r train_requirements.txt
+#
+# The named 100M-300M configurations expect a GPU machine; a CPU device
+# refuses them unless --force-cpu is passed, because a run of that size pegs
+# every core for days. torch is installed from the CPU index above rather
+# than listed below for the reason real_model_requirements.txt gives: pinning
+# it here would make pip resolve the CUDA wheel from PyPI on machines where
+# the CPU index was not passed on the command line.
+transformers>=4.40
+datasets>=2.19
