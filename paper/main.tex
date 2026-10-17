@@ -218,12 +218,12 @@ head can be linearized.
 \label{sec:background}
 
 \subsection{Setup}
-\label{sec:background}
 
 Let $d$ be an even head dimension and $x_m$ the pre-projection content at
 absolute position $m$. RoPE assigns channel $k < \half$ the frequency
-$\invf_k = \mathrm{base}^{-2k/d}$ at $9_0 = 1$ and rotates the
-pair $(k, k + \half)$ by $m\cdot\invf_k$. With $q = W_Q x_m$ and
+$\invf_k = \mathrm{base}^{-2k/d}$ ($\theta_0 = \mathrm{base}^{0} = 1$ at the
+fastest channel), and rotates the pair $(k, k + \half)$ by $m\cdot\invf_k$.
+With $q = W_Q x_m$ and
 $k = W_K x_n$ taken before rotation, the score is
 
 \begin{equation}
@@ -511,17 +511,18 @@ band $22.4\%$ to $34.9\%$, so this is not one bad head but the ordinary case. Th
 relative error is larger than the signal itself: median $1.13$ against a peak of
 $1$.
 
-The headline deserves three qualifications it did not previously carry.
+The headline deserves three qualifications.
 \emph{First}, $26.8\%$ is the equal-weight mean of the three per-checkpoint
 rates; the mean over all $2790$ heads is $26.70\%$, lower because
-\texttt{SmolLM-135M} contributes $1350$ heads against $720$ each for the other two.
-The two differ by more than the half-width of the interval below, so they are
-not interchangeable, and this is the one used throughout.
-\emph{Second}, an interval. Resampling with replacement over heads --- over
+\texttt{SmolLM-135M} contributes $1350$ heads against $720$ each for the other
+two. These are different estimators: the headline is the equal-weight $26.8\%$,
+while the interval below belongs to the head-pooled $26.70\%$, and the two
+differ by more than twice that interval's half-width.
+\emph{Second}, the interval. Resampling with replacement over heads --- over
 \emph{heads} and not over the cells inside them, because cells within a head
 share a query and a key and so are not independent --- gives a $95\%$ percentile
-interval of $[0.2665, 0.2674]$ around $0.2670$, with standard deviation
-$0.0129$. The interval is narrow because head-to-head variation is small; it
+interval of $[0.2665, 0.2674]$ around $0.2670$, standard deviation $0.0129$.
+An interval for the pooled mean does not cover the equal-weight headline; and it
 says nothing about variation across prompts or across the distance grid, which
 is a real limitation of the estimate and is stated as one.
 \emph{Third}, and most substantively, the three checkpoints do \emph{not}
@@ -768,8 +769,11 @@ the most favourable on linearizable fraction in our table, \yarn\
 \citep{peng2023yarn} keeps the base and ramps per frequency, which is what
 makes $\max_k|\D|$ invariant under it, and raising the base does neither; nor
 does DaRoPE \citep{levy2026darope}, which keeps plain RoPE on the fast bands
-and learns bounded coordinates for the slow ones. None of them touches the
-fastest channel, which is why none rescues a global linearization. Feature-level attribution, from superposition and sparse
+and learns bounded coordinates for the slow ones. None of them keeps the fastest
+channel within $0.1\rad$ for more than three tokens: \yarn\ and the base raise
+leave it untouched, and interpolation damps it by only the extension factor
+$s$, so none rescues a global linearization. Feature-level attribution, from
+superposition and sparse
 autoencoders \citep{elhage2022toymodels,cunningham2023sparseautoencoders}
 through attribution patching, the tuned lens, sparse feature circuits and
 transcoder discovery
@@ -778,8 +782,8 @@ operates at a fixed position or treats positions as independent examples: the
 encoding is part of the forward pass, never the attribution target. The
 per-pair algebra is not new \citep{chachamovits2026phase,liang2026roaware},
 the per-frequency structure has been measured on pretrained checkpoints
-\citep{li2026fingerprint}, and the sign reversal we measure has not been
-reported: the closest work \citep{jedryszek2026retrieval} excludes
+\citep{li2026fingerprint}, and the sign reversal we measure does not appear in
+the work we survey: the closest work \citep{jedryszek2026retrieval} excludes
 sign-inconsistent bands as numerically unreliable. Recent analyses ask how
 much position a channel carries
 \citep{wu2026endofrope,jonasson2025rotaryoffset,chiang2025diminefficiency,xiong2025dope,mikaeili2026untwistingrope,loveland2026graph,picov2026ropelime};
@@ -791,7 +795,8 @@ RoPE's effect on feature-level attention attribution is exactly characterizable
 in the relative frame, where the score is $q^{\!\top}\R_{\delta}k$ and each of
 the $\half$ rotary pairs contributes a sinusoid with a position-independent
 amplitude and a linear phase. Three consequences. Attribution at the score level
-is exact, to $3.6\times10^{-14}$, and orthogonality makes the magnitude gate
+is exact for a fixed position pair, to $3.6\times10^{-14}$, and orthogonality
+makes the magnitude gate
 exactly position-independent, so the gate/phase split is a theorem rather than
 an approximation. Position-conditionality, not bilinearity, is the operative
 obstruction: a feature's contribution reverses sign across
@@ -874,11 +879,11 @@ Sec.~\ref{sec:context} & Tab.~\ref{tab:spectrum} & \texttt{measurements.json :: 
  & $\delta = 861$, $4/32$ & \texttt{fig04} CSV \\
  & $1.24572\!\times\!10^{6}$ etc. & \texttt{fig05} CSV \\
  & $1225.06$, $\delta = 3$ & \texttt{fig05}, \texttt{fig06} CSVs \\
-Sec.~\ref{sec:context} & $9$ of $32$, $32.00\times$ & \texttt{fig01} CSV, unchanged-pair count \\
+App.~\ref{app:context} & $9$ of $32$, $32.00\times$ & \texttt{fig01} CSV, unchanged-pair count \\
+ & $9$ of $32$ bit-for-bit & \texttt{fig01} CSV, column 3 vs column 1 \\
  & $52.42$, $23.40$ & \texttt{fig02} CSV, \texttt{abs\_angle\_rad} \\
 Sec.~\ref{sec:exact} & $0.9526294618$, $2.3046990967$ & \texttt{fig06} CSV, \texttt{amplitude\_R\_k} \\
  & $-0.9525$, $-1.0607$, $0.1136$, $4.3\!\times\!10^{-6}$ & \texttt{fig06} CSV \\
-Sec.~\ref{sec:background} & $9$ of $32$ bit-for-bit & \texttt{fig01} CSV, column 3 vs column 1 \\
 Sec.~\ref{sec:partial} & $0.0$, $11.34$, $24.20$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
  & $0.302$, $0.187$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
  & $<10^{-13}$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; full-RoPE floor \\
@@ -933,8 +938,9 @@ usually discussed as three separate observations and they are not.
 R1 and R2 pull in opposite directions and both are correct. The additive
 decomposition of Equation~\ref{eq:additive} is exact to
 $5.0\times10^{-14}$ --- the coefficients $A_{ij}$ exist and are real numbers,
-not fudges. But those real numbers are functions of $\delta$, and they vary by
-over the distance range. Exactness therefore buys nothing
+not fudges. But those real numbers are functions of $\delta$: each rotary pair
+contributes $\Rk\cos(\D + \psik)$, which changes sign twice per period. Exactness
+therefore buys nothing
 against position-conditionality: the map from features to score is exactly
 additive at every fixed distance and wildly non-constant across distances. This
 is the sense in which position-conditionality, not bilinearity, is the operative
@@ -1226,7 +1232,6 @@ Factoring through the relative frame gives
 and therefore
 \begin{equation}
   s(m,n) \;=\; q^{\!\top} \R_{\delta} k, \qquad \delta = n - m,
-  \label{eq:relative}
 \end{equation}
 which depends on the two absolute positions only through their difference,
 reducing the score of Equation~\ref{eq:rope} to a function of one number. This is
@@ -1487,7 +1492,9 @@ measuring it identifies anything about a trained model.
 \begin{table*}[t]
   \centering
   \caption{The four position-encoding schemes on the $5$-point distance grid,
-    $d = 64$, $\mathrm{base} = 10^{4}$, extension factor $s = 32$, pre-extension
+    long-distance rows shown (RoPE and \yarn\ at $\delta = 512, 2048, 4096$;
+    the other two schemes at $\delta = 512, 4096$), with $d = 64$,
+    $\mathrm{base} = 10^{4}$, extension factor $s = 32$, pre-extension
     context $2048$. ``Linearizable'' is the fraction of rotary pairs with
     $|\D| \le 0.1\rad$, with the exact count out of $\half = 32$ in brackets.
     ``Amp-wtd err'' is the amplitude-weighted linearization error, normalized so

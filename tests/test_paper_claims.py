@@ -197,7 +197,7 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("abstract_additivity", r"we measure the residual at \$(3\.6)\\times10\^\{-14\}\$"),
     Claim("r1_additivity", r"additive decomposition holds to \$(3\.6)\\times10\^\{-14\}\$"),
-    Claim("conclusion_additivity", r"is exact, to \$(3\.6)\\times10\^\{-14\}\$"),
+    Claim("conclusion_additivity", r"is exact for a fixed position pair, to \$(3\.6)\\times10\^\{-14\}\$"),
     Claim(
         "corr_bilinearity",
         r"doubles the score to a relative error of \$(7\.4)\\times10\^\{-16\}\$",
