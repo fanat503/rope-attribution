@@ -3,9 +3,10 @@
 This repository is distributed under the Apache License, Version 2.0. See `LICENSE`.
 
 This file records the provenance of the repository: what is original work, what is
-an academic citation, and what third-party source code is included. The answer to
-the last question is **none** — stated explicitly, because that is the fact the
-provenance audit established, and because a bare assertion would not be auditable.
+an academic citation, and what third-party source is included. The answer to the
+last question is **none, with one named exception** — stated explicitly, because a
+bare assertion would not be auditable. The exception is the paper's conference
+style sheet, named in "Third-party code" below.
 
 ## Academic citations (methods, not code)
 
@@ -30,16 +31,24 @@ algorithms behind RoPE and YaRN were read from the papers and re-expressed in
 this repository's own code. No source code from those works, or from any
 implementation of them, is present in this repository.
 
-## Third-party code: none
+## Third-party code: none in the measured code
 
-There is no third-party source code in this repository.
+There is no third-party source code in the Python modules, tests, tooling or
+measurement artifacts this repository's claims rest on.
 
-There is no vendored directory, no `src/` tree, no bundled third-party library,
-and no file carrying a third-party copyright or SPDX header. Exactly one license
-file exists in the tree — `LICENSE`, Apache-2.0, with the appendix copyright line
-left unfilled — and a case-insensitive search for `copyright`, `SPDX-License`,
-`MIT License` and `BSD` across every `.py`, `.json` and `.txt` file returns
-0 hits.
+One file is third-party by construction, and it is named here rather than left
+to be found: `paper/neurips_2026.sty`, the NeurIPS conference style sheet,
+vendored verbatim so that `paper/` builds without network access. Its own header
+records that it is a partial rewrite of `nips15submit_e.sty`. It carries no
+copyright line and no license header of its own, nothing under `projects/`
+imports or derives from it, and it is the only such file in the tree.
+
+Beyond it: no vendored directory, no `src/` tree, no bundled third-party
+library, and no file carrying a third-party copyright or SPDX header. Exactly
+one license file exists in the tree — `LICENSE`, Apache-2.0, with the appendix
+copyright line left unfilled — and a case-insensitive search for `copyright`,
+`SPDX-License`, `MIT License` and `BSD` across every `.py`, `.json` and `.txt`
+file returns 0 hits.
 
 That statement is auditable rather than asserted. It is backed by a provenance
 audit run on 2026-09-29, reproducible with the exact commands in
@@ -67,10 +76,15 @@ The counts above are a re-measurement, not the ones this table originally carrie
 Every non-zero hit above is either this project's own newly written code, this project's own test of that code, or this project's own emitted measurement artefact. None is a fragment of an upstream implementation, and the zero rows remain zero, which is the part that matters.
 
 Scope of that audit, stated so the claim is not read as broader than it is: it
-covers the text sources `.py`, `.md`, `.json`, `.txt`. The only other non-binary
-text files in the tree are `projects/frontier-01-figures.html` and
-`projects/frontier-01-figures-ideal.html`, which are figure preview pages with no
-scripts (0 hits for `<script`, `import ` and `require(`).
+covers the text sources `.py`, `.md`, `.json`, `.txt`. The LaTeX sources under
+`paper/` and the figure CSV sidecars under `figures/` sit outside that scope and
+were checked separately on 2026-10-17: `rotary_emb`, `apply_rotary`,
+`attention_scaling`, `ntk`, `copied from` and `ported from` return 0 hits across
+them, the single hit for `taken from` is the phrase "activations taken from three
+trained checkpoints" in `paper/main.tex` (a description of where activations come
+from, not a code-provenance marker), and no file among them carries a
+`copyright` or `SPDX` marker. The two `projects/frontier-01-figures*.html`
+preview pages hold no scripts (0 hits for `<script`, `import ` and `require(`).
 
 This audit previously claimed to cover `rope-attribution-anthropic.patch`, a git
 diff of this repository's own history. That file does not exist here and never did,
@@ -111,9 +125,10 @@ arithmetic layout, not copied expression. The `transformers` and `jquesnelle/yar
 projects are named here as sources consulted, not as licensors of any part of
 this repository.
 
-No third-party license is reproduced or claimed, because no third-party source
-is distributed. The Apache-2.0 `LICENSE` at the repository root covers only this
-project's own original work.
+No third-party license is reproduced or claimed: no third-party source is
+distributed beyond the conference style sheet named above, and that file carries
+no license text of its own to reproduce. The Apache-2.0 `LICENSE` at the
+repository root covers only this project's own original work.
 
 ## Attribution
 

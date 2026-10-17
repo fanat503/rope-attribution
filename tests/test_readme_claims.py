@@ -888,7 +888,7 @@ def test_every_figure_the_readme_names_exists_on_disk() -> None:
         )
 
 
-def test_readme_says_nine_figures_and_each_has_a_csv_sidecar() -> None:
+def test_readme_states_the_figure_count_and_each_figure_has_a_csv_sidecar() -> None:
     claimed = readme_word_number(r"(\w+) figures, each with a CSV sidecar", "the figure count")
     stems = sorted(path.stem for path in (_REPO / "figures").glob("fig*.png"))
     assert claimed == len(stems), f"README says {claimed} figures; figures/ holds {stems}"
@@ -1329,7 +1329,7 @@ def collected_node_ids() -> tuple[str, ...]:
 
 
 def test_quoted_test_count_matches_what_pytest_collects() -> None:
-    """``1102 tests``, in both places the README states it.
+    """``1393 tests``, in both places the README states it.
 
     The README counts the suite that existed when it was written. This file is
     the documentation verifier and is deliberately excluded from the comparison,

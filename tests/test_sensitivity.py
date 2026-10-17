@@ -13,6 +13,7 @@ the paper's sentence claims, and every printed number's re-derivation from
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -156,7 +157,7 @@ def test_the_head_dimension_is_not_load_bearing() -> None:
 
 
 def test_the_base_claim_is_re_derived() -> None:
-    """``from $32.0\%$ down to $18.3\%$`` -- order and values from the band."""
+    r"""``from $32.0\%$ down to $18.3\%$`` -- order and values from the band."""
     data = _committed()
     lo, hi = data["base_band_at_dim_64"]
     assert_paper_number_matches(
@@ -181,7 +182,7 @@ def test_the_base_claim_names_bases_and_a_head_dimension() -> None:
 
 
 def test_the_dim_claim_is_re_derived() -> None:
-    """``at $25.6\%$ to $26.3\%$`` -- ascending, from the committed band."""
+    r"""``at $25.6\%$ to $26.3\%$`` -- ascending, from the committed band."""
     data = _committed()
     lo, hi = data["dim_band_at_base_10000"]
     assert_paper_number_matches(
@@ -232,3 +233,51 @@ def test_the_synthetic_construction_is_calibrated() -> None:
         row["sign_flip_fraction_mean"],
         trained_rate,
     )
+
+
+def test_the_module_reproduces_the_committed_artifact() -> None:
+    """results/sensitivity.json must be what the module produces right now.
+
+    Every other test in this file reads the JSON, so without this one the
+    artifact could silently diverge from the code the paper's numbers are
+    re-derived from. The sweep is seeded: its counts are integers and are
+    compared exactly, and the rates built from them are compared to 1e-12
+    relative, the way test_readme_claims compares measurements.json, because
+    the last bits of a float64 sum depend on the host BLAS.
+    """
+    committed = _committed()
+    fresh = S.run_all()
+    assert fresh["schema"] == committed["schema"]
+    assert fresh["bases"] == committed["bases"]
+    assert fresh["head_dims"] == committed["head_dims"]
+    old_rows = {(r["base"], r["head_dim"]): r for r in committed["records"]}
+    assert len(old_rows) == len(fresh["records"]), (
+        "sensitivity.json lists a different number of configurations than the "
+        "module sweeps"
+    )
+    for row in fresh["records"]:
+        old = old_rows[(row["base"], row["head_dim"])]
+        for new_seed, old_seed in zip(row["per_seed"], old["per_seed"], strict=True):
+            for field in ("n_material_cells", "n_sign_flips"):
+                assert new_seed[field] == old_seed[field], (
+                    f"sensitivity.json is stale at base {row['base']} / dim "
+                    f"{row['head_dim']}: {field} {old_seed[field]} committed vs "
+                    f"{new_seed[field]} fresh"
+                )
+            for field in ("sign_flip_fraction", "rel_err_median"):
+                assert math.isclose(
+                    new_seed[field], old_seed[field], rel_tol=1e-12, abs_tol=1e-12
+                ), (row["base"], row["head_dim"], field, old_seed[field], new_seed[field])
+        for field in (
+            "sign_flip_fraction_mean",
+            "sign_flip_fraction_sd",
+            "rel_err_median_mean",
+        ):
+            assert math.isclose(
+                row[field], old[field], rel_tol=1e-12, abs_tol=1e-12
+            ), (row["base"], row["head_dim"], field, old[field], row[field])
+    for key in ("base_band_at_dim_64", "dim_band_at_base_10000"):
+        for new_value, old_value in zip(fresh[key], committed[key], strict=True):
+            assert math.isclose(
+                new_value, old_value, rel_tol=1e-12, abs_tol=1e-12
+            ), (key, old_value, new_value)

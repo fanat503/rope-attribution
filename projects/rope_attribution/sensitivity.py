@@ -74,7 +74,7 @@ N_SWEEP_SEEDS = 3
 SWEEP_BASE_SEED = 20261010
 
 #: Content vectors per synthetic layer -- the same order as the real
-#: measurement's key pool (``real_model.N_KEYS``).
+#: measurement's per-layer key pool (``real_model.HeadVectors.n_tokens``).
 N_TOKENS = 256
 
 #: Content pairs measured per (configuration, seed) -- the same order as the

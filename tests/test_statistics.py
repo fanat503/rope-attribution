@@ -319,6 +319,8 @@ def test_main_writes_the_report_it_prints() -> None:
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=600,
     )
     assert proc.returncode == 0, proc.stderr[-2000:]

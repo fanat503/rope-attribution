@@ -2,14 +2,17 @@
 
 Every value that appears on an axis, in an annotation, in a title or in
 ``figures/README.md`` is computed here at run time by calling into
-``rope_attribution.experiments`` or ``rope_attribution.rope``. There are no
+``rope_attribution.experiments`` or ``rope_attribution.rope`` --- or, for the
+configuration sweep (fig11), by reading ``results/sensitivity.json``, the
+artifact ``rope_attribution.sensitivity`` regenerates and the test suite
+diffs. There are no
 typed-in measurement constants anywhere in this file: the literals that *are*
 present are configuration (head dim, RoPE base, extension scale, seeds), the
 definition of the distance grid, plotting parameters (dpi, figure size, tick
 fiddling, a display floor for log axes) and two dimensionless *thresholds* that
 are definitions rather than results - the ``0.1 rad`` linearization cut used by
 ``experiments.linearization_error`` and the ``1.0`` (= 100% relative error)
-reference used in fig06.
+reference used in fig06 and fig11.
 
 The module is the only thing in the repository allowed to write into
 ``figures/``. Each figure is written twice: a PNG for humans and a CSV
