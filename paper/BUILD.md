@@ -65,27 +65,24 @@ those files or from `results/measurements.json`.
 - `tests/test_venue_compliance.py::test_the_figures_are_all_embedded` requires at
   least nine embedded images.
 - `tests/test_venue_compliance.py::test_the_main_text_fits_in_nine_pages` measures
-  the main text against NeurIPS' nine-page limit. It is currently `xfail`: the
-  main text runs to **13 pages**. Progress so far, from 14: the official style
-  file is tighter than the hand-rolled geometry; the synthesis subsection, the
-  Method protocol, partial-RoPE and mscale moved to appendices; fig04 and fig05
-  moved out of the counted part; and Related Work was compressed after the
-  literature sweep. The last page was added back by the corrected proofs of
-  `prop:blind`, `prop:cond` and `prop:gate`, which were previously absent or
-  wrong and are not compressible without reintroducing the error. What remains in
-  the main text is R1, R2, R3 and the per-pair decomposition. Closing the last
-  four pages means deleting headline results, which the hostile review explicitly
-  advised against; its alternative reading — that this content belongs in the
-  position track with results in the appendix — is the decision still
-  outstanding, and it is the author's to make.
+  the main text against NeurIPS' nine-page limit. It carried `xfail` while the
+  text ran long and cleared on 2026-10-17: the compression pass moved the
+  related-work survey, the extension-comparison table and the "note on two
+  corrections" into the appendix, taking the boundary from 11 pages (measured at
+  the start of the pass) to 10, then 9. Earlier passes had already moved the
+  synthesis subsection, the Method protocol, partial-RoPE, mscale, fig04 and
+  fig05 out of the counted part; what remains in the main text is R1, R2, R3 and
+  the per-pair decomposition.
 
 ## Page limit accounting
 
 NeurIPS caps the main text at nine pages. References and the appendix are not
 counted. The boundary is located by finding the final main-text section in the
 extracted page text — `LAST_MAIN_TEXT_SECTION` in
-`tests/test_venue_compliance.py` — rather than by counting pages of the PDF,
-which would silently include the appendix.
+`tests/test_venue_compliance.py`, currently the Conclusion — rather than by
+counting pages of the PDF, which would silently include the appendix. The
+physical extent was verified by page extraction as well: the appendix's first
+section begins on page 9, and the last main-text sentence is on page 9.
 
 ## Regenerating the numbers
 

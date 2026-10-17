@@ -12,11 +12,13 @@ wrong and hard to notice:
   boundary is located by finding the ``\\appendix`` marker in the source and
   matching it against the extracted page text.
 
-The tests below therefore *measure* rather than assert. The page-count test is
-an ``xfail(strict=False)``: it records the real number, and it will start
-passing the day the main text is compressed to fit. It is not marked ``strict``,
-because the day it starts passing is a real change we want noticed, not a
-surprise. Raising the limit without changing the paper will not make it pass.
+The tests below therefore *measure* rather than assert. The page-count test
+carried ``xfail(strict=False)`` while the main text ran over the limit — it
+recorded the real number instead of failing the suite — and it cleared on
+2026-10-17, the day the compression pass moved the related-work survey, the
+extension-comparison table and the "note on two corrections" into the appendix.
+It is a plain assertion now. Raising the limit without changing the paper still
+cannot make it pass silently: the boundary is located in the built PDF.
 
 Everything here skips cleanly when the paper has not been built, so a fresh
 clone with no LaTeX toolchain still has a green suite that is honest about
@@ -69,9 +71,12 @@ def _first_page_containing(pages: list[str], needle: str) -> int | None:
 # --------------------------------------------------------------------------
 
 
-# The last section of the main text, immediately before \appendix. Every page
+# The last section of the main text. Bound for page accounting by the first
+# page on which it appears. After the 2026-10 compression pass the counted text
+# ends with the Conclusion — the "note on two corrections" it used to end with
+# now lives in the appendix — so the boundary is located there. Every page
 # accounting test keys on this, so moving it means updating one named constant.
-LAST_MAIN_TEXT_SECTION = "A note on two corrections"
+LAST_MAIN_TEXT_SECTION = "Conclusion"
 
 
 def test_the_appendix_marker_is_present() -> None:
@@ -88,16 +93,14 @@ def test_the_last_main_text_section_is_found(pages: list[str]) -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason="the main text is still 12 pages; it must be compressed to 9",
-)
 def test_the_main_text_fits_in_nine_pages(pages: list[str]) -> None:
     """The limit itself, measured rather than asserted.
 
-    ``strict=False`` on purpose: the day this starts passing is a real change we
-    want noticed, and raising MAIN_TEXT_LIMIT without changing the paper must not
-    be able to make it pass silently.
+    This test carried ``xfail(strict=False)`` while the main text ran long: it
+    recorded the real number — measured at 11 pages when the October 2026
+    compression pass started, 10 after the first cut — and cleared when the
+    second cut brought the boundary to page 9. It stays an assertion rather than
+    a warning because that is what the limit is.
     """
     boundary = _first_page_containing(pages, LAST_MAIN_TEXT_SECTION)
     assert boundary is not None
@@ -182,6 +185,11 @@ def test_tectonic_can_compile_the_paper(tmp_path: Path) -> None:
         cwd=_PAPER_DIR,
         capture_output=True,
         text=True,
+        # tectonic's progress notes carry UTF-8 punctuation; without an explicit
+        # encoding the reader thread decodes as the machine locale (cp1251 here)
+        # and dies on byte 0x98, which surfaces as an unhandled-thread warning.
+        encoding="utf-8",
+        errors="replace",
         timeout=1200,
     )
     assert proc.returncode == 0, proc.stdout[-3000:] + proc.stderr[-3000:]

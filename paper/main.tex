@@ -626,21 +626,14 @@ head-to-head dispersion is enormous.
 
 \subsection{What context extension fixes, and what it does not}
 \label{sec:context}
-\paperfigure{fig03_max_vs_median_angle}{%
-  Maximum (solid) and median (dashed) per-channel angle against relative
-  distance for all four schemes. The maximum angle is identical for RoPE and
-  \yarn\ at every distance; only the median moves. See
-  Section~\ref{sec:context}.%
-}{fig:maxmedian}
-
-Table~\ref{tab:spectrum} compares the four schemes on the $5$-point grid. Three
+Table~\ref{tab:spectrum} (Appendix~\ref{app:figs:context}) compares the four schemes on the $5$-point grid. Three
 things are visible.
 
 \paragraph{The maximum angle is not changed by \yarn.}
 $\max_k|\D|$ for RoPE and \yarn\ is equal at \emph{every} distance in the grid.
 At $\delta = 4096$ both are exactly $4096\rad$, and across all $54$ distances of
 the finer grid the largest disagreement is $0.000\times10^{0}\rad$
-(Figure~\ref{fig:maxmedian}). This is not
+(Figure~\ref{app:fig:maxmedian}). This is not
 an accident of rounding: \yarn's ramp is constructed to leave
 short-wavelength channels at their original inverse frequency, so the fastest
 channel contributes exactly $1\rad$ per token under both schemes. Any
@@ -650,56 +643,13 @@ one.
 % table* spans both columns: six columns of numerics do not fit a
 % single \columnwidth. Layout-only change; the rows and the caption are
 % untouched.
-\begin{table*}[t]
-  \centering
-  \caption{The four position-encoding schemes on the $5$-point distance grid,
-    $d = 64$, $\mathrm{base} = 10^{4}$, extension factor $s = 32$, pre-extension
-    context $2048$. ``Linearizable'' is the fraction of rotary pairs with
-    $|\D| \le 0.1\rad$, with the exact count out of $\half = 32$ in brackets.
-    ``Amp-wtd err'' is the amplitude-weighted linearization error, normalized so
-    that $1$ would mean an error as large as the head's own total amplitude.
-    Source: \texttt{measurements.json}, key \texttt{method\_spectrum}.}
-  \label{tab:spectrum}
-  \setlength{\tabcolsep}{3.6pt}
-  \begin{tabular}{llrrrr}
-    \toprule
-    scheme & $\delta$ & $\max_k|\D|$ & $\mathrm{med}_k|\D|$
-      & linearizable & amp-wtd err \\
-    \midrule
-    RoPE, $\mathrm{base}=10^{4}$ & 512 & 512 & 5.97
-      & $0.0625\ (2/32)$ & $4.88\!\times\!10^{3}$ \\
-    RoPE, $\mathrm{base}=10^{4}$ & 2048 & 2048 & 23.90
-      & $0.0000\ (0/32)$ & $7.79\!\times\!10^{4}$ \\
-    RoPE, $\mathrm{base}=10^{4}$ & 4096 & 4096 & 47.79
-      & $0.0000\ (0/32)$ & $3.12\!\times\!10^{5}$ \\
-    \midrule
-    \yarn, $s=32$ & 512 & 512 & 2.67
-      & $0.3438\ (11/32)$ & $4.87\!\times\!10^{3}$ \\
-    \yarn, $s=32$ & 2048 & 2048 & 10.67
-      & $0.2812\ (9/32)$ & $7.77\!\times\!10^{4}$ \\
-    \yarn, $s=32$ & 4096 & 4096 & 21.34
-      & $0.2188\ (7/32)$ & $3.11\!\times\!10^{5}$ \\
-    \midrule
-    interpolation & 512 & 16 & 0.19
-      & $0.4375\ (14/32)$ & $5.26$ \\
-    interpolation & 4096 & 128 & 1.49
-      & $0.2188\ (7/32)$ & $3.08\!\times\!10^{2}$ \\
-    \midrule
-    $\mathrm{base}=5\!\times\!10^{5}$ & 512 & 512 & 0.91
-      & $0.3438\ (11/32)$ & $2.78\!\times\!10^{3}$ \\
-    $\mathrm{base}=5\!\times\!10^{5}$ & 4096 & 4096 & 7.26
-      & $0.1875\ (6/32)$ & $1.77\!\times\!10^{5}$ \\
-    \bottomrule
-  \end{tabular}
-\end{table*}
-
 \paragraph{The median angle falls, and the linearizable fraction rises.}
 $\operatorname{median}_k|\D|$ for \yarn\ is a constant $0.4464\times$ that of
 RoPE at every distance tested --- $2.67$ against $5.97\rad$ at $\delta = 512$,
 and $21.34$ against $47.79$ at $\delta = 4096$. A fixed ratio, not an
 improvement that grows with distance, because \yarn's ramp is a fixed
 per-channel rescaling and $\D$ is linear in $\delta$ for every channel.
-Figure~\ref{fig:spectrum} shows the per-channel form of this: at
+Figure~\ref{app:fig:spectrum} shows the per-channel form of this: at
 $\delta = 4493$ the median angle is $52.42\rad$ under RoPE against
 $23.40\rad$ under \yarn, and the two distributions have visibly different
 \emph{left} tails even though their right edges coincide exactly.
@@ -710,12 +660,6 @@ different row with different numbers again ($0.3438$ and $0.1875$), and
 position interpolation is the most favourable on this metric because it damps
 the fast channel too, at the cost of shrinking $\max_k|\D|$ from $4096$ to
 $128\rad$.
-
-\paperfigure{fig02_angle_spectrum}{%
-  Per-channel angle $|D_k|$ against pair index at eight distances, for RoPE
-  and for \yarn. The right-hand edge of both panels is identical; \yarn\ lowers
-  the bulk of the spectrum. See Section~\ref{sec:context}.%
-}{fig:spectrum}
 
 \paragraph{Neither rescues a global linearization.}
 Plain RoPE retains no linearizable channel at all from $\delta = 861$ onward,
@@ -730,22 +674,7 @@ never returns; no amount of ramping the slow tail repairs it. The
 fraction-linearizable curve and the amplitude-weighted error for all four
 schemes are in Figures~\ref{app:fig:linearizable} and~\ref{app:fig:error}.
 
-\paperfigure{fig05_linearization_error}{%
-  Amplitude-weighted and per-pair linearization error against relative distance,
-  all four schemes, log scale. The curves for RoPE and \yarn\ sit almost on top
-  of one another even though their median angles differ by more than a factor of
-  two: the error is dominated by the handful of fast channels both schemes leave
-  untouched. See Section~\ref{sec:context}.%
-}{app:fig:error}
-
-\paperfigure{fig06_pair_exact_vs_linear}{%
-  Exact per-pair contribution against its first-order Taylor form, for five
-  selected rotary pairs, under RoPE and \yarn. The fastest pair's normalized
-  error reaches $1$, meaning an error as large as the term itself, at
-  $\delta = 3$ under both schemes. See Section~\ref{sec:context}.%
-}{app:fig:pairs}
-
-The same figure localizes the damage. At $\delta = 1$ the fastest pair $k = 0$
+Figure~\ref{app:fig:pairs} localizes the damage. At $\delta = 1$ the fastest pair $k = 0$
 has an exact contribution of $-0.9525$ against a linearized $-1.0607$, a
 normalized error of $0.1136$; the mid-frequency pair $k = 12$ has
 $4.3\times10^{-6}$ at the same distance, roughly $26000$ times smaller. By
@@ -768,22 +697,16 @@ which is the same reason it compresses the spectrum into a regime a trained
 model does not natively use. We do not measure that trade-off.
 
 \begin{remark}
-The correct summary of R3 is: context extension changes \emph{which channels}
-admit a linearization and \emph{when}, but does not change the fact that the
-worst channel is out of range. RoPE runs out of linearizable channels first;
-\yarn\ extends the range for the bulk. Neither makes the linearization of the
-whole head safe, and neither is a rescue for position-free attribution --- that
-failure is in R2, which no amount of angle damping addresses.
+The correct summary of R3: context extension changes \emph{which} channels
+admit a linearization and \emph{when}, but not the fact that the worst channel
+is out of range --- and no amount of angle damping is a rescue for
+position-free attribution, whose failure is in R2.
 \end{remark}
 
-Two further findings are in the appendices, neither being part of R1--R3.
-Appendix~\ref{sec:partial}: partial RoPE yields an \emph{exactly} position-free
-sub-score, the one place the gate/phase split is usable in practice and a
-diagnostic for which convention an implementation uses.
-Appendix~\ref{sec:mscale}: \yarn's magnitude factor acts exactly as a
-temperature, monotone in entropy across $18$ scales --- so it changes the
-score's sharpness without touching its per-pair structure, which is why it
-cannot repair R2.
+Two further findings are in the appendices, neither part of R1--R3:
+Appendix~\ref{sec:partial} (partial RoPE yields an \emph{exactly} position-free
+sub-score) and Appendix~\ref{sec:mscale} (\yarn's magnitude factor is exactly a
+temperature, monotone in entropy across $18$ scales).
 
 \section{Limitations}
 
@@ -834,90 +757,33 @@ per-distance attribution is practically useful, which would require circuits,
 patching, and a trained model.
 
 \section{Related Work}
+\label{sec:related}
 
-\textbf{Position encodings and length extrapolation.} RoPE
-\citep{su2021ropeformer} is the scheme studied here. \alpibib\ 
-\citep{press2021train} removes position from the attention pattern by a linear
-bias, so it has no per-channel angle spectrum and no version of the
-linearization problem of Section~\ref{sec:context}; GaLA
-\citep{loveland2026graph} adds a bias instead, undoing RoPE's
-bandwidth-dependent attention decay on graph-linearized inputs at inference
-time --- again an attention-pattern fix, not a per-feature decomposition. Among extension schemes,
-position interpolation \citep{chen2023positionalinterp} rescales positions
-uniformly and is the most favourable on linearizable fraction in our table;
-\yarn\ \citep{peng2023yarn} keeps the base and ramps per frequency, which is
-what makes $\max_k|\D|$ invariant under it. \lengthxtrap\ 
-\citep{sun2022lengthextrap} covers the partial case of Section~\ref{sec:partial},
-\longrope\ \citep{ding2024longrope} per-channel non-uniform extension,
-and \ropetheory\ \citep{barbero2024roundandround} RoPE's frequency
-content from an optimization perspective. The ``raise $\mathrm{base}$ from
-$10000$ to $500000$'' recipe is a fourth scheme: it multiplies channel $k$ by
-$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
-$\max_k|\D|$ untouched. We measure it separately for that reason.
-
-\textbf{Feature-level attribution.} The additive decomposition of activations
-into learned features originates in the superposition line
-\citep{elhage2022toymodels}, with sparse autoencoders as an operational extractor
-\citep{cunningham2023sparseautoencoders}. Attribution on attention heads runs
-from attribution patching \citep{syed2023attributionpatching} to the tuned lens
-\citep{belrose2023tunedlens}, sparse feature circuits
-\citep{marks2024sparsefeaturecircuits}, transcoder-based discovery
-\citep{dunefsky2024transcoders} and RoPE-LIME
-\citep{picov2026ropelime}, which uses the rotary embedding only as a
-locality kernel for input perturbations on closed models. All of them operate
-at a \emph{fixed} position
-or integrate over positions as independent examples: the positional encoding is
-part of the forward pass, not the attribution target.
-
-\textbf{The algebra is not new, and we do not claim it is.} Chachamovits
-\citep{chachamovits2026phase} writes a rotary head as a sum of per-pair terms
-$\rho\cos(\alpha - \beta + (m-n)\theta)$ with $\rho = |q_j||k_j|$ ---
-our closed form --- and remarks that the term goes negative near $\pi$; the
-same identity appears in KV-cache quantization work \citep{liang2026roaware}, and
-the per-frequency spectral structure has been measured on pretrained
-checkpoints in weight space \citep{li2026fingerprint}. What is claimed here is
-the attribution semantics and its consequence, not the identity.
-
-\textbf{The sign reversal appears unreported.} Our searches returned no paper
-reporting that a feature's contribution to a rotary score changes sign as the
-relative distance grows. The closest is Jedryszek and Crook
-\citep{jedryszek2026retrieval}, who attribute per frequency pair with verified
-additivity and then \emph{exclude} sign-inconsistent bands as numerically
-unreliable. We read that as our phenomenon being discarded as noise; on the
-decompositions we test it is exact and its magnitude is the feature's own
-amplitude. Reporting it as something to exclude is not the same as measuring it
-across a range and showing that no position-free summary can represent it.
-
-\textbf{What the sweep found next to our claim.} Wu and colleagues
-\citep{wu2026endofrope} derive a context-length bound beyond which a fixed
-attention-score comparison cannot jointly avoid \emph{semantic reversal} and
-positional insensitivity: a head-level comparison failing at long context,
-whereas ours is per-feature, per-distance, and holds at short distances too.
-Jonasson \citep{jonasson2025rotaryoffset} measures the norms and angles of
-rotary offset features across architectures, Chiang and Yogatama
-\citep{chiang2025diminefficiency} find dimensions that carry position without
-helping retrieval, and He and colleagues \citep{he2025lowrank} build a low-rank
-sparse replacement for attention layers. Each concerns \emph{how much}
-position a channel carries, not the sign of what it carries. The spectral view
-belongs to Xiong et al. \citep{xiong2025dope}, \citet{li2026fingerprint}, and
-frequency-band control in shared-attention DiTs
-\citep{mikaeili2026untwistingrope}.
-
-\textbf{Position-blindness is a known gap, but not this one.} Haklay and
-colleagues \citep{haklay2025positionaware} observe that circuit-discovery
-methods assume position-invariance and introduce position-aware edge
-attribution to relax it, which is the strongest existing support for our
-framing. It is a different blindness: they distinguish \emph{which token
-position} a component matters at, whereas we are concerned with the score's
-geometric dependence on the distance between two positions.
-
-\textbf{Our relationship to the attribution literature.} Those methods ask
-which features caused a behaviour in a trained model. We ask a prior question
-about the position encoding alone: given a RoPE head, is a feature's
-contribution a scalar? Our answer --- no, it is a function of distance --- is a
-structural precondition any of those methods must handle. Our per-distance
-attribution has not been connected to a circuit, and we have not shown that
-measuring it identifies anything about a trained model.
+The positioning, paragraph by paragraph, is in Appendix~\ref{app:related}; in
+brief: \alpibib\ \citep{press2021train} removes position from the attention
+pattern by a linear bias, so it has no per-channel angle spectrum and no
+version of the linearization problem of Section~\ref{sec:context}. Among
+extension schemes, position interpolation \citep{chen2023positionalinterp} is
+the most favourable on linearizable fraction in our table, \yarn\
+\citep{peng2023yarn} keeps the base and ramps per frequency, which is what
+makes $\max_k|\D|$ invariant under it, and raising the base does neither; nor
+does DaRoPE \citep{levy2026darope}, which keeps plain RoPE on the fast bands
+and learns bounded coordinates for the slow ones. None of them touches the
+fastest channel, which is why none rescues a global linearization. Feature-level attribution, from superposition and sparse
+autoencoders \citep{elhage2022toymodels,cunningham2023sparseautoencoders}
+through attribution patching, the tuned lens, sparse feature circuits and
+transcoder discovery
+\citep{syed2023attributionpatching,belrose2023tunedlens,marks2024sparsefeaturecircuits,dunefsky2024transcoders},
+operates at a fixed position or treats positions as independent examples: the
+encoding is part of the forward pass, never the attribution target. The
+per-pair algebra is not new \citep{chachamovits2026phase,liang2026roaware},
+the per-frequency structure has been measured on pretrained checkpoints
+\citep{li2026fingerprint}, and the sign reversal we measure has not been
+reported: the closest work \citep{jedryszek2026retrieval} excludes
+sign-inconsistent bands as numerically unreliable. Recent analyses ask how
+much position a channel carries
+\citep{wu2026endofrope,jonasson2025rotaryoffset,chiang2025diminefficiency,xiong2025dope,mikaeili2026untwistingrope,loveland2026graph,picov2026ropelime};
+ours is the sign, per feature and per distance.
 % =====================================================================
 \section{Conclusion}
 
@@ -946,24 +812,8 @@ The measurements are structural and model-independent by design, and we have
 been explicit about what that excludes: no trained model, no learned features,
 no retrieval benchmark, no accuracy figure. What is claimed here is a correct
 and carefully measured characterization of the score's structure under RoPE, and
-nothing beyond it.
-
-\subsection*{A note on two corrections}
-
-Two statements are common enough in informal write-ups of this area that we
-record what we measured against them, since both are cases where the natural
-explanation is wrong in an instructive way. The first is that ``RoPE breaks
-bilinearity''. It does not, at the score level: doubling the query doubles the
-score to a relative error of $7.4\times10^{-16}$. Any observed super-linearity
-comes from changing what is being measured --- typically comparing a score
-against an attention output, which involves the softmax. The second is that
-``YaRN works by raising the base from $10000$ to $500000$''. It does not.
-\yarn\ keeps the base and ramps per frequency, leaving the fastest $9$ of $32$
-pairs bit-for-bit unchanged; the base-raising recipe is a distinct scheme again,
-since it rescales channel $k$ by $s^{-2k/d}$ rather than by $s^{-1}$, and
-appears as its own row in
-Table~\ref{tab:spectrum}. Both corrections push the same way: toward
-disentangling the position encoding from the operations people attribute to it.
+nothing beyond it. Appendix~\ref{app:note} records two corrections to statements
+that are common in informal write-ups of this area.
 
 % =====================================================================
 \appendix
@@ -1529,6 +1379,199 @@ routinely conflated, so all four are measured as separate rows.
 The full derivation, the frequency ladder of
 Figure~\ref{app:fig:ladder}, and the algebra of why they never coincide on
 any channel are in Appendix~\ref{app:context}.
+
+
+% =====================================================================
+% Content below was moved out of the main text to respect the nine-page
+% limit. Content unchanged; only its placement.
+% =====================================================================
+
+\section{Related work, in full}
+\label{app:related}
+
+\textbf{Position encodings and length extrapolation.} RoPE
+\citep{su2021ropeformer} is the scheme studied here. \alpibib\ 
+\citep{press2021train} removes position from the attention pattern by a linear
+bias, so it has no per-channel angle spectrum and no version of the
+linearization problem of Section~\ref{sec:context}; GaLA
+\citep{loveland2026graph} adds a bias instead, undoing RoPE's
+bandwidth-dependent attention decay on graph-linearized inputs at inference
+time --- again an attention-pattern fix, not a per-feature decomposition. Among extension schemes,
+position interpolation \citep{chen2023positionalinterp} rescales positions
+uniformly and is the most favourable on linearizable fraction in our table;
+\yarn\ \citep{peng2023yarn} keeps the base and ramps per frequency, which is
+what makes $\max_k|\D|$ invariant under it. \lengthxtrap\ 
+\citep{sun2022lengthextrap} covers the partial case of Section~\ref{sec:partial},
+\longrope\ \citep{ding2024longrope} per-channel non-uniform extension,
+and \ropetheory\ \citep{barbero2024roundandround} RoPE's frequency
+content from an optimization perspective. The ``raise $\mathrm{base}$ from
+$10000$ to $500000$'' recipe is a fourth scheme: it multiplies channel $k$ by
+$s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
+$\max_k|\D|$ untouched. We measure it separately for that reason.
+
+A fifth construction, DaRoPE \citep{levy2026darope}, keeps standard RoPE on the
+fast bands and replaces absolute position on the slow bands with bounded
+coordinates learned from contextual representations, motivated by slow-band
+wavelengths that exceed the training context and expose models to unseen
+angles. It is data-aware rather than distance-only --- an axis this paper does
+not vary --- and it leaves the fastest channel, whose linearization is measured
+to fail in Section~\ref{sec:context}, exactly as plain RoPE has it.
+
+\textbf{Feature-level attribution.} The additive decomposition of activations
+into learned features originates in the superposition line
+\citep{elhage2022toymodels}, with sparse autoencoders as an operational extractor
+\citep{cunningham2023sparseautoencoders}. Attribution on attention heads runs
+from attribution patching \citep{syed2023attributionpatching} to the tuned lens
+\citep{belrose2023tunedlens}, sparse feature circuits
+\citep{marks2024sparsefeaturecircuits}, transcoder-based discovery
+\citep{dunefsky2024transcoders} and RoPE-LIME
+\citep{picov2026ropelime}, which uses the rotary embedding only as a
+locality kernel for input perturbations on closed models. All of them operate
+at a \emph{fixed} position
+or integrate over positions as independent examples: the positional encoding is
+part of the forward pass, not the attribution target.
+
+\textbf{The algebra is not new, and we do not claim it is.} Chachamovits
+\citep{chachamovits2026phase} writes a rotary head as a sum of per-pair terms
+$\rho\cos(\alpha - \beta + (m-n)\theta)$ with $\rho = |q_j||k_j|$ ---
+our closed form --- and remarks that the term goes negative near $\pi$; the
+same identity appears in KV-cache quantization work \citep{liang2026roaware}, and
+the per-frequency spectral structure has been measured on pretrained
+checkpoints in weight space \citep{li2026fingerprint}. What is claimed here is
+the attribution semantics and its consequence, not the identity.
+
+\textbf{The sign reversal appears unreported.} Our searches returned no paper
+reporting that a feature's contribution to a rotary score changes sign as the
+relative distance grows. The closest is Jedryszek and Crook
+\citep{jedryszek2026retrieval}, who attribute per frequency pair with verified
+additivity and then \emph{exclude} sign-inconsistent bands as numerically
+unreliable. We read that as our phenomenon being discarded as noise; on the
+decompositions we test it is exact and its magnitude is the feature's own
+amplitude. Reporting it as something to exclude is not the same as measuring it
+across a range and showing that no position-free summary can represent it.
+
+\textbf{What the sweep found next to our claim.} Wu and colleagues
+\citep{wu2026endofrope} derive a context-length bound beyond which a fixed
+attention-score comparison cannot jointly avoid \emph{semantic reversal} and
+positional insensitivity: a head-level comparison failing at long context,
+whereas ours is per-feature, per-distance, and holds at short distances too.
+Jonasson \citep{jonasson2025rotaryoffset} measures the norms and angles of
+rotary offset features across architectures, Chiang and Yogatama
+\citep{chiang2025diminefficiency} find dimensions that carry position without
+helping retrieval, and He and colleagues \citep{he2025lowrank} build a low-rank
+sparse replacement for attention layers. Each concerns \emph{how much}
+position a channel carries, not the sign of what it carries. The spectral view
+belongs to Xiong et al. \citep{xiong2025dope}, \citet{li2026fingerprint}, and
+frequency-band control in shared-attention DiTs
+\citep{mikaeili2026untwistingrope}.
+
+\textbf{Position-blindness is a known gap, but not this one.} Haklay and
+colleagues \citep{haklay2025positionaware} observe that circuit-discovery
+methods assume position-invariance and introduce position-aware edge
+attribution to relax it, which is the strongest existing support for our
+framing. It is a different blindness: they distinguish \emph{which token
+position} a component matters at, whereas we are concerned with the score's
+geometric dependence on the distance between two positions.
+
+\textbf{Our relationship to the attribution literature.} Those methods ask
+which features caused a behaviour in a trained model. We ask a prior question
+about the position encoding alone: given a RoPE head, is a feature's
+contribution a scalar? Our answer --- no, it is a function of distance --- is a
+structural precondition any of those methods must handle. Our per-distance
+attribution has not been connected to a circuit, and we have not shown that
+measuring it identifies anything about a trained model.
+
+\section{The extension comparison, in full}
+\label{app:figs:context}
+
+\begin{table*}[t]
+  \centering
+  \caption{The four position-encoding schemes on the $5$-point distance grid,
+    $d = 64$, $\mathrm{base} = 10^{4}$, extension factor $s = 32$, pre-extension
+    context $2048$. ``Linearizable'' is the fraction of rotary pairs with
+    $|\D| \le 0.1\rad$, with the exact count out of $\half = 32$ in brackets.
+    ``Amp-wtd err'' is the amplitude-weighted linearization error, normalized so
+    that $1$ would mean an error as large as the head's own total amplitude.
+    Source: \texttt{measurements.json}, key \texttt{method\_spectrum}.}
+  \label{tab:spectrum}
+  \setlength{\tabcolsep}{3.6pt}
+  \begin{tabular}{llrrrr}
+    \toprule
+    scheme & $\delta$ & $\max_k|\D|$ & $\mathrm{med}_k|\D|$
+      & linearizable & amp-wtd err \\
+    \midrule
+    RoPE, $\mathrm{base}=10^{4}$ & 512 & 512 & 5.97
+      & $0.0625\ (2/32)$ & $4.88\!\times\!10^{3}$ \\
+    RoPE, $\mathrm{base}=10^{4}$ & 2048 & 2048 & 23.90
+      & $0.0000\ (0/32)$ & $7.79\!\times\!10^{4}$ \\
+    RoPE, $\mathrm{base}=10^{4}$ & 4096 & 4096 & 47.79
+      & $0.0000\ (0/32)$ & $3.12\!\times\!10^{5}$ \\
+    \midrule
+    \yarn, $s=32$ & 512 & 512 & 2.67
+      & $0.3438\ (11/32)$ & $4.87\!\times\!10^{3}$ \\
+    \yarn, $s=32$ & 2048 & 2048 & 10.67
+      & $0.2812\ (9/32)$ & $7.77\!\times\!10^{4}$ \\
+    \yarn, $s=32$ & 4096 & 4096 & 21.34
+      & $0.2188\ (7/32)$ & $3.11\!\times\!10^{5}$ \\
+    \midrule
+    interpolation & 512 & 16 & 0.19
+      & $0.4375\ (14/32)$ & $5.26$ \\
+    interpolation & 4096 & 128 & 1.49
+      & $0.2188\ (7/32)$ & $3.08\!\times\!10^{2}$ \\
+    \midrule
+    $\mathrm{base}=5\!\times\!10^{5}$ & 512 & 512 & 0.91
+      & $0.3438\ (11/32)$ & $2.78\!\times\!10^{3}$ \\
+    $\mathrm{base}=5\!\times\!10^{5}$ & 4096 & 4096 & 7.26
+      & $0.1875\ (6/32)$ & $1.77\!\times\!10^{5}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\paperfigure{fig03_max_vs_median_angle}{%
+  Maximum (solid) and median (dashed) per-channel angle against relative
+  distance for all four schemes. The maximum angle is identical for RoPE and
+  \yarn\ at every distance; only the median moves. See
+  Section~\ref{sec:context}.%
+}{app:fig:maxmedian}
+
+\paperfigure{fig02_angle_spectrum}{%
+  Per-channel angle $|D_k|$ against pair index at eight distances, for RoPE
+  and for \yarn. The right-hand edge of both panels is identical; \yarn\ lowers
+  the bulk of the spectrum. See Section~\ref{sec:context}.%
+}{app:fig:spectrum}
+
+\paperfigure{fig05_linearization_error}{%
+  Amplitude-weighted and per-pair linearization error against relative distance,
+  all four schemes, log scale. The curves for RoPE and \yarn\ sit almost on top
+  of one another even though their median angles differ by more than a factor of
+  two: the error is dominated by the handful of fast channels both schemes leave
+  untouched. See Section~\ref{sec:context}.%
+}{app:fig:error}
+
+\paperfigure{fig06_pair_exact_vs_linear}{%
+  Exact per-pair contribution against its first-order Taylor form, for five
+  selected rotary pairs, under RoPE and \yarn. The fastest pair's normalized
+  error reaches $1$, meaning an error as large as the term itself, at
+  $\delta = 3$ under both schemes. See Section~\ref{sec:context}.%
+}{app:fig:pairs}
+
+\section{A note on two corrections}
+\label{app:note}
+
+Two statements are common enough in informal write-ups of this area that we
+record what we measured against them, since both are cases where the natural
+explanation is wrong in an instructive way. The first is that ``RoPE breaks
+bilinearity''. It does not, at the score level: doubling the query doubles the
+score to a relative error of $7.4\times10^{-16}$. Any observed super-linearity
+comes from changing what is being measured --- typically comparing a score
+against an attention output, which involves the softmax. The second is that
+``YaRN works by raising the base from $10000$ to $500000$''. It does not.
+\yarn\ keeps the base and ramps per frequency, leaving the fastest $9$ of $32$
+pairs bit-for-bit unchanged; the base-raising recipe is a distinct scheme again,
+since it rescales channel $k$ by $s^{-2k/d}$ rather than by $s^{-1}$, and
+appears as its own row in
+Table~\ref{tab:spectrum}. Both corrections push the same way: toward
+disentangling the position encoding from the operations people attribute to it.
 
 
 \end{document}

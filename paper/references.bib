@@ -358,3 +358,21 @@
   archivePrefix = {arXiv},
   primaryClass  = {cs.CL}
 }
+
+% A data-aware encoder that keeps standard RoPE on the fast bands and learns
+% bounded coordinates for the slow bands, motivated by slow-band wavelengths
+% exceeding the training context. Same slow-band framing as the paper's table,
+% at the other end of the spectrum from the fast channel whose linearization
+% fails in Section 3.7; cited as an encoding-level alternative, not as
+% attribution work.
+@article{levy2026darope,
+  title   = {RoPE is Dead, Long Live RoPE: Towards Scalable Data-aware
+             Positional Encodings},
+  author  = {L{\'e}vy, Jarod and Videau, Mathurin and Yehya, Jad and
+             King, Jean-R{\'e}mi and d'Ascoli, St{\'e}phane and Moreau, Thomas},
+  journal = {arXiv preprint arXiv:2609.34556},
+  year    = {2026},
+  eprint  = {2609.34556},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL}
+}
