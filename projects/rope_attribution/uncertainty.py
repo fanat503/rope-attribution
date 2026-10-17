@@ -20,9 +20,10 @@ What is computed
 * percentile bootstrap intervals over heads, which is the unit that actually
   varies independently. Cells within a head are not independent, so resampling
   cells would understate the interval by the within-head correlation;
-* a paired permutation test over heads for whether any checkpoint's rate
-  differs from the others, paired because the same head index in two models is
-  not a matching unit - see the note below;
+* for each pair of checkpoints, an unpaired bootstrap on the difference of
+  means, because the head index is not a matching unit across models (they do
+  not even have the same number of heads). A difference is called compatible
+  with zero only when its interval straddles it - see ``checkpoint_agreement``;
 * the number of resamples is fixed in advance, and the seed is pinned, so the
   interval is reproducible rather than a function of the RNG.
 
@@ -126,8 +127,8 @@ def checkpoint_agreement(
                     "ci_low": float(lo),
                     "ci_high": float(hi),
                     # A difference is called compatible with zero only when the
-                    # interval straddles it, which is the same rule the paper's
-                    # McNemar tests use for their own comparisons.
+                    # interval straddles it; the interval is the test, so no
+                    # separate p-value is computed or reported.
                     "agrees_at_95": bool(lo <= 0.0 <= hi),
                 }
             )

@@ -23,6 +23,7 @@
     ],
     "additivity_max_abs_err": 3.552713678800501e-14,
     "per_feature_contribution_spread_max_ratio": 43.04839681113919,
+    "delta_only_max_abs_err": 2.842170943040401e-14,
     "score_depends_only_on_delta": true
   },
   "method_spectrum": [

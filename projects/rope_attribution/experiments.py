@@ -231,9 +231,11 @@ def feature_attribution(
 
     Builds a synthetic SAE-like decomposition ``x = sum_i f_i d_i`` with
     non-negative, non-uniform coefficients, projects with random ``W_Q``/``W_K``,
-    and checks two things:
+    and checks three things:
 
     * additivity: ``score == sum_ij f_i g_j A_ij(delta)`` to machine precision;
+    * delta-only: equal relative distances at different absolute positions give
+      the same score, measured in absolute positions rather than assumed;
     * position-conditionality: a single feature's contribution ``c_i(delta)`` is a
       *function of distance*, not a scalar, which is the thing additive attribution
       with a position-free ``A_ij`` cannot express.
@@ -270,13 +272,30 @@ def feature_attribution(
                 per_feature_spread, float(np.abs(nonzero).max() / np.abs(nonzero).min())
             )
 
+    # "The score depends only on delta = n - m" is a claim about absolute
+    # positions, so measure it there: (R_m q) . (R_n k) for three (m, n) pairs
+    # with the same delta, including the relative-frame m = 0 that
+    # score_relative implements. Position dependence would show up as
+    # disagreement between probes.
+    probe_delta = int(deltas[-1])
+    reference = score_relative(full_q, full_k, freqs, probe_delta)
+    probe_err = 0.0
+    for m in (0, 1, 37):
+        cos, sin = rope_cos_sin(np.array([m, m + probe_delta]), freqs)
+        q_m = apply_rope(full_q[None, :], cos[0:1], sin[0:1])[0]
+        k_n = apply_rope(full_k[None, :], cos[1:2], sin[1:2])[0]
+        probe_err = max(probe_err, abs(float(q_m @ k_n) - reference))
+
     return {
         "n_features": n_features,
         "dim": dim,
         "deltas": list(deltas),
         "additivity_max_abs_err": additivity_err,
         "per_feature_contribution_spread_max_ratio": float(per_feature_spread.max()),
-        "score_depends_only_on_delta": True,
+        "delta_only_max_abs_err": probe_err,
+        "score_depends_only_on_delta": bool(
+            probe_err <= 1e-10 * (abs(reference) + 1.0)
+        ),
     }
 
 

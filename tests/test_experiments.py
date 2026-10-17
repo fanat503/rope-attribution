@@ -706,6 +706,11 @@ def test_feature_attribution_reports_machine_precision_additivity():
     assert reported["additivity_max_abs_err"] == pytest.approx(
         3.552713678800501e-14, rel=0.5, abs=EXACT_TOL
     )
+    delta_only_err = reported["delta_only_max_abs_err"]
+    assert delta_only_err < 1e-10, (
+        "equal deltas at different absolute positions disagree by "
+        f"{delta_only_err:.3e}; the score is not a function of delta alone"
+    )
     assert reported["score_depends_only_on_delta"] is True
     assert reported["n_features"] == 8
     assert reported["dim"] == 64

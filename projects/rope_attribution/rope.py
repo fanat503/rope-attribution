@@ -71,8 +71,17 @@ def inv_freq(dim: int, base: float = 10000.0) -> np.ndarray:
 
 
 def rotary_angles(positions: np.ndarray, inv_f: np.ndarray) -> np.ndarray:
-    """Per-dimension rotation angle. Returns shape ``(len(positions), dim // 2)``."""
-    return np.asarray(positions, dtype=np.float64)[:, None] * inv_f[None, :]
+    """Per-dimension rotation angle. Returns shape ``(len(positions), dim // 2)``.
+
+    A scalar ``positions`` returns the one-dimensional ``D_k`` vector of length
+    ``dim // 2`` -- ``delta * inv_freq_k`` for every channel -- rather than
+    raising ``IndexError`` on a batch axis the caller never asked for; the scalar
+    and one-element-array forms then agree channel by channel.
+    """
+    arr = np.asarray(positions, dtype=np.float64)
+    if arr.ndim == 0:
+        return arr * inv_f
+    return arr[:, None] * inv_f[None, :]
 
 
 def rope_cos_sin(

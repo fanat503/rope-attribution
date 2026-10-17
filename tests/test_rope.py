@@ -1011,6 +1011,22 @@ def test_per_dim_angle_is_the_outer_product_of_delta_and_inv_freq(dim):
 
 
 @pytest.mark.parametrize("dim", DIMS)
+def test_per_dim_angle_accepts_a_scalar_delta(dim):
+    """A bare float is a valid distance; it must not need a batch axis.
+
+    ``per_dim_angle(8192, inv_f)`` is the natural way to ask what every channel's
+    angle is at one distance. The vector form is a convenience on top of that,
+    so the scalar form returns the channel vector and agrees with the
+    one-element array form.
+    """
+    inv_f = R.inv_freq(dim)
+    angles = R.per_dim_angle(8192.0, inv_f)
+    assert angles.shape == (dim // 2,)
+    np.testing.assert_array_equal(angles, 8192.0 * inv_f)
+    np.testing.assert_array_equal(angles, R.per_dim_angle(np.array([8192.0]), inv_f)[0])
+
+
+@pytest.mark.parametrize("dim", DIMS)
 def test_per_dim_angle_agrees_with_rotary_angles(dim):
     """Both are the same quantity under two names; the module must not disagree.
 
