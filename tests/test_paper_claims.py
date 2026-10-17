@@ -2178,13 +2178,21 @@ def test_entropy_falls_monotonically_to_the_end_of_the_scale_grid() -> None:
     assert_paper_number_matches(mscaled[-1], prov_ratio, "H/ln T at the top scale (appendix)")
     assert_paper_number_matches(mscalers[-1], prov_mscale, "mscale at the top scale (appendix)")
     assert float(prov_scale) == float(rows[-1]["scale"])
-    assert mscaled[-1] == E.mscale_entropy(
-        dim=HEAD_DIM,
-        scale=float(rows[-1]["scale"]),
-        original_max_position_embeddings=ORIGINAL_MAX_POS,
-        n_keys=N_KEYS,
-        seed=4,
-    )["entropy_ratio_mscaled"]
+    # Freshness, not bit-equality: the CSV ships from a different numpy build
+    # than CI runs, and the mscaled path now flows through cos/sin tables,
+    # where the last ulp is platform-dependent. A stale CSV -- one written
+    # under a different convention -- differs in the first decimal, not the
+    # sixteenth, so a 1e-12 relative window still catches it.
+    assert mscaled[-1] == pytest.approx(
+        E.mscale_entropy(
+            dim=HEAD_DIM,
+            scale=float(rows[-1]["scale"]),
+            original_max_position_embeddings=ORIGINAL_MAX_POS,
+            n_keys=N_KEYS,
+            seed=4,
+        )["entropy_ratio_mscaled"],
+        rel=1e-12,
+    )
 
 
 def test_mscale_is_a_temperature_not_a_scale_change() -> None:
