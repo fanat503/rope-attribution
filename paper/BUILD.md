@@ -36,7 +36,7 @@ The matching `neurips_2026.cls` is **not** vendored. It could not be fetched fro
 the NeurIPS repositories during this work (`neurips.cc/Conferences/2026/...`
 returns 404 for the class), so the `\documentclass{neurips_2026}` form is not
 available. NeurIPS ships the two files together; before submitting, download both
-from the conference style-files page and switch line 15 of `main.tex` to
+from the conference style-files page and switch line 29 of `main.tex` to
 `\documentclass[preprint,position]{neurips_2026}`, dropping the `\usepackage`.
 
 The style file loads `natbib` and sets the geometry itself, so `main.tex` must
@@ -63,7 +63,8 @@ those files or from `results/measurements.json`.
 - `tests/test_venue_compliance.py::test_every_numbered_figure_reaches_the_document`
   fails if any figure fell back to its placeholder.
 - `tests/test_venue_compliance.py::test_the_figures_are_all_embedded` requires at
-  least nine embedded images.
+  least one embedded image per `\paperfigure` call, counting the calls in
+  `main.tex` rather than hard-coding a number.
 - `tests/test_venue_compliance.py::test_the_main_text_fits_in_nine_pages` measures
   the main text against NeurIPS' nine-page limit. It carried `xfail` while the
   text ran long and cleared on 2026-10-17: the compression pass moved the
@@ -86,7 +87,7 @@ section begins on page 9, and the last main-text sentence is on page 9.
 
 ## Regenerating the numbers
 
-The paper's numbers come from two sources, both regenerated from the code:
+The paper's numbers come from three sources, all regenerated from the code:
 
 ```sh
 PYTHONPATH=../projects python -m rope_attribution.experiments   # results/measurements.json

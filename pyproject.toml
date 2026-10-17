@@ -64,14 +64,13 @@ target-version = "py310"
 #
 # Deliberately out of scope, by decision and not by accident:
 #   * projects/frontier-01-*.py  - 31 tracked one-off experiment scripts. They
-#     are a frozen archive of GPU work. Under this exact rule set they produce
-#     2 findings (E402 x2); enabling E501 as well takes it to 544, because those
-#     files contain lines up to 209 characters. Linting them would be a
-#     reformatting project, not a packaging change, and they are not owned by
-#     the change that introduced this file.
-#   * projects/frontier-01-*.py at the repository root and one level below -
-#     the frozen archive of exploratory scripts. They are not part of the
-#     package and their constants are illustrative, not measured.
+#     are a frozen archive of GPU work, not part of the package, and their
+#     constants are illustrative, not measured. Under this exact rule set they
+#     produce 10 findings (RET504 x4, RUF100 x3, E402 x1, E731 x1, RET505 x1);
+#     enabling E501 as well takes it to 552, because those files contain lines
+#     up to 368 characters. Linting them would be a reformatting project, not a
+#     packaging change, and they are not owned by the change that introduced
+#     this file.
 #
 # Re-run with a wider `include` once the archive is retired.
 include = ["projects/rope_attribution/**/*.py", "tests/**/*.py"]

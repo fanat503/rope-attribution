@@ -884,7 +884,7 @@ def fig07_partial_rope() -> FigureRecord:
     return FigureRecord(
         stem=stem,
         producer=(
-            "recomputed here from rope.partial_rope_cos_sin + rope.apply_rope,"
+            "recomputed here from rope.partial_rope_cos_sin + rope.apply_partial_rope,"
             f" cross-checked against experiments.partial_rope_split(seed={SEED_PARTIAL})"
         ),
         headline=(
@@ -1063,8 +1063,9 @@ def fig09_position_conditional_attribution() -> FigureRecord:
     # Per-feature log-ratio, then averaged over features - the same order of
     # operations as statistics._endpoint_log_ratio. Averaging the magnitudes first
     # and taking one ratio of the means is a different statistic: it let a single
-    # large-amplitude feature dominate and printed 10^0.01 instead of the true
-    # 10^-0.08, which is the claim the paper quotes. One definition, one number.
+    # large-amplitude feature dominate and printed 10^0.01 instead of this
+    # figure's 10^-0.19 (the paper's 10^-0.08 is the seed mean in
+    # statistics.seed_variance). One definition, one number.
     with np.errstate(divide="ignore", invalid="ignore"):
         per_feature = np.log10(
             np.abs(contrib[:, i_hi]) / np.where(np.abs(contrib[:, i_lo]) > 0, np.abs(contrib[:, i_lo]), np.nan)
@@ -1105,7 +1106,7 @@ def fig09_position_conditional_attribution() -> FigureRecord:
         " position-free A_ij can express it\n"
         f"seed={SEED_ATTRIB}, N_FEATURES={N_FEATURES}, head_dim={HEAD_DIM}  |  "
         f"additivity residual |sum_i c_i - score| = {additivity_residual:.3e}"
-        "  |  every feature reverses sign at least once\n"
+        f"  |  {n_reversing} of {N_FEATURES} features reverse sign at least once\n"
         "dotted = the feature's mean over delta.  Blue = lower-indexed feature,"
         " orange = higher-indexed.  experiments.feature_attribution on the same"
         " grid. The max/min ratio this figure once quoted is a grid-density"
@@ -1225,12 +1226,15 @@ def fig10_seed_variance() -> FigureRecord:
          for s, c, v, e in zip(seeds, crossings, cvs, endpoint, strict=True)],
     )
     n_seeds = len(seeds)
+    # The requested count is not always what _log_uniform_grid returns; report the
+    # grid the loop actually used so the record cannot go stale against it.
+    n_deltas = int(_d.size)
     return FigureRecord(
         stem=stem,
         producer=(
             f"rope_attribution.statistics.contribution_grid over {n_seeds} seeds "
-            f"starting at {ST.BASE_SEED}, {len(DELTA_GRID)} distances, "
-            f"F={N_FEATURES}"
+            f"starting at {ST.BASE_SEED}, {n_deltas} distances "
+            f"({len(DELTA_GRID)} requested), F={N_FEATURES}"
         ),
         headline=(
             f"all {n_seeds} seeds give a sign-crossing fraction of "

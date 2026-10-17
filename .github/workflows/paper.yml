@@ -2,9 +2,9 @@ name: paper
 
 on:
   push:
-    paths: ["paper/**", "figures/**", "build_tools/**"]
+    paths: ["paper/**", "figures/**"]
   pull_request:
-    paths: ["paper/**", "figures/**", "build_tools/**"]
+    paths: ["paper/**", "figures/**"]
   workflow_dispatch:
 
 permissions:
@@ -56,8 +56,9 @@ jobs:
       # Guards the silent failure where \IfFileExists swallows every figure and the
       # PDF still builds. Two checks, because they catch different things:
       #   1. the placeholder string must be absent, which means no figure fell back;
-      #   2. the PDF must carry at least nine raster images, which means the figures
-      #      really were embedded.
+      #   2. the PDF must carry at least one raster image per \paperfigure call,
+      #      which means the figures really were embedded. The expected count is
+      #      read from paper/main.tex below rather than typed in.
       # Deliberately NOT checking for the figure file names in the extracted text:
       # \includegraphics paths are not typeset, so the names never appear there and
       # such a check would always fail. Each figure's \caption IS typeset, so the

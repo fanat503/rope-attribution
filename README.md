@@ -20,8 +20,9 @@ nothing here evaluates a downstream task.
 
 ## Dataflow
 
-Every number in the paper traces to one of two generated artefacts. Nothing is
-typed in by hand.
+Every number in the paper traces to a generated artefact: the `results/*.json`
+files and the `figures/*.csv` sidecars derived from them. Nothing is typed in by
+hand.
 
 ```
                        rope.py  (RoPE / YaRN / partial RoPE, numpy float64)
@@ -58,7 +59,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1405 tests
+pytest -q                                        # 1405 tests (excludes tests/test_readme_claims.py)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -143,6 +144,8 @@ projects/rope_attribution/
   usefulness.py   cost of the best position-free surrogate, on real checkpoints
   agreement.py    how the surrogate's pair rankings disagree with the exact
                   ones, on the same checkpoints
+  uncertainty.py  percentile bootstrap intervals over heads, for the aggregate
+                  shares the paper quotes
   sensitivity.py  the cost statistic across rotary bases and head dimensions
                   (synthetic - is it balanced on one configuration?)
   train.py        trains 100M-300M models, logging every metric including the
@@ -150,7 +153,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1405 tests
+tests/            1405 tests (excludes tests/test_readme_claims.py)
 figures/          eleven figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
@@ -219,13 +222,15 @@ random `W_Q`, `W_K`, the score decomposes additively into per-feature-pair terms
 `A_ij(delta)` to `3.6e-14`. But `A_ij` depends on the distance, so a single
 feature's contribution is a *function of distance*, not a scalar. Measured on the
 54-point grid, **all eight features reverse sign** somewhere in
-`delta in [1, 8192]`, while the magnitudes at the two ends of the range agree to
-within a factor of `10^-0.08`. Summarising `c_i(delta)` by its per-feature mean
-— the least-squares-optimal position-free choice — leaves a residual **15 orders
-of magnitude** above the additivity residual, and that factor stays within
-`15.0`–`15.2` as the grid is made 120x denser. This, not a failure of
-bilinearity, is the real obstacle to position-free feature attribution under RoPE
-(`figures/fig09_position_conditional_attribution.png`).
+`delta in [1, 8192]` (`figures/fig09_position_conditional_attribution.png`), and
+on average across seeds the magnitudes at the two ends of the range agree to
+within a factor of `10^-0.08` (`results/statistics.json`; the single seed-1 draw
+shown in fig09 gives `10^-0.19`). Summarising `c_i(delta)` by its per-feature
+mean — the least-squares-optimal position-free choice — leaves a residual
+**15 orders of magnitude** above the additivity residual, and that factor stays
+within `15.0`–`15.2` as the grid is made 120x denser. This, not a failure of
+bilinearity, is the real obstacle to position-free feature attribution under
+RoPE.
 
 > The paper previously led with a worst-feature ratio of `920x`. That number was a
 > sampling artefact — a `max/min` over a grid, so it grows without bound as the

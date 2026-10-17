@@ -5,7 +5,7 @@ The question this module answers
 Sections 4.1--4.3 of the paper establish that a feature's contribution to a
 rotary attention score is a function of the relative distance ``delta`` and that
 it can change sign, and that on trained weights a feature's share of the score
-varies by two to three orders of magnitude across heads. What those results do
+varies by close to two orders of magnitude across heads. What those results do
 *not* establish is the thing a reviewer asked for: whether correcting this is
 worth anything, or whether it is a correct description of a thing nobody needs.
 

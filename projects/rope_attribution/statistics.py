@@ -3,12 +3,11 @@
 Why this module exists
 ----------------------
 An earlier version of the paper led with the claim that a single feature's
-contribution to the attention score "swings by 920x" across relative distance.
-``max_delta |c_i(delta)| / min_delta |c_i(delta)|`` over a 54-point grid, and it
-That number was an artefact of the sampling, not a property of the function:
-|c_i(delta)|`` approaches zero as the grid gets denser, so the ratio grows
-``min_delta |c_i(delta)|`` approaches zero as the grid gets denser, so the
-ratio grows without bound.
+contribution to the attention score "swings by 920x" across relative distance:
+``max_delta |c_i(delta)| / min_delta |c_i(delta)|`` over a 54-point grid. That
+number was an artefact of the sampling, not a property of the function:
+``min_delta |c_i(delta)|`` approaches zero as the grid gets denser, so the ratio
+grows without bound.
 
 The table below is what THIS module measures. The figures quoted in the review
 that prompted this module (34.98 / 920.04 / 13710.15 / 4094122.99) come from a
@@ -20,8 +19,10 @@ is what _log_uniform_grid is asked for, not always what it returns after
 de-duplication:
 
     n_deltas  requested  max/min ratio
-         9           9        1111.73
+         5           5        1111.73
+        17          17       17153.75
         48          54        3162.56
+       104         128       19189.38
        235         332       19622.05
        599        1024       35478.80
 
@@ -35,7 +36,7 @@ module does two things the paper did not:
    density and with seed-to-seed error bars, which the repository previously did
    not have at all.
 
-Three grid-independent statistics are reported, so a reader can see that the
+Four grid-independent statistics are reported, so a reader can see that the
 conclusion does not depend on which one is chosen:
 
 ``cv_magnitude``
@@ -161,8 +162,8 @@ def contribution_grid(
     """``c_i(delta)`` for every feature.
 
     Returns ``(deltas, contributions, residuals)`` with ``contributions`` of shape
-    ``(n_features, n_points)`` and ``residuals`` of shape ``(n_points,)`` being the
-    additivity residual ``|sum_i c_i - score|`` on the same grid.
+    ``(n_features, deltas.size)`` and ``residuals`` of shape ``(deltas.size,)``
+    being the additivity residual ``|sum_i c_i - score|`` on the same grid.
     """
     deltas = _log_uniform_grid(n_points)
     q_i, k_i, freqs = _decomposition(n_features, seed)
