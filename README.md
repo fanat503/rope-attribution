@@ -58,7 +58,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1387 tests
+pytest -q                                        # 1391 tests
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -114,7 +114,8 @@ attribution diagnostics on one fixed probe batch (`closed_form_resid_max`,
 `rel_err_median_probe`) -- plus `runs/<name>/summary.json`. Two runs of the
 same command with the same seed produce identical records except the
 throughput field; `tests/test_train.py` pins that, and the torch-free tests
-pin the parameter arithmetic even where torch is absent.
+pin the parameter arithmetic, the next-token window construction and the
+CPU-refusal matrix even where torch is absent.
 
 ## Citation
 
@@ -148,7 +149,7 @@ projects/rope_attribution/
                   attribution diagnostics
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, every value computed at run time
-tests/            1387 tests
+tests/            1391 tests
 figures/          ten figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)

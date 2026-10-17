@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import itertools
 import json
 import math
 import time
@@ -188,6 +189,29 @@ TRAIN_PARAM_BANDS = {
 # Weight decay applies to the model's matrices, not to norms or embeddings.
 _WD_KEYS = ("q_proj", "k_proj", "v_proj", "o_proj", "fc_in", "fc_out")
 
+#: A CPU run above this parameter count refuses to start without an explicit
+#: override: the machine this repository is developed on has six cores.
+CPU_PARAM_LIMIT = 20_000_000
+
+
+def _cpu_refusal(
+    config_name: str, n_params: int, device: str, force_cpu: bool
+) -> str | None:
+    """The refusal message for a named config asked to run on CPU, or None.
+
+    A string rather than an exception so both callers -- ``train()`` raising
+    RuntimeError, ``main()`` raising SystemExit -- share one wording, and so
+    the torch-free test suite can exercise the whole matrix without a model.
+    """
+    if device != "cpu" or force_cpu or n_params <= CPU_PARAM_LIMIT:
+        return None
+    return (
+        f"{config_name} realizes {n_params:,} parameters; the named "
+        "configurations are GPU territory and this machine must not be "
+        "pegged by them. Pass --force-cpu to override deliberately, or "
+        "call train() with device='cuda'."
+    )
+
 
 def lr_at(step: int, config: dict) -> float:
     """The schedule: linear warmup to ``lr``, then cosine decay to the floor.
@@ -223,11 +247,22 @@ class MetricsWriter:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.path = self.run_dir / "metrics.jsonl"
         self.summary_path = self.run_dir / "summary.json"
+        # A run directory is a fresh run: files from a previous run of the
+        # same name must not survive next to this run's records -- a stale
+        # metrics.jsonl would be appended to, and a stale summary.json from
+        # a crashed run would outlive the run it describes.
+        for path in (self.path, self.summary_path):
+            if path.exists():
+                path.unlink()
         self._lines: list[str] = []
 
     def log(self, record: dict) -> None:
-        self._lines.append(json.dumps(record))
-        self.path.write_text("\n".join(self._lines) + "\n", encoding="utf-8")
+        # Append rather than rewrite: a crash mid-run then costs the tail
+        # line, not the history.
+        line = json.dumps(record)
+        self._lines.append(line)
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
 
     def finalize(self, summary: dict) -> None:
         self.summary_path.write_text(
@@ -373,9 +408,13 @@ def build_model(config: dict, device: str = "cpu"):
             self.final_norm = RMSNorm(config["dim"])
             self.base = ROPE_BASE
             positions = np.arange(config["ctx"], dtype=np.float64)
-            self.cos_buf, self.sin_buf = _cos_sin_torch(
-                positions, config["head_dim"], self.base, device
-            )
+            # Registered as non-persistent buffers so ``.to(device)`` moves
+            # the tables with the weights -- a caller doing
+            # ``build_model(cfg).to("cuda")`` must not device-mismatch on
+            # the first forward -- without inflating ``state_dict()``.
+            cos, sin = _cos_sin_torch(positions, config["head_dim"], self.base, "cpu")
+            self.register_buffer("cos_buf", cos, persistent=False)
+            self.register_buffer("sin_buf", sin, persistent=False)
 
         def forward(self, ids, capture=None):
             x = self.embed(ids)
@@ -411,7 +450,9 @@ def _probe_diagnostics(model, ids, deltas, n_pairs: int, seed: int) -> dict:
       float64 casts, the implementation-fidelity floor;
     * ``sign_flip_rate`` / ``rel_err_median`` -- the position-free cost
       statistic computed by the very ``measure_pair_cost`` the paper's
-      number comes from.
+      per-cell statistic comes from. The logged rate is the mean over the
+      sampled cells -- a micro-average over heads and pairs, not the
+      paper's head-pooled rate -- and ``n_probe_cells`` is logged beside it.
 
     The probe is one fixed batch and the per-pair sampling is seeded, so the
     diagnostic series across a run's evaluations are comparable.
@@ -432,12 +473,13 @@ def _probe_diagnostics(model, ids, deltas, n_pairs: int, seed: int) -> dict:
     rels = []
     T = int(ids.shape[1])
     positions = np.arange(T, dtype=np.float64)
+    ref_cos, ref_sin = reference_cos_sin(positions, model.config["head_dim"])
+    freqs = inv_freq(model.config["head_dim"])
     for index in sorted(capture["pre_rope"]):
         q_pre, k_pre = capture["pre_rope"][index]
         q_post, k_post = capture["post_rope"][index]
         q_np = q_pre.to(torch.float64).cpu().numpy()
         k_np = k_pre.to(torch.float64).cpu().numpy()
-        ref_cos, ref_sin = reference_cos_sin(positions, model.config["head_dim"])
         ref_q = _apply_rope_ref_4d(q_np, ref_cos, ref_sin)
         ref_k = _apply_rope_ref_4d(k_np, ref_cos, ref_sin)
         rope_resid = max(
@@ -445,7 +487,6 @@ def _probe_diagnostics(model, ids, deltas, n_pairs: int, seed: int) -> dict:
             float(np.max(np.abs(q_post.to(torch.float64).cpu().numpy() - ref_q))),
             float(np.max(np.abs(k_post.to(torch.float64).cpu().numpy() - ref_k))),
         )
-        freqs = inv_freq(model.config["head_dim"])
         for head in range(q_np.shape[2]):
             for _pair in range(n_pairs):
                 m = int(rng.integers(0, T - 1))
@@ -505,6 +546,38 @@ def reference_cos_sin(positions: np.ndarray, head_dim: int) -> tuple:
     return rope_cos_sin(positions, inv_freq(head_dim))
 
 
+def _split_windows(tokens: np.ndarray, ctx: int) -> tuple:
+    """Next-token windows: inputs, targets, and the held-out decile.
+
+    Window ``k`` of a segment covers inputs ``s[k*ctx : (k+1)*ctx]`` and
+    targets ``s[k*ctx+1 : (k+1)*ctx+1]``, so every target is the token that
+    actually follows its input -- a ``torch.roll`` construction would point
+    the window's last position at its own first token. The split is taken
+    on the flat stream before windowing, so no target of a training window
+    lies inside the held-out block (the final decile of the stream, which is
+    the fixed validation set of the run).
+
+    Pure numpy and torch-free so the suite checks the construction without
+    a model.
+    """
+    stream = np.asarray(tokens, dtype=np.int64).reshape(-1)
+    split = len(stream) - max(1, len(stream) // 10)
+
+    def windows(segment: np.ndarray) -> tuple:
+        n = (len(segment) - 1) // ctx
+        if n <= 0:
+            empty = segment[:0].reshape(0, ctx)
+            return empty, empty
+        return (
+            segment[: n * ctx].reshape(n, ctx),
+            segment[1 : n * ctx + 1].reshape(n, ctx),
+        )
+
+    train_in, train_tg = windows(stream[:split])
+    held_in, held_tg = windows(stream[split:])
+    return train_in, train_tg, held_in, held_tg
+
+
 def train(
     config_name: str,
     run_dir: Path,
@@ -512,13 +585,17 @@ def train(
     device: str = "auto",
     max_steps: int | None = None,
     override: dict | None = None,
+    force_cpu: bool = False,
+    threads: int | None = None,
 ) -> dict:
     """One training run. Returns the summary record it also writes.
 
-    ``tokens`` is an int array of token ids (any shape; reshaped into
-    contiguous ``ctx``-length windows, last decile kept as the fixed
+    ``tokens`` is an int array of token ids (any shape; cut into next-token
+    windows, with the final decile of the stream held out as the fixed
     validation block). The test suite passes synthetic ids directly, which
-    keeps the whole data path out of the network.
+    keeps the whole data path out of the network. ``force_cpu`` is the
+    deliberate override of the named-config CPU refusal; ``threads``
+    overrides the default thread count (4 on CPU, 8 otherwise).
     """
     if not TORCH_AVAILABLE:
         raise RuntimeError("torch is not installed; see train_requirements.txt")
@@ -530,17 +607,15 @@ def train(
     if max_steps is not None:
         config["n_steps"] = int(max_steps)
     params = count_params(config)
-    writer = MetricsWriter(run_dir)
-    _set_determinism(config["seed"])
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    if device == "cpu" and params > 20_000_000:
-        raise RuntimeError(
-            f"{config_name} realizes {params:,} parameters; the named configs "
-            "are GPU territory and this machine must not be pegged by them. "
-            "main() asks for --force-cpu; train() takes device='cuda'."
-        )
-    torch.set_num_threads(4 if device == "cpu" else 8)
+    refusal = _cpu_refusal(config_name, params, device, force_cpu)
+    if refusal:
+        raise RuntimeError(refusal)
+    _set_determinism(config["seed"])
+    torch.set_num_threads(
+        threads if threads is not None else (4 if device == "cpu" else 8)
+    )
     model = build_model(config, device=device)
     decayed, decayless = [], []
     for name, parameter in model.named_parameters():
@@ -556,15 +631,16 @@ def train(
     )
     rng = np.random.default_rng(config["seed"])
     ctx = config["ctx"]
-    n_windows = len(tokens) // ctx
-    if n_windows < config["batch_size"] + 2:
+    train_in, train_tg, held_in, held_tg = _split_windows(tokens, ctx)
+    if len(train_in) < config["batch_size"] or len(held_in) < 1:
         raise ValueError(
-            f"{len(tokens)} tokens make {n_windows} windows of {ctx}; not "
-            "enough for one train batch plus a validation block"
+            f"{len(tokens)} tokens make {len(train_in)} training windows of "
+            f"{ctx}; not enough for a batch of {config['batch_size']} plus "
+            "a validation block"
         )
-    windows = tokens[: n_windows * ctx].reshape(n_windows, ctx)
-    held = windows[-max(1, n_windows // 10):]
-    train_windows = windows[: n_windows - len(held)]
+    # The writer is created only after every refusal check: a refused run
+    # must not have wiped the previous run's records.
+    writer = MetricsWriter(run_dir)
     step = 0
     loss_ema: float | None = None
     start = time.perf_counter()
@@ -584,9 +660,9 @@ def train(
     deltas = np.array(DISTANCE_GRID, dtype=np.int64)
     probe_seed = config["seed"]
     while step < config["n_steps"]:
-        picks = rng.integers(0, len(train_windows), size=config["batch_size"])
-        ids = torch.from_numpy(train_windows[picks]).to(device)
-        targets = torch.roll(ids, -1, dims=1)
+        picks = rng.integers(0, len(train_in), size=config["batch_size"])
+        ids = torch.from_numpy(train_in[picks]).to(device)
+        targets = torch.from_numpy(train_tg[picks]).to(device)
         logits = model(ids)
         loss = F.cross_entropy(
             logits.reshape(-1, logits.shape[-1]).float(), targets.reshape(-1)
@@ -596,7 +672,10 @@ def train(
         grad_norm = torch.nn.utils.clip_grad_norm_(
             model.parameters(), config["grad_clip"]
         )
-        current_lr = lr_at(step, config)
+        # The update that follows is the (step + 1)-th, so the schedule is
+        # read at step + 1: without this the first update would run at
+        # lr_at(0) == 0 and waste a step of the budget.
+        current_lr = lr_at(step + 1, config)
         for group in opt.param_groups:
             group["lr"] = current_lr
         opt.step()
@@ -605,17 +684,17 @@ def train(
         tokens_seen += int(ids.numel())
         step += 1
         if step % config["eval_every"] == 0 or step == config["n_steps"]:
-            val_window = torch.from_numpy(held[: config["batch_size"]]).to(device)
-            val_targets = torch.roll(val_window, -1, dims=1)
+            val_ids = torch.from_numpy(held_in[: config["batch_size"]]).to(device)
+            val_targets = torch.from_numpy(held_tg[: config["batch_size"]]).to(device)
             with torch.no_grad():
-                val_logits = model(val_window)
+                val_logits = model(val_ids)
                 val_loss = F.cross_entropy(
                     val_logits.reshape(-1, val_logits.shape[-1]).float(),
                     val_targets.reshape(-1),
                 ).item()
-            probe = train_windows[0][:ctx]
+            probe = train_in[0][None, :]
             diagnostics = _probe_diagnostics(
-                model, probe[None, :], deltas, n_pairs=12, seed=probe_seed
+                model, probe, deltas, n_pairs=12, seed=probe_seed
             )
             writer.log(
                 {
@@ -652,49 +731,59 @@ def main() -> None:
     parser.add_argument("--force-cpu", action="store_true")
     parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args()
-    if not TRAINING_AVAILABLE:
+    if not TORCH_AVAILABLE:
         raise SystemExit("torch is not installed; see train_requirements.txt")
-    import torch
+    if args.device in ("auto", "cpu"):
+        device = args.device
+        if device == "auto":
+            import torch
 
-    torch.set_num_threads(args.threads)
-    if args.device in ("auto", "cpu") and not args.force_cpu:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         params = count_params(CONFIGS[args.config])
-        if params > 20_000_000:
-            raise SystemExit(
-                f"{args.config} is a {params:,}-parameter configuration; on CPU "
-                "this pegs every core for days. The named configs are for GPU "
-                "machines. Pass --force-cpu to override deliberately."
-            )
+        refusal = _cpu_refusal(args.config, params, device, args.force_cpu)
+        if refusal:
+            raise SystemExit(refusal)
     run_dir = Path("runs") / (args.run_name or args.config)
     if args.config == "smoke":
         tokens = np.random.default_rng(7).integers(0, 512, size=4096)
     else:
+        if not TRANSFORMERS_AVAILABLE:
+            raise SystemExit(
+                "transformers and datasets are not installed; the wikitext "
+                "path needs train_requirements.txt"
+            )
         tokens = _load_wikitext_tokens()
     summary = train(args.config, run_dir, tokens, device=args.device,
-                    max_steps=args.max_steps)
+                    max_steps=args.max_steps, force_cpu=args.force_cpu,
+                    threads=args.threads)
     print("wrote", run_dir, json.dumps(summary))
 
 
 def _load_wikitext_tokens() -> np.ndarray:
     """The default corpus: wikitext-103 raw, GPT-2 tokenized, deterministic.
-    Requires train_requirements.txt; the smoke config needs no network at all.
+
+    Requires train_requirements.txt; the smoke config needs no network at
+    all. Streamed through ``np.fromiter`` so the ~10^8-token corpus is never
+    materialized as a Python int list, which would cost gigabytes before
+    training starts.
     """
     from transformers import GPT2TokenizerFast
 
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
-    ids: list[int] = []
     try:
         from datasets import load_dataset
 
         split = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
-        for example in split:
-            ids.extend(tokenizer.encode(example["text"]))
+        stream = itertools.chain.from_iterable(
+            tokenizer.encode(example["text"]) for example in split
+        )
+        tokens = np.fromiter(stream, dtype=np.int64)
     except Exception as exc:  # pragma: no cover - network/cache path
         raise SystemExit(
             f"could not load wikitext-103 ({exc}); download it first or pass "
             "your own token stream to train(..., tokens=...)"
         ) from exc
-    return np.asarray(ids, dtype=np.int64)
+    return tokens
 
 
 if __name__ == "__main__":
