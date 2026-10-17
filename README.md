@@ -148,9 +148,10 @@ projects/rope_attribution/
   train.py        trains 100M-300M models, logging every metric including the
                   attribution diagnostics
   real_model.py   identities re-measured on three trained checkpoints
-  figures.py      the figure set, every value computed at run time
+  figures.py      the figure set, values computed at run time or read from the
+                  results/ artifacts
 tests/            1391 tests
-figures/          ten figures, each with a CSV sidecar
+figures/          eleven figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
                     real_model.json          (three trained checkpoints)
@@ -304,6 +305,7 @@ matters for the mechanism:
 | `fig08_mscale_entropy` | attention entropy against scale, with and without `mscale` |
 | `fig09_position_conditional_attribution` | per-feature contribution against distance |
 | `fig10_seed_variance` | the central claim across a 12-seed sweep, with the spread shown |
+| `fig11_sensitivity_sweep` | the configuration sweep behind the robustness paragraph, read from its artifact |
 
 Each figure ships the plotted data as a CSV beside it, and `figures/README.md`
 records which function produced it and its headline number.

@@ -839,7 +839,10 @@ patching, and a trained model.
 \citep{su2021ropeformer} is the scheme studied here. \alpibib\ 
 \citep{press2021train} removes position from the attention pattern by a linear
 bias, so it has no per-channel angle spectrum and no version of the
-linearization problem of Section~\ref{sec:context}. Among extension schemes,
+linearization problem of Section~\ref{sec:context}; GaLA
+\citep{loveland2026graph} adds a bias instead, undoing RoPE's
+bandwidth-dependent attention decay on graph-linearized inputs at inference
+time --- again an attention-pattern fix, not a per-feature decomposition. Among extension schemes,
 position interpolation \citep{chen2023positionalinterp} rescales positions
 uniformly and is the most favourable on linearizable fraction in our table;
 \yarn\ \citep{peng2023yarn} keeps the base and ramps per frequency, which is
@@ -858,8 +861,11 @@ into learned features originates in the superposition line
 \citep{cunningham2023sparseautoencoders}. Attribution on attention heads runs
 from attribution patching \citep{syed2023attributionpatching} to the tuned lens
 \citep{belrose2023tunedlens}, sparse feature circuits
-\citep{marks2024sparsefeaturecircuits} and transcoder-based discovery
-\citep{dunefsky2024transcoders}. All of them operate at a \emph{fixed} position
+\citep{marks2024sparsefeaturecircuits}, transcoder-based discovery
+\citep{dunefsky2024transcoders} and RoPE-LIME
+\citep{picov2026ropelime}, which uses the rotary embedding only as a
+locality kernel for input perturbations on closed models. All of them operate
+at a \emph{fixed} position
 or integrate over positions as independent examples: the positional encoding is
 part of the forward pass, not the attribution target.
 
@@ -893,7 +899,9 @@ rotary offset features across architectures, Chiang and Yogatama
 helping retrieval, and He and colleagues \citep{he2025lowrank} build a low-rank
 sparse replacement for attention layers. Each concerns \emph{how much}
 position a channel carries, not the sign of what it carries. The spectral view
-belongs to Xiong et al. \citep{xiong2025dope} and \citet{li2026fingerprint}.
+belongs to Xiong et al. \citep{xiong2025dope}, \citet{li2026fingerprint}, and
+frequency-band control in shared-attention DiTs
+\citep{mikaeili2026untwistingrope}.
 
 \textbf{Position-blindness is a known gap, but not this one.} Haklay and
 colleagues \citep{haklay2025positionaware} observe that circuit-discovery
@@ -980,7 +988,18 @@ at head dimension $64$, moves the pooled rate monotonically from $32.0\%$ down
 to $18.3\%$ --- slower rotation fits the constant better --- and sweeping head
 dimension $32$ to $128$ at base $10^{4}$ leaves it at $25.6\%$ to $26.3\%$. The
 median relative error stays above $1.0$ everywhere, from $1.03$ to $1.18$; the
-artifact is \texttt{results/sensitivity.json}.
+artifact is \texttt{results/sensitivity.json}, plotted in
+Figure~\ref{app:fig:sensitivity} with the published configuration marked.
+\paperfigure{fig11_sensitivity_sweep}{%
+  The configuration sweep behind this paragraph. Left: the pooled rate against
+  the rotary base on a log axis at head dimension $64$ (error bars: $\pm 1$ SD
+  across the sweep's seeds; dashed: the published base). Right: the rate
+  against head dimension at base $10^{4}$ (left axis) and the median relative
+  error against the same head dimension (squares, right axis; dotted: the
+  $1.0$ reference). Every plotted value is read from
+  \texttt{results/sensitivity.json}, the artifact this paragraph quotes; the
+  CSV sidecar holds the same array.%
+}{app:fig:sensitivity}
 
 \paragraph{Claims and their source files.}
 % Full-width float: this three-column audit table is ~216pt wider than a
