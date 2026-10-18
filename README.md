@@ -217,11 +217,11 @@ All measured at `dim = 64`, `base = 10000`, `scale = 32`. Full values in
 | norm preservation, query and key | `1.8e-15` |
 | bilinearity in content, 35 score checks | `7.4e-16` |
 | per-pair closed form vs brute force | `3.6e-15` |
-| feature additivity, `score == sum_ij f_i g_j A_ij(delta)` | `3.6e-14` |
+| feature additivity, `score == sum_ij f_i g_j A_ij(delta)` | `3.9e-14` |
 
 **Attribution is exact, but position-conditional.** With `x = sum_i f_i d_i` and
 random `W_Q`, `W_K`, the score decomposes additively into per-feature-pair terms
-`A_ij(delta)` to `3.6e-14`. But `A_ij` depends on the distance, so a single
+`A_ij(delta)` to `3.9e-14`. But `A_ij` depends on the distance, so a single
 feature's contribution is a *function of distance*, not a scalar. Measured on the
 54-point grid, **all eight features reverse sign** somewhere in
 `delta in [1, 8192]` (`figures/fig09_position_conditional_attribution.png`), and

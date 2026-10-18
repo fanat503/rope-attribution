@@ -175,13 +175,15 @@ CLAIMS: tuple[Claim, ...] = (
         r"(?:over|across) \$(35)\$ score checks",
         at_least=2,
     ),
-    # The note explaining WHY ceilings are quoted names the two platform-dependent
-    # values illustratively. They are not measurements: nothing is asserted about
-    # them beyond both being far below the bound, so the test only checks that.
+    # The note explaining WHY ceilings are quoted names two observed values of the
+    # same sum on two platforms: 3.5527e-14 on Ubuntu CI (both matrix Pythons)
+    # and 3.9079e-14 on the Windows machine that produced the artefacts. Nothing
+    # is asserted about the digits beyond both sitting far below the bound; the
+    # exact last bits are platform-dependent by construction.
     Claim(
         "floor_note_pair",
-        r"yields \$(3\.4)\\times10\^\{-14\}\$ on one platform and "
-        r"\$(3\.6)\\times10\^\{-14\}\$ on another",
+        r"yields \$(3\.6)\\times10\^\{-14\}\$ on one platform and "
+        r"\$(3\.9)\\times10\^\{-14\}\$ on another",
     ),
     Claim(
         "closed_form_ceiling",
@@ -195,16 +197,16 @@ CLAIMS: tuple[Claim, ...] = (
         "additivity_54pt_ceiling",
         r"feature additivity, \$54\$-pt grid & \$<(10)\^\{-(13)\}\$",
     ),
-    Claim("abstract_additivity", r"we measure the residual at \$(3\.6)\\times10\^\{-14\}\$"),
-    Claim("r1_additivity", r"additive decomposition holds to \$(3\.6)\\times10\^\{-14\}\$"),
-    Claim("conclusion_additivity", r"is exact for a fixed position pair, to \$(3\.6)\\times10\^\{-14\}\$"),
+    Claim("abstract_additivity", r"we measure the residual at \$(3\.9)\\times10\^\{-14\}\$"),
+    Claim("r1_additivity", r"additive decomposition holds to \$(3\.9)\\times10\^\{-14\}\$"),
+    Claim("conclusion_additivity", r"is exact for a fixed position pair, to \$(3\.9)\\times10\^\{-14\}\$"),
     Claim(
         "corr_bilinearity",
         r"doubles the score to a relative error of \$(7\.4)\\times10\^\{-16\}\$",
     ),
     Claim(
         "eq_additivity_grids",
-        r"holds to \$(3\.6)\\times10\^\{-14\}\$ on the \$5\$-point grid and "
+        r"holds to \$(3\.9)\\times10\^\{-14\}\$ on the \$5\$-point grid and "
         r"\$(5\.0)\\times10\^\{-14\}\$ on the \$54\$-point grid",
     ),
     Claim("synthesis_additivity", r"is exact to \$(5\.0)\\times10\^\{-14\}\$"),
@@ -398,7 +400,7 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("partial_clean_const", r"the plotted constant is \$([\d.]+)\$ at every"),
     Claim("partial_rot_spread", r"over those same grids, varies by \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ respectively"),
-    Claim("partial_share", r"score of \$(0\.075)\$ \(JSON grid\) and \$(0\.231)\$ \(figure grid\)"),
+    Claim("partial_share", r"score of \$(0\.076)\$ \(JSON grid\) and \$(0\.231)\$ \(figure grid\)"),
     # The norm-deviation claims are withdrawn: partial rotary is orthogonal once the
     # rotated block is paired within itself, so the paper now states a ceiling and
     # explains the silently-wrong pairing that motivated the earlier, wrong number.
@@ -407,7 +409,7 @@ CLAIMS: tuple[Claim, ...] = (
         r"&\s*\$<(10)\^\{-(13)\}\$, \$(1\.776)\\\!\\times\\\!10\^\{(-15)\}\$ & \\texttt\{partial",
     ),
     Claim("partial_prov_spreads", r"&\s*\$(0\.0)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & \\texttt\{measurements\.json :: partial"),
-    Claim("partial_prov_share", r"&\s*\$(0\.075)\$, \$(0\.231)\$ & \\texttt\{clean"),
+    Claim("partial_prov_share", r"&\s*\$(0\.076)\$, \$(0\.231)\$ & \\texttt\{clean"),
     # ---- mscale / entropy -------------------------------------------------------
     Claim("mscale_formula", r"\\mathrm\{mscale\} = (0\.1) \\ln s \+ 1"),
     Claim(
@@ -434,7 +436,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("prov_pair_d1", r"&\s*\$(-0\.9525)\$, \$(-1\.0607)\$, \$(0\.1136)\$, \$(4\.3)\\\!\\times\\\!10\^\{(-6)\}\$ & \\texttt\{fig06\}"),
     Claim("prov_yarn_note", r"&\s*\$(\d+)\$ of \$(\d+)\$ bit-for-bit"),
     Claim("prov_partial", r"&\s*\$(0\.0)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & \\texttt\{measurements"),
-    Claim("prov_partial_share", r"&\s*\$(0\.075)\$, \$(0\.231)\$ & \\texttt\{clean"),
+    Claim("prov_partial_share", r"&\s*\$(0\.076)\$, \$(0\.231)\$ & \\texttt\{clean"),
     Claim("prov_partial_norm", r"&\s*\$<(10)\^\{-(13)\}\$, \$(1\.776)\\\!\\times\\\!10\^\{(-15)\}\$ & \\texttt\{partial"),
     # The remark that replaced the withdrawn norm claim restates n_rot.
     Claim(
@@ -933,7 +935,7 @@ def _leaves(fresh, committed, path: str = ""):
       ``additivity_max_abs_err``) are not ordinary quantities: they *are* the
       float64 roundoff of subtracting two analytically equal expressions, so
       their value is whatever the summation order happens to produce. Windows
-      and Linux legitimately give 3.4e-14 and 3.6e-14 for the same sum. A
+      and Linux legitimately give 3.9e-14 and 3.6e-14 for the same sum. A
       relative tolerance on noise is meaningless, so these are compared against
       an absolute ceiling instead: the claim that matters is "below the noise
       floor of float64", not "equal to the digits I happened to get".
@@ -1094,9 +1096,11 @@ def test_paper_states_the_two_grids_the_numbers_came_from() -> None:
     grid = figure_delta_grid()
     assert n_figure == len(grid), f"paper says {n_figure} figure distances; the grid has {len(grid)}"
     assert (grid[0], grid[-1]) == (1, top)
-    # The coarse-grid attribution ratio is no longer quoted in the paper, so the
-    # fine figure grid is the only attribution grid the prose has to pin down.
-    assert set(MEASUREMENTS["partial_rope"]["deltas"]).issubset(table_grid)
+    # Every JSON grid is the declared table grid: both the partial-RoPE split
+    # and the additivity check record the same five distances the Method names,
+    # so no quoted number is measured on an undeclared grid.
+    assert MEASUREMENTS["partial_rope"]["deltas"] == list(table_grid)
+    assert MEASUREMENTS["feature_attribution"]["deltas"] == list(table_grid)
     assert int(literal("table_intro_grid")) == len(table_grid)
     assert int(literal("table_caption_grid")) == len(table_grid)
 
@@ -1204,12 +1208,13 @@ def test_relative_position_property_claim() -> None:
 
 
 def test_the_floor_note_pairs_are_both_far_below_the_bound() -> None:
-    """The illustrative pair in the note on platform-dependent noise floors.
+    """The note's platform pair: one sum, two hosts, two last-bit values.
 
-    These two numbers are not measurements the paper is reporting; they illustrate
-    that the same computation lands on a different last-bit value on a different
-    host. What must hold is that both sit far below the ceiling the table states -
-    otherwise the note would be comparing values that are not actually noise.
+    The mantissas are measured, not illustrative: 3.6e-14 is the aligned-grid
+    additivity residual on Ubuntu CI (both matrix Pythons), 3.9e-14 is the value
+    in the artefacts. What must hold here is the property the note uses the pair
+    for - both sit far below the ceiling the table states - because the exact
+    digits depend on the host's summation order.
     """
     low_mantissa, high_mantissa = groups("floor_note_pair")[0]
     low = float(low_mantissa) * 1e-14
@@ -1220,6 +1225,11 @@ def test_the_floor_note_pairs_are_both_far_below_the_bound() -> None:
             f"{value:.3e} should be noise well below the {bound:.0e} ceiling"
         )
     assert float(low) != float(high), "the note's point is that they differ"
+    assert_paper_number_matches(
+        MEASUREMENTS["feature_attribution"]["additivity_max_abs_err"] / 1e-14,
+        high_mantissa,
+        "the note's larger value is the artefacts' own residual",
+    )
 
 
 def test_the_42_pairs_are_the_7_distances_times_the_6_base_positions() -> None:
@@ -2037,9 +2047,11 @@ def test_the_rotated_subscore_spread_on_both_grids() -> None:
     assert_paper_number_matches(measured, fig_value, "the rotated spread (figure grid)")
     assert_paper_number_matches(
         MEASUREMENTS["partial_rope"]["rotated_score_spread"], literal("prov_partial", 2),
-        "the appendix's 12.03",
+        "the provenance row's JSON-grid spread",
     )
-    assert_paper_number_matches(measured, literal("prov_partial", 3), "the appendix's 22.56")
+    assert_paper_number_matches(
+        measured, literal("prov_partial", 3), "the provenance row's figure-grid spread"
+    )
 
 
 def test_the_clean_magnitude_share_on_both_grids() -> None:

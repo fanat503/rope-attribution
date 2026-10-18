@@ -228,7 +228,7 @@ def _leaves(fresh, committed, path: str = ""):
       ``additivity_max_abs_err``) are not ordinary quantities: they *are* the
       float64 roundoff of subtracting two analytically equal expressions, so
       their value is whatever the summation order happens to produce. Windows
-      and Linux legitimately give 3.4e-14 and 3.6e-14 for the same sum. A
+      and Linux legitimately give 3.9e-14 and 3.6e-14 for the same sum. A
       relative tolerance on noise is meaningless, so these are compared against
       an absolute ceiling instead: the claim that matters is "below the noise
       floor of float64", not "equal to the digits I happened to get".

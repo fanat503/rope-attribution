@@ -225,7 +225,7 @@ def feature_attribution(
     n_features: int = 8,
     dim: int = 64,
     seed: int = 1,
-    deltas: tuple[int, ...] = (1, 8, 32, 128, 512),
+    deltas: tuple[int, ...] = (1, 64, 512, 2048, 4096),  # the paper's 5-point grid
 ) -> dict:
     """Exact additive attribution of the score, and how it varies with distance.
 
@@ -394,7 +394,7 @@ def partial_rope_split(
     n_rot_frac: float = 0.25,
     dim: int = 64,
     seed: int = 3,
-    deltas: tuple[int, ...] = (1, 64, 512, 2048),
+    deltas: tuple[int, ...] = (1, 64, 512, 2048, 4096),  # the paper's 5-point grid
 ) -> dict:
     """Partial RoPE splits the score into an exactly position-free bilinear part
     and a rotated part. Measure both, and the position-invariance of the clean part."""

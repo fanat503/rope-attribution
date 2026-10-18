@@ -704,7 +704,7 @@ def test_feature_attribution_reports_machine_precision_additivity():
     reported = E.feature_attribution()
     assert reported["additivity_max_abs_err"] < EXACT_TOL
     assert reported["additivity_max_abs_err"] == pytest.approx(
-        3.552713678800501e-14, rel=0.5, abs=EXACT_TOL
+        3.907985046680551e-14, rel=0.5, abs=EXACT_TOL
     )
     delta_only_err = reported["delta_only_max_abs_err"]
     assert delta_only_err < 1e-10, (
@@ -714,7 +714,7 @@ def test_feature_attribution_reports_machine_precision_additivity():
     assert reported["score_depends_only_on_delta"] is True
     assert reported["n_features"] == 8
     assert reported["dim"] == 64
-    assert reported["deltas"] == [1, 8, 32, 128, 512]
+    assert reported["deltas"] == [1, 64, 512, 2048, 4096]
 
 
 def test_feature_attribution_reproduces_its_own_spread_definition():
@@ -1100,7 +1100,7 @@ def test_n_rot_is_int_of_the_fraction(n_rot_frac, n_rot):
     assert reported["rotated_fraction"] == n_rot_frac
     assert reported["clean_fraction"] == 1.0 - n_rot_frac
     assert reported["dim"] == 64
-    assert reported["deltas"] == [1, 64, 512, 2048]
+    assert reported["deltas"] == [1, 64, 512, 2048, 4096]
 
 
 def _pp_rope_vector(vec: np.ndarray, rot_freqs: np.ndarray, n_rot: int, pos: int) -> np.ndarray:
@@ -1239,7 +1239,7 @@ def test_rotated_score_really_depends_on_the_distance(n_rot_frac):
 
 def test_partial_rope_split_is_reproducible_from_the_documented_construction():
     """Recompute the rotated spread and the share from the module's own vectors."""
-    dim, n_rot, deltas, seed = 64, 16, (1, 64, 512, 2048), 3
+    dim, n_rot, deltas, seed = 64, 16, (1, 64, 512, 2048, 4096), 3
     freqs = _ladder(dim)
     rng = np.random.default_rng(seed)
     q_hat = rng.standard_normal(dim)
@@ -1261,7 +1261,7 @@ def test_partial_rope_split_is_reproducible_from_the_documented_construction():
         reported["clean_magnitude_share_mean"], rel=1e-12
     )
     assert reported["rotated_score_spread"] == pytest.approx(20.647208273835265, rel=1e-9)
-    assert reported["clean_magnitude_share_mean"] == pytest.approx(0.07490835206551523, rel=1e-9)
+    assert reported["clean_magnitude_share_mean"] == pytest.approx(0.07617579321024089, rel=1e-9)
 
 
 # ==========================================================================

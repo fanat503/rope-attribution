@@ -16,14 +16,14 @@
     "dim": 64,
     "deltas": [
       1,
-      8,
-      32,
-      128,
-      512
+      64,
+      512,
+      2048,
+      4096
     ],
-    "additivity_max_abs_err": 3.552713678800501e-14,
-    "per_feature_contribution_spread_max_ratio": 43.04839681113919,
-    "delta_only_max_abs_err": 2.842170943040401e-14,
+    "additivity_max_abs_err": 3.907985046680551e-14,
+    "per_feature_contribution_spread_max_ratio": 477.4180077972933,
+    "delta_only_max_abs_err": 9.769962616701378e-13,
     "score_depends_only_on_delta": true
   },
   "method_spectrum": [
@@ -237,11 +237,12 @@
       1,
       64,
       512,
-      2048
+      2048,
+      4096
     ],
     "clean_score_spread": 0.0,
     "rotated_score_spread": 20.647208273835265,
-    "clean_magnitude_share_mean": 0.07490835206551523,
+    "clean_magnitude_share_mean": 0.07617579321024089,
     "partial_norm_deviation": 0.0
   },
   "mscale_entropy": {

@@ -110,7 +110,7 @@ narrow question: \emph{exactly} what does RoPE do to it? Three things. First,
 for a fixed pair of positions, the RoPE attention score is exactly bilinear in
 the content vectors, so the additive feature decomposition
 $\mathrm{score} = \sum_{ij} f_i g_j A_{ij}(\delta)$ is exact, not approximate;
-we measure the residual at $3.6\times10^{-14}$. Because the rotary transform is
+we measure the residual at $3.9\times10^{-14}$. Because the rotary transform is
 orthogonal, the magnitude gate $|q|$ is exactly position-independent, which
 promotes the gate/phase split from heuristic to theorem. Second, the exactness
 does not extend to position-\emph{free} coefficients: $A_{ij}$ is a function of
@@ -158,7 +158,7 @@ Three results follow, and we state them as precisely as we can.
 
 \paragraph{R1: attribution is exact, and the gate/phase split is a theorem.}
 For a fixed position pair the score is exactly bilinear in $(q, k)$, so the
-additive decomposition holds to $3.6\times10^{-14}$. Moreover, because
+additive decomposition holds to $3.9\times10^{-14}$. Moreover, because
 $\R_{\delta}$ is orthogonal, $|q|$ and $|k|$ are exactly
 position-independent. Any claim that RoPE corrupts bilinearity, or smears the
 gate with position, is false at the score level, and we measure it to be false
@@ -323,8 +323,8 @@ algebra above is the actual computation, not a post-hoc description of it.
 
 We report these as ceilings rather than digits. Each is the residual of
 subtracting two analytically equal expressions, so its value is whatever the host's
-summation order produces: the same computation yields $3.4\times10^{-14}$ on one
-platform and $3.6\times10^{-14}$ on another. Quoting more precision than the
+summation order produces: the same computation yields $3.6\times10^{-14}$ on one
+platform and $3.9\times10^{-14}$ on another. Quoting more precision than the
 quantity carries would be false. The claim that carries meaning is the bound, and
 it is checked against the data at test time, not merely asserted here.
 
@@ -358,7 +358,7 @@ before rotating, the score decomposes additively:
   \underbrace{q_i^{\!\top}\R_{\delta}k_j}_{A_{ij}(\delta)} .
   \label{eq:additive}
 \end{equation}
-Equation~\ref{eq:additive} holds to $3.6\times10^{-14}$ on the $5$-point grid
+Equation~\ref{eq:additive} holds to $3.9\times10^{-14}$ on the $5$-point grid
 and $5.0\times10^{-14}$ on the $54$-point grid. Additive attribution to a
 sparse-feature code is therefore \emph{exact} at the score level under RoPE, and
 any failure mode one wishes to attribute to RoPE's position encoding is not
@@ -795,7 +795,7 @@ RoPE's effect on feature-level attention attribution is exactly characterizable
 in the relative frame, where the score is $q^{\!\top}\R_{\delta}k$ and each of
 the $\half$ rotary pairs contributes a sinusoid with a position-independent
 amplitude and a linear phase. Three consequences. Attribution at the score level
-is exact for a fixed position pair, to $3.6\times10^{-14}$, and orthogonality
+is exact for a fixed position pair, to $3.9\times10^{-14}$, and orthogonality
 makes the magnitude gate
 exactly position-independent, so the gate/phase split is a theorem rather than
 an approximation. Position-conditionality, not bilinearity, is the operative
@@ -885,7 +885,7 @@ App.~\ref{app:context} & $9$ of $32$, $32.00\times$ & \texttt{fig01} CSV, unchan
 Sec.~\ref{sec:exact} & $0.9526294618$, $2.3046990967$ & \texttt{fig06} CSV, \texttt{amplitude\_R\_k} \\
  & $-0.9525$, $-1.0607$, $0.1136$, $4.3\!\times\!10^{-6}$ & \texttt{fig06} CSV \\
 Sec.~\ref{sec:partial} & $0.0$, $20.65$, $24.36$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
- & $0.075$, $0.231$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
+ & $0.076$, $0.231$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
  & $<10^{-13}$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; full-RoPE floor \\
 Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entropy.mscale} \\
  & $0.9233 \to 0.7687$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
@@ -1060,7 +1060,7 @@ grid is \emph{exactly} $0.0$, and over the finer $54$-point grid it
 is also exactly $0.0$ --- the plotted constant is $0.6857345646988313$ at every
 distance. The rotated sub-score, over those same grids, varies by $20.65$ and
 $24.36$ respectively. The clean part carries a mean magnitude share of the
-score of $0.075$ (JSON grid) and $0.231$ (figure grid): a genuinely
+score of $0.076$ (JSON grid) and $0.231$ (figure grid): a genuinely
 position-free bilinear term, though a smaller part of the score than the
 rotated one at these distances.
 
