@@ -2,8 +2,9 @@
 #
 # `make all` runs the test suite, regenerates the committed structural
 # artefacts and the figure set, and recompiles the paper. Every step is
-# byte-reproducible: the structural JSON artefacts are verified identical
-# across three independent runs.
+# reproducible: the test suite recomputes the structural JSON artefacts
+# and compares them with the committed copies value by value (floats to
+# a relative 1e-12).
 #
 # The checkpoint measurements (real_model.py, usefulness.py, agreement.py) are
 # deliberately not part of `all`: they need CPU torch, which is not a test

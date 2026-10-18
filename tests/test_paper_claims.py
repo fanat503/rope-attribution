@@ -528,9 +528,12 @@ CLAIMS += (
         r"on \\texttt\{SmolLM-135M\}, \$(0\.\d+)\$ to \$(0\.\d+)\$, "
         r"a factor of \$(\d+\.\d)\$",
     ),
+    # Pythia-160m's own quartiles, not a pooling across models: the
+    # sentence used to say "pooled".
     Claim(
         "trained_share_iqr",
-        r"interquartile range alone runs from \$(0\.\d+)\$ to \$(0\.\d+)\$",
+        r"interquartile range on \\texttt\{pythia-160m\} alone runs from "
+        r"\$(0\.\d+)\$ to \$(0\.\d+)\$",
     ),
     Claim(
         "trained_blind_fraction",
@@ -569,8 +572,72 @@ CLAIMS += (
     Claim(
         "worth_grid_drift",
         r"drift is \$(0\.1779)\$ across the sweep actually run, which spans\s+"
-        r"densities \$(9)\$, \$(17)\$ and \$(65)\$",
+        r"densities \$(9)\$, \$(17)\$ and \$(65)\$ --- a \$(7)\\times\$ change",
     ),
+    # The qualifications the paper puts on the 26.8% headline: which
+    # estimator it is, the interval around it, and the pairwise
+    # disagreement. Every number here is re-derived from the per-head
+    # rates in `test_uncertainty.py`; the patterns are also what the
+    # exhaustiveness scan sees the passage through, so all three
+    # mentions of 26.8/26.70 are claimed.
+    Claim(
+        "boot_two_means",
+        r"\$(26\.8)\\%\$ is the equal-weight mean of the three per-checkpoint "
+        r"rates; the mean over all \$(\d+)\$ heads is \$(26\.\d\d)\\%\$",
+    ),
+    Claim(
+        "boot_head_mean_restated",
+        r"the headline is the equal-weight \$(26\.8)\\%\$, while the interval "
+        r"below belongs to the head-pooled \$(26\.\d\d)\\%\$",
+    ),
+    Claim("boot_headline_restated", r"next to the \$(26\.8)\\%\$ itself"),
+    Claim(
+        "boot_head_counts",
+        r"\\texttt\{SmolLM-135M\} contributes \$(\d+)\$ heads against \$(\d+)\$ "
+        r"each for the other",
+    ),
+    Claim(
+        "boot_pooled_interval",
+        r"\$(95)\\%\$ percentile interval of \$\[(0\.\d+), (0\.\d+)\]\$ "
+        r"around \$(0\.\d+)\$",
+    ),
+    Claim(
+        "boot_between_head_sd",
+        r"between-head standard deviation of the per-head rates is \$(0\.\d+)\$",
+    ),
+    Claim(
+        "boot_pairwise_intervals",
+        r"pythia vs llama \$([+-]?\d\.\d+)\$ points \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$, "
+        r"pythia vs SmolLM \$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$, "
+        r"llama vs SmolLM \$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$",
+    ),
+    # Definitional spans and figure-caption numbers that the
+    # exhaustiveness scan has to see but that no single number test can
+    # pin: the small-angle truncation's Taylor coefficients, the shape of
+    # the coefficients, the index sets, the frequency formula, the
+    # positivity and blindness conditions, and the fig11 caption's
+    # configuration constants. Where the number is a real quantity, the
+    # test that verifies it is named rather than restated here.
+    Claim("method_taylor_series", r"\$\\cos ?\\D \\mapsto (1) - \\D\^2/2\$", 3),
+    Claim("method_2x2", r"define the \$(2)\\times 2\$ coefficients"),
+    Claim(
+        "method_one_by_one_family",
+        r"not a \$(1)\\times1\$ coefficient \$A_\{ij\}\$ but the \$\\delta\$-indexed "
+        r"family \$\\bigl\\\{A_\{ij\}\^\{\(0\)\}\(\\delta\), \\dots, "
+        r"A_\{ij\}\^\{\(\\half-1\)\}\(\\delta\)\\bigr\\\}\$",
+    ),
+    Claim("method_freq_formula", r"\$\\invf_k = \\mathrm\{base\}\^\{(-2)k/d\}\$"),
+    Claim("prop_gate_positive", r"whenever \$R_k > (0)\$"),
+    Claim("prop_blind_zero", r"it touches has \$\\Bk = (0)\$"),
+    Claim("blind_one_percent", r"moves by less than \$(1)\\%\$ across the distance range"),
+    Claim("pair_past_one", r"past \$(1)\$, i\.e\. worse than deleting the term"),
+    Claim("yarn_scales_fast_one", r"scales those channels by exactly \$(1)\$"),
+    Claim("threshold_rad_within", r"within \$(0\.1)\\rad\$ for more than three tokens"),
+    Claim("worth_withdrawn_fourteen", r"claimed a \$(14)\\times\$ span"),
+    Claim("fig11_head_dim", r"at head dimension \$(64)\$ \(error bars"),
+    Claim("fig11_error_bars", r"error bars: \$\\pm (1)\$ SD across"),
+    Claim("fig11_base", r"at base \$(10)\^\{4\}\$ \(left axis\)"),
+    Claim("fig11_reference", r"dotted: the \$(1\.0)\$ reference"),
     # The ranking-agreement measurement on the same three checkpoints: the
     # position-free surrogate ranks the head's rotary pairs, and the paper
     # quotes how often the exact and the surrogate ranking name the same lead,
@@ -666,7 +733,13 @@ CLAIMS += (
     # number takes rather than written out 46 times.
     Claim("ext_scale_prose", r"extension factor \$s = (32)\$", 3),
     Claim("ext_scale_at", r"At \$s = (32)\$ we measure"),
-    Claim("ext_scale_under_yarn", r"Under .*? at \$s = (32)\$"),
+    # Anchored on \yarn itself: the lazy version of this pattern --
+    # `Under .*? at $s = (32)$` -- started at 'Under RoPE' in the
+    # introduction and reached the first matching appendix sentence
+    # 57 620 characters later, marking every number in between as
+    # claimed. The span cap in test_the_claim_registry_is_not_vacuous
+    # keeps that trap from coming back quietly.
+    Claim("ext_scale_under_yarn", r"Under \\yarn\\ at \$s = (32)\$"),
     Claim("ext_scale_figure", r"slow tail down by exactly \$(32)\\times\$"),
     Claim("ext_scale_divides", r"divides every entry by \$(32)\$"),
     Claim("ext_scale_all_entries", r"differs from RoPE in all \$(32)\$ entries"),
@@ -701,9 +774,12 @@ CLAIMS += (
         "legacy_row_fractions",
         r"different numbers again \(\$(0\.3438)\$ and \$(0\.\d+)\$\)",
     ),
+    # The same repair as ext_scale_under_yarn: the expression before
+    # the word 'from' is the shrinking of the max angle, not the first
+    # `shrinking` in the paper, which is 15 000 characters earlier.
     Claim(
         "interp_shrinks_max_angle",
-        r"shrinking .*? from \$(\d+)\$ to\s*\$(\d+)\\rad\$",
+        r"shrinking \$\\max_k\|\\D\|\$ from \$(\d+)\$ to\s*\$(\d+)\\rad\$",
     ),
 )
 
@@ -2780,6 +2856,19 @@ def test_no_affirmative_claim_of_a_trained_model_real_activations_or_accuracy() 
     )
 
 
+def test_the_paper_does_not_deny_the_trained_checkpoints_exist() -> None:
+    """The Conclusion once said there was no trained model anywhere in this work.
+
+    The trained section measures on three pretrained checkpoints, so that
+    absolute denial was false; it was replaced by what is actually absent (a
+    downstream model, learned features, a retrieval benchmark) plus an explicit
+    statement that those checkpoints are not evaluated on any task. This pins
+    the replacement and catches a rewording that resurrects the false sentence.
+    """
+    assert "no trained model" not in TEX_FLAT
+    assert "we do not evaluate them on any task" in TEX_FLAT
+
+
 def test_the_only_accuracy_number_in_the_paper_is_the_one_it_refuses_to_report() -> None:
     hits = re.findall(r"accuracy[^\n]{0,60}?\$([\d.]+)\$", TEX)
     assert hits == [literal("negated_accuracy")], (
@@ -3027,6 +3116,21 @@ def test_the_claim_registry_is_not_vacuous() -> None:
     )
     assert capturing == len(CLAIMS) - len(no_capture), (
         f"only {capturing} of {len(CLAIMS)} claims capture a number at all"
+    )
+    # No claim may swallow the document. A lazy `.*?` can run across
+    # pages: `Under .*?` once spanned 57 620 characters, from the
+    # introduction to an unrelated appendix sentence, so every number
+    # between its endpoints counted as covered. Patterns here are
+    # anchored on specific prose; this is what keeps them that way.
+    spans = [
+        (match.end() - match.start(), entry.name)
+        for entry in CLAIMS
+        for match in re.finditer(entry.pattern, TEX_FLAT)
+    ]
+    longest = max(spans)
+    assert longest[0] <= 300, (
+        f"claim {longest[1]!r} matches {longest[0]} characters; a match that"
+        f" long hides unclaimed numbers inside its span"
     )
 
 

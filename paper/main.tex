@@ -387,7 +387,8 @@ has $\Bk = 0$.
   Per-feature contribution against relative distance. Eight synthetic
   features; each panel plots $c_i(\delta)$ against $\delta$ with the feature's
   own mean as a dotted line. Every feature's curve changes sign over the range.
-  See Section~\ref{sec:cond}.%
+  The max/min ratio this figure was once described by is a grid-density
+  artefact and is deliberately not plotted; see the remark below.%
 }{fig:attrib}
 
 Figure~\ref{fig:attrib} measures the effect directly, and the result is sharper
@@ -517,11 +518,12 @@ rates; the mean over all $2790$ heads is $26.70\%$, lower because
 \texttt{SmolLM-135M} contributes $1350$ heads against $720$ each for the other
 two. These are different estimators: the headline is the equal-weight $26.8\%$,
 while the interval below belongs to the head-pooled $26.70\%$, and the two
-differ by more than twice that interval's half-width.
+differ by more than that interval's half-width.
 \emph{Second}, the interval. Resampling with replacement over heads --- over
 \emph{heads} and not over the cells inside them, because cells within a head
 share a query and a key and so are not independent --- gives a $95\%$ percentile
-interval of $[0.2665, 0.2674]$ around $0.2670$, standard deviation $0.0129$.
+interval of $[0.2665, 0.2674]$ around $0.2670$; the between-head standard
+deviation of the per-head rates is $0.0129$.
 An interval for the pooled mean does not cover the equal-weight headline; and it
 says nothing about variation across prompts or across the distance grid, which
 is a real limitation of the estimate and is stated as one.
@@ -588,7 +590,10 @@ Equation~\ref{eq:perpair} reproduces brute-force scores to a median relative
 error of $5.06\times10^{-8}$ on \texttt{pythia-160m}, $3.57\times10^{-8}$ on
 \texttt{llama-160m} and $5.85\times10^{-8}$ on \texttt{SmolLM-135M}, against a
 float32 epsilon of $1.19\times10^{-7}$; bilinearity in content behaves the same
-way at $8.65\times10^{-8}$, $5.99\times10^{-8}$ and $7.52\times10^{-8}$. These
+way at $8.65\times10^{-8}$, $5.99\times10^{-8}$ and $7.52\times10^{-8}$ --- each
+a scaled residual, divided by the magnitude sum on which bilinearity is exact
+rather than by the score, whose cancellation on a real head would dominate the
+naive ratio. These
 are not small numbers that happen to pass: they are the numbers you get when the
 implementation is correct and the arithmetic runs out of precision. A trained
 checkpoint does not introduce a correction term to any of it.
@@ -598,8 +603,9 @@ share of an attention score taken by a feature's contribution is not a stable
 quantity across heads. Pooling over heads, layers and prompts, the leading
 feature's share ranges from $0.0108$ to $0.9999$ on \texttt{pythia-160m}, a
 factor of $92.9$; on \texttt{llama-160m} it spans $0.0148$ to $0.9999$, a factor of $67.6$; on
-\texttt{SmolLM-135M}, $0.0150$ to $0.9999$, a factor of $66.8$. The pooled
-interquartile range alone runs from $0.117$ to $0.992$. Some heads hand
+\texttt{SmolLM-135M}, $0.0150$ to $0.9999$, a factor of $66.8$. The
+interquartile range on \texttt{pythia-160m} alone runs from $0.117$ to $0.992$.
+Some heads hand
 almost the entire score to one feature; others spread it. Any per-feature
 attribution method that reports one number per feature has to pick a convention
 for that spread, and the convention will dominate the answer.
@@ -814,11 +820,14 @@ short version is that exactness, position-conditionality, and linearizability
 are three separate problems that are easy to conflate.
 
 The measurements are structural and model-independent by design, and we have
-been explicit about what that excludes: no trained model, no learned features,
-no retrieval benchmark, no accuracy figure. What is claimed here is a correct
-and carefully measured characterization of the score's structure under RoPE, and
-nothing beyond it. Appendix~\ref{app:note} records two corrections to statements
-that are common in informal write-ups of this area.
+been explicit about what that excludes: no downstream model, no learned
+features, no retrieval benchmark, no accuracy figure. The three pretrained
+checkpoints of Section~\ref{sec:trained} confirm the identities they are asked
+about and nothing more; we do not evaluate them on any task. What is claimed
+here is a correct and carefully measured characterization of the score's
+structure under RoPE, and nothing beyond it. Appendix~\ref{app:note} records
+two corrections to statements that are common in informal write-ups of this
+area.
 
 % =====================================================================
 \appendix

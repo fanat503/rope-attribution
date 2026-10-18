@@ -26,6 +26,16 @@ if str(_REPO / "projects") not in sys.path:
 
 from rope_attribution import uncertainty as UNC  # noqa: E402
 
+# The claims this file re-derives. Same-directory import: the patterns
+# and the paper live in test_paper_claims.py, so exactly one module
+# knows what the paper says.
+from test_paper_claims import (  # noqa: E402
+    TEX_FLAT,
+    assert_paper_number_matches,
+    groups,
+    literal,
+)
+
 _JSON = _REPO / "results" / "usefulness.json"
 
 
@@ -210,3 +220,101 @@ def test_the_interval_comes_from_heads_not_cells(per_head: tuple[list[str], list
         spread_of_model_means,
         out["sd"],
     )
+
+
+def test_the_two_means_the_paper_distinguishes(usefulness: dict) -> None:
+    """26.8% is the equal-weight mean of per-checkpoint means; 26.70% is the
+    mean over all 2790 heads. Both are pinned, so the passage cannot collapse
+    them into one number."""
+    checkpoint, n, head = groups("boot_two_means")[0]
+    rates = [
+        [
+            h["sign_flip_fraction_pooled"]
+            for entry in m["per_prompt"]
+            for h in entry["heads"]
+        ]
+        for m in usefulness["models"]
+    ]
+    assert sum(len(row) for row in rates) == int(n)
+    assert_paper_number_matches(
+        100.0 * float(np.mean([np.mean(row) for row in rates])),
+        f"{float(checkpoint):.1f}",
+        "the equal-weight mean of the per-checkpoint rates",
+    )
+    head_mean = 100.0 * float(np.mean([rate for row in rates for rate in row]))
+    assert_paper_number_matches(head_mean, f"{float(head):.2f}", "the head-pooled mean")
+    restated_equal, restated_head = groups("boot_head_mean_restated")[0]
+    assert_paper_number_matches(
+        100.0 * float(np.mean([np.mean(row) for row in rates])),
+        f"{float(restated_equal):.1f}",
+        "the equal-weight headline where the paper distinguishes it",
+    )
+    assert_paper_number_matches(
+        head_mean,
+        f"{float(restated_head):.2f}",
+        "the head-pooled mean where the paper restates it",
+    )
+    # The passage's other quantitative claim: the two differ by more than
+    # the pooled interval's half-width. Re-derived here, and it is *less*
+    # than two half-widths --- which is what made the earlier "more than
+    # twice" wording wrong and why that phrase is now absent.
+    out = UNC.bootstrap_ci([rate for row in rates for rate in row])
+    half_width = 100.0 * 0.5 * (out["ci_high"] - out["ci_low"])
+    delta = 100.0 * float(np.mean([np.mean(row) for row in rates])) - head_mean
+    assert delta > half_width, (delta, half_width)
+    assert delta < 2.0 * half_width, (delta, half_width)
+    assert "twice that interval's half-width" not in TEX_FLAT
+
+
+def test_the_head_counts_are_the_ones_in_the_json(usefulness: dict) -> None:
+    smol, each = (int(value) for value in groups("boot_head_counts")[0])
+    counts = {m["model_id"]: m["n_heads"] for m in usefulness["models"]}
+    assert counts["HuggingFaceTB/SmolLM-135M"] == smol
+    assert [n for name, n in counts.items() if "SmolLM" not in name] == [each, each]
+    assert sum(counts.values()) == int(literal("worth_head_count")) == smol + 2 * each
+
+
+def test_the_pooled_interval_is_as_printed(
+    per_head: tuple[list[str], list[list[float]]],
+) -> None:
+    """The bootstrap the paper labels as between-head, re-derived end to end."""
+    _ids, rates = per_head
+    out = UNC.bootstrap_ci([rate for row in rates for rate in row])
+    pct, lo, hi, mean = groups("boot_pooled_interval")[0]
+    assert pct == "95", pct
+    assert_paper_number_matches(out["ci_low"], f"{float(lo):.4f}", "the interval's lower end")
+    assert_paper_number_matches(out["ci_high"], f"{float(hi):.4f}", "the interval's upper end")
+    assert_paper_number_matches(out["mean"], f"{float(mean):.4f}", "the pooled mean")
+    # The number is the spread of the per-head rates, not the standard error of
+    # the mean, which is an order of magnitude smaller at n = 2790.
+    sd = literal("boot_between_head_sd")
+    assert_paper_number_matches(
+        out["sd"], f"{float(sd):.4f}", "the between-head standard deviation"
+    )
+
+
+def test_the_pairwise_intervals_are_as_printed(
+    per_head: tuple[list[str], list[list[float]]],
+) -> None:
+    ids, rates = per_head
+    out = UNC.checkpoint_agreement(rates, ids)
+    written = groups("boot_pairwise_intervals")[0]
+    assert len(out["pairs"]) == 3
+    for pair, (mean, lo, hi) in zip(
+        out["pairs"], (written[i : i + 3] for i in (0, 3, 6)), strict=True
+    ):
+        assert_paper_number_matches(
+            100.0 * pair["mean_difference"],
+            f"{float(mean):.2f}",
+            f"the mean difference for {pair['pair']}",
+        )
+        assert_paper_number_matches(
+            100.0 * pair["ci_low"],
+            f"{float(lo):.2f}",
+            f"the interval's lower end for {pair['pair']}",
+        )
+        assert_paper_number_matches(
+            100.0 * pair["ci_high"],
+            f"{float(hi):.2f}",
+            f"the interval's upper end for {pair['pair']}",
+        )

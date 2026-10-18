@@ -95,7 +95,9 @@ PYTHONPATH=../projects python -m rope_attribution.statistics   # results/statist
 PYTHONPATH=../projects python -m rope_attribution.figures      # figures/*.png and *.csv
 ```
 
-All three are seeded and reproduce byte-identically.
-`tests/test_measurements_json_is_current` and its statistics counterpart re-run
-them and require the committed files to match, so the paper cannot drift from
-the data.
+All three are seeded. `tests/test_measurements_json_is_current` and its
+statistics counterpart re-run the first two and require the committed files to
+match value by value --- floats to a relative `1e-12`, which tolerates the
+last-bit drift between platforms --- so the paper cannot drift from the data.
+The figure CSV sidecars are re-derived against the paper's claims in
+`tests/test_paper_claims.py`.

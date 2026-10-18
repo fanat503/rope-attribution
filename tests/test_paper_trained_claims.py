@@ -196,6 +196,19 @@ def test_the_closed_form_and_bilinearity_sit_at_that_floor(trained: dict) -> Non
         assert bilinear < FLOAT32_EPS, (model, bilinear)
 
 
+def test_the_bilinearity_numbers_are_labelled_as_scaled_residuals() -> None:
+    """The three numbers are scaled residuals, not score-relative errors.
+
+    The test above re-derives ``bilinearity_max_scaled_err``: the residual
+    divided by the magnitude sum on which bilinearity is exact. Divided by
+    the score itself, the same residuals would be dominated by cancellation
+    on a real head and would not be small, so the sentence has to name the
+    denominator it uses.
+    """
+    assert "each a scaled residual, divided by the magnitude sum" in TEX_FLAT
+    assert "rather than by the score" in TEX_FLAT
+
+
 # --------------------------------------------------------------------------
 # the empirical payoff: per-feature share is not a stable quantity
 # --------------------------------------------------------------------------
@@ -220,13 +233,24 @@ def test_the_per_feature_share_spread_is_as_quoted(trained: dict) -> None:
         assert q["std"] > 0.3, (model, q["std"])
 
 
-def test_the_quoted_interquartile_range_is_the_pooled_one(trained: dict) -> None:
+def test_the_quoted_interquartile_range_is_pythias_own(trained: dict) -> None:
+    """A one-checkpoint sentence, and the paper now says which checkpoint.
+
+    Both ends of the printed range are pythia-160m's own quartiles
+    (0.1169 and 0.9919). The label used to say 'pooled'; llama and
+    SmolLM sit at 0.151/0.988 and 0.154/0.989, so naming the model is
+    the honest version of what was measured.
+    """
     lo, hi = groups("trained_share_iqr")[0]
-    p25 = [float(_shares(trained, m)["p25"]) for m in (PYTHIA, LLAMA, SMOLLM)]
-    p75 = [float(_shares(trained, m)["p75"]) for m in (PYTHIA, LLAMA, SMOLLM)]
-    assert_paper_number_matches(min(p25), f"{float(lo):.3f}", "the pooled lower quartile")
-    assert_paper_number_matches(max(p75), f"{float(hi):.3f}", "the pooled upper quartile")
-    assert max(p75) > 0.95 and min(p25) < 0.2, (p25, p75)
+    q = _shares(trained, PYTHIA)
+    assert_paper_number_matches(
+        float(q["p25"]), f"{float(lo):.3f}", "the lower quartile on pythia-160m"
+    )
+    assert_paper_number_matches(
+        float(q["p75"]), f"{float(hi):.3f}", "the upper quartile on pythia-160m"
+    )
+    # Not a rounding artefact: the range really is most of the unit interval.
+    assert float(q["p25"]) < 0.2 and float(q["p75"]) > 0.95, (q["p25"], q["p75"])
 
 
 def test_almost_every_channel_is_position_carrying(trained: dict) -> None:
@@ -299,7 +323,13 @@ def test_each_checkpoint_reports_its_own_rate(usefulness: dict) -> None:
 
 
 def test_the_head_range_is_not_one_outlier(usefulness: dict) -> None:
-    """If a single head failed, the honest claim would be about that head."""
+    """If a single head failed, the honest claim would be about that head.
+
+    The band's two ends are pinned at the paper's own precision instead
+    of a +-1.0-point slack: the extremes over all 2790 heads are 22.378%
+    and 34.859%, which round to the printed 22.4% and 34.9%. A one-point
+    slack would have passed a band that is nearly a point off the data.
+    """
     total = sum(m["n_heads"] for m in usefulness["models"])
     assert total == int(literal("worth_head_count")), total
     los, his = (float(x) for x in groups("worth_head_range")[0])
@@ -307,9 +337,10 @@ def test_the_head_range_is_not_one_outlier(usefulness: dict) -> None:
     # The JSON stores fractions and the paper prints percentages. Comparing the
     # two directly is a unit error that happens to pass for the pooled rate and
     # fails here, so the conversion is explicit.
-    for model in usefulness["models"]:
-        assert 100.0 * model["sign_flip_fraction_min_head"] >= los - 1.0, model["model_id"]
-        assert 100.0 * model["sign_flip_fraction_max_head"] <= his + 1.0, model["model_id"]
+    mins = [100.0 * m["sign_flip_fraction_min_head"] for m in usefulness["models"]]
+    maxs = [100.0 * m["sign_flip_fraction_max_head"] for m in usefulness["models"]]
+    assert_paper_number_matches(min(mins), f"{los:.1f}", "the lowest per-head rate")
+    assert_paper_number_matches(max(maxs), f"{his:.1f}", "the highest per-head rate")
     # Every model fails on a large minority of cells, so it is not a tail effect.
     for model in usefulness["models"]:
         assert model["sign_flip_fraction_pooled"] > 0.15, model["model_id"]
