@@ -59,7 +59,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1409 tests (excludes tests/test_readme_claims.py)
+pytest -q                                        # 1410 tests (excludes tests/test_readme_claims.py)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -153,7 +153,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1409 tests (excludes tests/test_readme_claims.py)
+tests/            1410 tests (excludes tests/test_readme_claims.py)
 figures/          eleven figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
@@ -264,11 +264,12 @@ any of these methods; what YaRN buys is a larger linearizable majority
 
 **Partial RoPE yields an exactly position-free sub-score.** At `p = 0.25` the
 unrotated 75% of channels contribute a sub-score whose spread across distance is
-exactly `0.0`, while the rotated quarter varies by `11.34`. This is a clean
+exactly `0.0`, while the rotated quarter varies by `20.65`. This is a clean
 separation of a bilinear, position-independent term from the position-carrying
-one (`figures/fig07`). Note that partial rotation is *not* orthogonal, so the norm
+one (`figures/fig07`). Note that partial rotation is orthogonal, so the norm
 is preserved exactly as for full RoPE, provided the rotated block is paired within
-itself (the GPT-NeoX layout, as in `pythia-160m`). Pairing across the whole head
+itself (the GPT-NeoX layout, as in `pythia-160m`) and its frequencies are built
+from `rotary_dim` as HF does. Pairing across the whole head
 instead leaves every touched pair half rotated and half not; that variant is not
 orthogonal and is not what any published model does.
 

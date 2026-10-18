@@ -472,12 +472,16 @@ def test_partial_apply_rope_leaves_the_tail_bit_identical(dim):
 
 
 @pytest.mark.parametrize("dim", DIMS)
-def test_partial_rope_repacks_the_lowest_frequencies_into_the_rotated_block(dim):
-    """The rotated block re-packs the ``n_rot // 2`` fastest channels twice.
+def test_partial_rope_carries_the_rotary_dim_ladder(dim):
+    """The rotated block carries the ladder of an ``n_rot``-channel head, duplicated.
 
-    Consequence: for ``0 < n_rot < dim`` the partial layout is *not* the leading slice
-    of the full layout (the full layout would repeat frequencies ``n_rot//2 ..
-    n_rot-1`` there instead).
+    HF GPT-NeoX builds ``inv_freq`` from ``rotary_dim = n_rot`` --
+    ``1.0 / (base ** (arange(0, n_rot, 2) / n_rot))`` in
+    ``models/gpt_neox/modeling_gpt_neox.py`` -- so the rotated block is not a re-run
+    of the full-head ladder's fastest channels. Where ``n_rot`` divides ``dim`` the
+    two constructions are bit-identical; where it does not, ``rope.py`` rebuilds the
+    ladder from the base the full ladder encodes and the check is to float64
+    precision.
     """
     pos = _positions(9)
     inv_f = R.inv_freq(dim)
@@ -486,13 +490,62 @@ def test_partial_rope_repacks_the_lowest_frequencies_into_the_rotated_block(dim)
         if n_rot == 0:
             continue
         k = n_rot // 2
+        ref = 1.0 / (BASES[0] ** (np.arange(0, n_rot, 2, dtype=np.float64) / n_rot))
+        ref_cos, ref_sin = R.rope_cos_sin(pos, ref)
+        ref_cos_half, ref_sin_half = ref_cos[:, :k], ref_sin[:, :k]
         cos, sin = R.partial_rope_cos_sin(pos, inv_f, n_rot)
-        np.testing.assert_array_equal(cos[:, :k], full_cos[:, :k])
-        np.testing.assert_array_equal(cos[:, k:n_rot], full_cos[:, :k])
-        np.testing.assert_array_equal(sin[:, :k], full_sin[:, :k])
-        np.testing.assert_array_equal(sin[:, k:n_rot], full_sin[:, :k])
+        for got, want in (
+            (cos[:, :k], ref_cos_half),
+            (cos[:, k:n_rot], ref_cos_half),
+            (sin[:, :k], ref_sin_half),
+            (sin[:, k:n_rot], ref_sin_half),
+        ):
+            if dim % n_rot == 0:
+                np.testing.assert_array_equal(got, want)
+            else:
+                # The rebuild round-trips the base through inv_f[1]
+                # (10000 -> 9999.99999999998, a 2.0e-15 relative loss), so the
+                # comparison sees 1-2 ulp disagreements; measured worst relative
+                # difference is 1.6e-14. A structurally wrong ladder (any other
+                # stride) differs by O(0.1), twelve orders of magnitude above
+                # this tolerance.
+                np.testing.assert_allclose(got, want, rtol=1e-12, atol=0.0)
         if n_rot < dim:
             assert not np.array_equal(cos[:, :n_rot], full_cos[:, :n_rot])
+            assert not np.array_equal(sin[:, :n_rot], full_sin[:, :n_rot])
+
+
+def test_partial_rotated_pairs_carry_the_rotary_dim_ladder():
+    """Detector: at ``head_dim = 64``, ``n_rot = 16`` the rotated pairs turn by
+    ``10000 ** (-2j/16)``, not by ``full[:8]``.
+
+    ``full[::4][:8]`` is the GPT-NeoX ``rotary_dim = 16`` ladder (bit-identical to
+    HF's ``1.0 / (base ** (arange(0, 16, 2) / 16))``): its slowest rotated pair turns
+    by ``512 * 10000 ** (-14/16) = 0.161909`` rad at ``delta = 512``. The withdrawn
+    variant sliced the full ladder's fastest eight channels, whose slowest pair would
+    turn by ``68.276297`` rad -- more than ``400`` times further. Revert the ladder
+    line in ``partial_rope_cos_sin`` and the first table equality check below fails with a ``0.23`` maximum relative difference (measured).
+    """
+    dim, n_rot, base = 64, 16, 10000.0
+    half = n_rot // 2
+    inv_f = R.inv_freq(dim)
+
+    rotary = 1.0 / (base ** (np.arange(0, n_rot, 2, dtype=np.float64) / n_rot))
+    assert dim % n_rot == 0, "the subsample below needs n_rot to divide dim"
+    np.testing.assert_array_equal(inv_f[:: dim // n_rot][:half], rotary)
+
+    cos, sin = R.partial_rope_cos_sin(np.array([0.0, 1.0, 512.0]), inv_f, n_rot)
+    ref_cos, ref_sin = R.rope_cos_sin(np.array([1.0]), rotary)
+    np.testing.assert_array_equal(cos[1, :n_rot], ref_cos[0])
+    np.testing.assert_array_equal(sin[1, :n_rot], ref_sin[0])
+
+    angles = np.arctan2(sin[1, :half], cos[1, :half])
+    np.testing.assert_allclose(angles, rotary, rtol=1e-12, atol=0.0)
+
+    slowest = 512.0 * rotary[-1]
+    withdrawn = 512.0 * inv_f[:half][-1]
+    assert slowest == pytest.approx(512.0 * base ** (-14.0 / 16.0), rel=1e-12)
+    assert withdrawn / slowest > 400.0
 
 
 @pytest.mark.parametrize("dim", DIMS)
@@ -536,7 +589,7 @@ def test_partial_propagates_mscale_to_the_rotated_block_only(dim):
     n_rot = min(16, dim)
     mscale = 1.3465735902799727
     cos, sin = R.partial_rope_cos_sin(pos, inv_f, n_rot, mscale)
-    ref_cos, ref_sin = R.rope_cos_sin(pos, inv_f[: n_rot // 2], mscale)
+    ref_cos, ref_sin = R.rope_cos_sin(pos, inv_f[:: dim // n_rot][: n_rot // 2], mscale)
     np.testing.assert_array_equal(cos[:, :n_rot], ref_cos)
     np.testing.assert_array_equal(sin[:, :n_rot], ref_sin)
     np.testing.assert_allclose(cos[:, :n_rot] ** 2 + sin[:, :n_rot] ** 2, mscale**2, rtol=0.0, atol=1e-14)

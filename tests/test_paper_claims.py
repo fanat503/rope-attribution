@@ -398,7 +398,7 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("partial_clean_const", r"the plotted constant is \$([\d.]+)\$ at every"),
     Claim("partial_rot_spread", r"over those same grids, varies by \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ respectively"),
-    Claim("partial_share", r"score of \$(0\.302)\$ \(JSON grid\) and \$(0\.187)\$ \(figure grid\)"),
+    Claim("partial_share", r"score of \$(0\.075)\$ \(JSON grid\) and \$(0\.231)\$ \(figure grid\)"),
     # The norm-deviation claims are withdrawn: partial rotary is orthogonal once the
     # rotated block is paired within itself, so the paper now states a ceiling and
     # explains the silently-wrong pairing that motivated the earlier, wrong number.
@@ -407,7 +407,7 @@ CLAIMS: tuple[Claim, ...] = (
         r"&\s*\$<(10)\^\{-(13)\}\$, \$(1\.776)\\\!\\times\\\!10\^\{(-15)\}\$ & \\texttt\{partial",
     ),
     Claim("partial_prov_spreads", r"&\s*\$(0\.0)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & \\texttt\{measurements\.json :: partial"),
-    Claim("partial_prov_share", r"&\s*\$(0\.302)\$, \$(0\.187)\$ & \\texttt\{clean"),
+    Claim("partial_prov_share", r"&\s*\$(0\.075)\$, \$(0\.231)\$ & \\texttt\{clean"),
     # ---- mscale / entropy -------------------------------------------------------
     Claim("mscale_formula", r"\\mathrm\{mscale\} = (0\.1) \\ln s \+ 1"),
     Claim(
@@ -434,7 +434,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("prov_pair_d1", r"&\s*\$(-0\.9525)\$, \$(-1\.0607)\$, \$(0\.1136)\$, \$(4\.3)\\\!\\times\\\!10\^\{(-6)\}\$ & \\texttt\{fig06\}"),
     Claim("prov_yarn_note", r"&\s*\$(\d+)\$ of \$(\d+)\$ bit-for-bit"),
     Claim("prov_partial", r"&\s*\$(0\.0)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & \\texttt\{measurements"),
-    Claim("prov_partial_share", r"&\s*\$(0\.302)\$, \$(0\.187)\$ & \\texttt\{clean"),
+    Claim("prov_partial_share", r"&\s*\$(0\.075)\$, \$(0\.231)\$ & \\texttt\{clean"),
     Claim("prov_partial_norm", r"&\s*\$<(10)\^\{-(13)\}\$, \$(1\.776)\\\!\\times\\\!10\^\{(-15)\}\$ & \\texttt\{partial"),
     # The remark that replaced the withdrawn norm claim restates n_rot.
     Claim(

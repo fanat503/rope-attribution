@@ -10,6 +10,12 @@ RoPE
     Inverse frequencies and the split-half rotation convention follow
     HuggingFace `transformers`, `models/llama/modeling_llama.py`
     (`rotate_half`, `compute_default_rope_parameters`).
+    Partial rotary (`partial_rope_cos_sin`, `apply_partial_rope`) follows the
+    GPT-NeoX layout in `transformers`, `models/gpt_neox/modeling_gpt_neox.py`:
+    the rotated block's inverse frequencies are built from `rotary_dim`
+    (`dim = int(head_dim * partial_rotary_factor)`), and channel `i` is paired
+    with `i + rotary_dim // 2` within the block -- the layout of
+    `EleutherAI/pythia-160m` (`rotary_pct = 0.25`, `head_dim = 64`).
 
 YaRN
     Peng, Bowen; Quesnelle, Jeffrey; Fan, Honglu; Shippole, Enrico.
@@ -142,9 +148,19 @@ def partial_rope_cos_sin(
 
     The remaining ``head_dim - n_rot`` dimensions receive ``cos = 1, sin = 0`` and are
     therefore left completely unrotated. This is the "partial rotary" arrangement used
-    by GPT-NeoX and by models such as ``EleutherAI/pythia-160m`` (``rotary_pct = 0.25``):
-    a fraction ``n_rot / head_dim`` of the channels carry position, the rest carry
-    content only.
+    by GPT-NeoX and by models such as ``EleutherAI/pythia-160m`` (``rotary_pct = 0.25``,
+    ``head_dim = 64``, hence ``rotary_dim = 16``): a fraction ``n_rot / head_dim`` of the
+    channels carry position, the rest carry content only.
+
+    **The ladder is built from ``n_rot``, not from the full head.** GPT-NeoX computes
+    ``dim = int(head_dim * partial_rotary_factor)`` and then
+    ``inv_freq = 1.0 / (base ** (arange(0, dim, 2) / dim))``
+    (`models/gpt_neox/modeling_gpt_neox.py`, ``compute_default_rope_parameters``), so the
+    rotated block carries ``inv_freq_j = base ** (-2j/n_rot)``. At ``head_dim = 64`` and
+    ``n_rot = 16`` those are the *slowest* channels of the full-head ladder under a
+    stride of four (``full[::4][:8]``), not the fastest eight (``full[:8]``): at
+    ``delta = 512`` the slowest rotated pair turns by 0.1619 rad under the GPT-NeoX
+    ladder against 68.28 rad under the leading-slice variant.
 
     **The pairing matters.** Apply these tables with :func:`apply_partial_rope`, which
     pairs channel ``i`` with channel ``i + n_rot // 2`` *within the rotated block*.
@@ -165,12 +181,31 @@ def partial_rope_cos_sin(
     if n_rot == 0:
         ones = np.ones((len(positions), dim), dtype=np.float64)
         return ones, np.zeros((len(positions), dim), dtype=np.float64)
-    cos, sin = rope_cos_sin(positions, inv_f[: n_rot // 2], mscale)
+    cos, sin = rope_cos_sin(positions, _rotary_dim_ladder(inv_f, n_rot), mscale)
     pad = dim - n_rot
     return (
         np.concatenate([cos, np.ones((len(positions), pad))], axis=-1),
         np.concatenate([sin, np.zeros((len(positions), pad))], axis=-1),
     )
+
+
+def _rotary_dim_ladder(inv_f: np.ndarray, n_rot: int) -> np.ndarray:
+    """Inverse frequencies of a ``rotary_dim = n_rot`` head: ``base ** (-2j/n_rot)``.
+
+    GPT-NeoX builds the ladder from the rotated block, not from the full head:
+    ``dim = int(head_dim * partial_rotary_factor)`` and then
+    ``1.0 / (base ** (arange(0, dim, 2) / dim))``
+    (`models/gpt_neox/modeling_gpt_neox.py`, ``compute_default_rope_parameters``).
+    The caller passes the full-head ladder, so whenever ``n_rot`` divides ``dim`` the
+    rotated ladder is its stride-``dim // n_rot`` subsample. Otherwise -- a width and a
+    rotated block that no ladder can be subsampled into -- it is rebuilt from the base
+    the full ladder encodes, ``inv_f[1] = base ** (-2 / dim)``.
+    """
+    dim = inv_f.shape[0] * 2
+    if dim % n_rot == 0:
+        return inv_f[:: dim // n_rot][: n_rot // 2]
+    base = float(inv_f[1]) ** (-dim / 2.0)
+    return base ** (-2.0 * np.arange(n_rot // 2, dtype=np.float64) / n_rot)
 
 
 # --------------------------------------------------------------------------

@@ -240,8 +240,8 @@
       2048
     ],
     "clean_score_spread": 0.0,
-    "rotated_score_spread": 11.341035002815437,
-    "clean_magnitude_share_mean": 0.30194191480559224,
+    "rotated_score_spread": 20.647208273835265,
+    "clean_magnitude_share_mean": 0.07490835206551523,
     "partial_norm_deviation": 0.0
   },
   "mscale_entropy": {

@@ -884,8 +884,8 @@ App.~\ref{app:context} & $9$ of $32$, $32.00\times$ & \texttt{fig01} CSV, unchan
  & $52.42$, $23.40$ & \texttt{fig02} CSV, \texttt{abs\_angle\_rad} \\
 Sec.~\ref{sec:exact} & $0.9526294618$, $2.3046990967$ & \texttt{fig06} CSV, \texttt{amplitude\_R\_k} \\
  & $-0.9525$, $-1.0607$, $0.1136$, $4.3\!\times\!10^{-6}$ & \texttt{fig06} CSV \\
-Sec.~\ref{sec:partial} & $0.0$, $11.34$, $24.20$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
- & $0.302$, $0.187$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
+Sec.~\ref{sec:partial} & $0.0$, $20.65$, $24.36$ & \texttt{measurements.json :: partial\_rope}; \texttt{fig07} CSV \\
+ & $0.075$, $0.231$ & \texttt{clean\_magnitude\_share\_mean}; fig07 \texttt{clean\_subscore} \\
  & $<10^{-13}$, $1.776\!\times\!10^{-15}$ & \texttt{partial\_norm\_deviation}; full-RoPE floor \\
 Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entropy.mscale} \\
  & $0.9233 \to 0.7687$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
@@ -1058,10 +1058,11 @@ Figure~\ref{fig:partial} shows the split. At $d = 64$ with
 $n_{\mathrm{rot}} = 16$: the unrotated sub-score's spread over the $5$-point
 grid is \emph{exactly} $0.0$, and over the finer $54$-point grid it
 is also exactly $0.0$ --- the plotted constant is $0.6857345646988313$ at every
-distance. The rotated sub-score, over those same grids, varies by $11.34$ and
-$24.20$ respectively. The clean part carries a mean magnitude share of the
-score of $0.302$ (JSON grid) and $0.187$ (figure grid), so this is a
-substantially weighted, genuinely position-free bilinear term.
+distance. The rotated sub-score, over those same grids, varies by $20.65$ and
+$24.36$ respectively. The clean part carries a mean magnitude share of the
+score of $0.075$ (JSON grid) and $0.231$ (figure grid): a genuinely
+position-free bilinear term, though a smaller part of the score than the
+rotated one at these distances.
 
 This is the one setting in which a position-free additive attribution is exactly
 correct, and it is correct because a quarter of the channels carry no position

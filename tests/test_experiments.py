@@ -1103,20 +1103,24 @@ def test_n_rot_is_int_of_the_fraction(n_rot_frac, n_rot):
     assert reported["deltas"] == [1, 64, 512, 2048]
 
 
-def _pp_rope_vector(vec: np.ndarray, freqs: np.ndarray, n_rot: int, pos: int) -> np.ndarray:
+def _pp_rope_vector(vec: np.ndarray, rot_freqs: np.ndarray, n_rot: int, pos: int) -> np.ndarray:
     """The partial-RoPE operator, written out by hand.
 
     Independent of ``rope.apply_partial_rope``: the rotated block ``0 .. n_rot-1``
     is split in half and paired within itself, ``k`` with ``k + n_rot//2``, which is
     the GPT-NeoX layout. The tail ``n_rot .. dim`` is untouched. Because each pair
     is a proper 2-D rotation the whole operator is orthogonal.
+
+    ``rot_freqs`` is the ladder of the *rotated block* alone, ``base ** (-2j/n_rot)``
+    (GPT-NeoX builds ``inv_freq`` from ``rotary_dim``, not from the head); the ladder
+    rule itself is pinned in ``tests/test_rope.py``.
     """
     out = np.array(vec, dtype=np.float64, copy=True)
     if n_rot == 0:
         return out
     half = n_rot // 2
     for k in range(half):
-        angle = pos * freqs[k]
+        angle = pos * rot_freqs[k]
         c, s = math.cos(angle), math.sin(angle)
         a, b = vec[k], vec[k + half]
         out[k] = a * c - b * s
@@ -1127,9 +1131,12 @@ def _pp_rope_vector(vec: np.ndarray, freqs: np.ndarray, n_rot: int, pos: int) ->
 def test_partial_rope_operator_matches_the_hand_written_one():
     dim, n_rot = 64, 16
     freqs = _ladder(dim)
+    # The rotated block's ladder is the full ladder subsampled by head_dim // n_rot,
+    # which is bit-identical to what the module uses for this pair of parameters.
+    rot_freqs = freqs[:: dim // n_rot][: n_rot // 2]
     v, _ = _vecs(dim, 51)
     for pos in (0, 37, 512):
-        mine = _pp_rope_vector(v, freqs, n_rot, pos)
+        mine = _pp_rope_vector(v, rot_freqs, n_rot, pos)
         cos, sin = R.partial_rope_cos_sin(np.array([pos]), freqs, n_rot)
         theirs = R.apply_partial_rope(v[None, :], cos, sin, n_rot)[0]
         assert np.array_equal(mine, theirs)
@@ -1140,17 +1147,17 @@ def test_partial_rope_operator_matches_the_hand_written_one():
     # unnoticed until an orthogonality check.
     cos, sin = R.partial_rope_cos_sin(np.array([37]), freqs, n_rot)
     wrong = R.apply_rope(v[None, :], cos, sin)[0]
-    assert not np.array_equal(_pp_rope_vector(v, freqs, n_rot, 37), wrong)
+    assert not np.array_equal(_pp_rope_vector(v, rot_freqs, n_rot, 37), wrong)
     assert abs(float(np.linalg.norm(wrong)) - float(np.linalg.norm(v))) > 1e-3
 
 
 def test_partial_norm_deviation_matches_the_hand_written_operator():
     """The hand-written GPT-NeoX operator must reproduce the module's measurement."""
     dim, n_rot = 64, 16
-    freqs = _ladder(dim)
+    rot_freqs = _ladder(n_rot)
     rng = np.random.default_rng(3)
     q_hat = rng.standard_normal(dim)
-    mine = _pp_rope_vector(q_hat, freqs, n_rot, 37)
+    mine = _pp_rope_vector(q_hat, rot_freqs, n_rot, 37)
     expected = float(np.linalg.norm(mine) - np.linalg.norm(q_hat))
     assert expected == pytest.approx(
         E.partial_rope_split()["partial_norm_deviation"], rel=1e-12
@@ -1170,11 +1177,10 @@ def test_partial_rotary_is_orthogonal_for_every_n_rot():
     not what any published partial-rotary model does.
     """
     dim = 64
-    freqs = _ladder(dim)
     rng = np.random.default_rng(7)
     for n_rot in range(2, dim + 1, 2):
         vec = rng.standard_normal(dim)
-        out = _pp_rope_vector(vec, freqs, n_rot, 37)
+        out = _pp_rope_vector(vec, _ladder(n_rot), n_rot, 37)
         assert float(np.linalg.norm(out)) == pytest.approx(
             float(np.linalg.norm(vec)), abs=EXACT_TOL
         ), f"n_rot={n_rot} leaked norm"
@@ -1254,8 +1260,8 @@ def test_partial_rope_split_is_reproducible_from_the_documented_construction():
     assert float(share.mean()) == pytest.approx(
         reported["clean_magnitude_share_mean"], rel=1e-12
     )
-    assert reported["rotated_score_spread"] == pytest.approx(11.341035002815437, rel=1e-9)
-    assert reported["clean_magnitude_share_mean"] == pytest.approx(0.30194191480559224, rel=1e-9)
+    assert reported["rotated_score_spread"] == pytest.approx(20.647208273835265, rel=1e-9)
+    assert reported["clean_magnitude_share_mean"] == pytest.approx(0.07490835206551523, rel=1e-9)
 
 
 # ==========================================================================
