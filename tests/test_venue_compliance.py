@@ -150,6 +150,22 @@ def test_the_references_are_present_and_not_empty(pages: list[str]) -> None:
     assert "arXiv" in tail, "the bibliography is empty"
 
 
+def test_the_bibliography_closes_the_document() -> None:
+    """The references come after every appendix, not inside them.
+
+    They once sat between appendix A and appendix B--G, so a reader following a
+    citation landed inside the proof material and the number scan stopped at
+    the first appendix. Placement is a sourcing decision, so it is checked in
+    the source: nothing but the closing marker follows the bibliography.
+    """
+    main = _MAIN_TEX.read_text(encoding="utf-8")
+    tail = main[main.index("\\bibliography{references}") :]
+    assert "\\end{document}" in tail
+    assert "\\section" not in tail, "the bibliography must follow every section"
+    assert "\\subsection" not in tail, "the bibliography must follow every subsection"
+    assert "\\appendix" not in tail, "the appendix marker must precede the bibliography"
+
+
 def test_every_bibliography_key_is_cited_and_every_citation_resolves() -> None:
     """A dangling citation or an uncited entry is a defect a reviewer will find."""
     main = _MAIN_TEX.read_text(encoding="utf-8")

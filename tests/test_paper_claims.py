@@ -39,6 +39,13 @@ tokens survive are only those listed in :data:`EXEMPT_ALGEBRA`, each with a
 stated reason.  Adding a number to the paper without adding a test for it fails
 there.
 
+The scan's scope, stated so it cannot be mistaken for wider than it is:
+inline dollar-delimited math only, over the whole source up to the
+bibliography --- since the bibliography moved to the end of the document
+that range includes every appendix --- and never the display-equation bodies
+or the bibliography itself.  Those are covered by the per-number tests
+above, not by this sweep.
+
 All four of the defects this file has found have been *fixed* rather than
 loosened: each names itself in the test name and works the arithmetic out in its
 docstring.
@@ -638,6 +645,104 @@ CLAIMS += (
     Claim("fig11_error_bars", r"error bars: \$\\pm (1)\$ SD across"),
     Claim("fig11_base", r"at base \$(10)\^\{4\}\$ \(left axis\)"),
     Claim("fig11_reference", r"dotted: the \$(1\.0)\$ reference"),
+    # Appendix algebra and one table caption, exposed when the bibliography
+    # moved to the end of the source: definitions, proposition conditions and
+    # proof identities whose digits are algebra, plus the two delta grids the
+    # context table's caption restates. The measured appendix numbers carry
+    # their own claims above.
+    Claim(
+        "app_linearization_bounds",
+        r"bounds the error by \$(1)\$ in units of the pair's own contribution, "
+        r"which is a well-conditioned quantity: it is \$(0)\$ when the pair is "
+        r"exactly linear and \$(1)\$ when",
+    ),
+    Claim(
+        "app_linearization_replace",
+        r"We replace \$\\cos \\D\$ by \$(1) - \\D\^2/2\$ and",
+    ),
+    Claim(
+        "app_theta0_scheme",
+        r"the algebra showing why raising \$\\theta_(0)\$ is not the same scheme",
+    ),
+    Claim(
+        "app_ladder",
+        r"which lies outside the ladder \$k = (0),\\dots,d/2-1\$",
+    ),
+    Claim(
+        "app_leaves_theta0",
+        r"leaves \$\\theta_(0)\$, and hence",
+    ),
+    Claim("app_blind_positive", r"whenever \$\\Rk > (0)\$"),
+    Claim("app_freq_positive", r"Since \$\\invf_k > (0)\$ for every"),
+    Claim(
+        "app_blind_zero",
+        r"In particular \$\\Bk = (0)\$ is \\emph\{not\} a blind case",
+    ),
+    Claim("app_psi_zero", r"it gives \$\\psik = (0)\$ and leaves"),
+    Claim(
+        "app_ak_bk_zero",
+        r"if and only if \$\\Ak = \\Bk = (0)\$ for every \$k \\in I\$",
+    ),
+    Claim(
+        "app_g_equiv_zero",
+        r"gives \$g \\equiv (0) \\Rightarrow \\Ak = \\Bk = 0\$ for all",
+    ),
+    Claim(
+        "app_ak_nonzero",
+        r"a single pair with \$\\Ak \\ne (0)\$ already",
+    ),
+    Claim(
+        "yarn_scheme_theta0",
+        r"it multiplies (?:entry|channel) \$k\$ by \$s\^\{-2k/d\}\$ rather than "
+        r"by \$s\^\{-1\}\$, so it leaves \$\\theta_0 = (1)\$ and hence",
+        2,
+    ),
+    Claim(
+        "app_mscale_squared",
+        r"every logit carries \$\\mathrm\{mscale\}\^(2)\$",
+    ),
+    Claim(
+        "yarn_pairing_rot",
+        r"channel \$i\$ with channel \$i \+ n_\{\\mathrm\{rot\}\}/(2)\$",
+    ),
+    Claim(
+        "yarn_pairing_d",
+        r"Pairing \$i\$ with \$i \+ d/(2)\$ across",
+    ),
+    Claim(
+        "yarn_rot_2x2",
+        r"whose \$k\$-th \$(2)\\times2\$ block rotates",
+    ),
+    Claim(
+        "app_proof_2x2",
+        r"block diagonal with \$(2)\\times 2\$ rotation blocks",
+    ),
+    Claim(
+        "app_proof_orthonormal",
+        r"columns are orthonormal: \$\(\\cos\\D\)\^(2) \+ \(\\sin\\D\)\^2 = 1\$",
+    ),
+    Claim(
+        "app_proof_norm_chain",
+        r"Hence \$\\bigl\|\\R_\\delta k\\bigr\|\^(2) = k\^\{\\!\\top\}\\R_\\delta\^\{\\!\\top\}"
+        r"\\R_\\delta k = k\^\{\\!\\top\}k = \\bigl\|k\\bigr\|\^2\$",
+    ),
+    Claim(
+        "app_atan2",
+        r"\$\\psik = \\operatorname\{atan(2)\}\(\\Bk, \\Ak\)\$",
+    ),
+    Claim(
+        "yarn_mscale_form",
+        r"multiplied by \$\\mathrm\{mscale\} = (0\.1)\\ln s \+ 1\$",
+    ),
+    Claim(
+        "app_table_caption_grid",
+        r"long-distance rows shown \(RoPE and \\yarn\\ at \$\\delta = (512), (2048), "
+        r"(4096)\$; the other two schemes at \$\\delta = 512, 4096\$",
+    ),
+    Claim(
+        "app_amp_err_norm",
+        r"normalized so that \$(1)\$ would mean an error as large",
+    ),
     # The ranking-agreement measurement on the same three checkpoints: the
     # position-free surrogate ranks the head's rotary pairs, and the paper
     # quotes how often the exact and the surrogate ranking name the same lead,
