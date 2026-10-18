@@ -448,7 +448,7 @@ def _probe_diagnostics(model, ids, deltas, n_pairs: int, seed: int) -> dict:
       measured on this model's own weights right now; machine-epsilon scale;
     * ``rope_probe_resid_max`` -- |torch rotation - rope.py rotation| after
       float64 casts, the implementation-fidelity floor;
-    * ``sign_flip_rate`` / ``rel_err_median`` -- the position-free cost
+    * ``sign_flip_rate`` / ``rel_err_median_probe`` -- the position-free cost
       statistic computed by the very ``measure_pair_cost`` the paper's
       per-cell statistic comes from. The logged rate is the mean over the
       sampled cells -- a micro-average over heads and pairs, not the

@@ -108,10 +108,12 @@ device they refuse to start unless `--force-cpu` is passed, because a run of
 this size pegs every core of the machine for days. The tiny `smoke`
 configuration runs the whole loop in seconds and is what the suite exercises.
 
-Each run writes `runs/<name>/metrics.jsonl` -- per evaluation: schedule and
-gradient norm, train/validation loss, throughput, tokens seen, and the
-attribution diagnostics on one fixed probe batch (`closed_form_resid_max`,
-`rope_probe_resid_max`, the position-free `sign_flip_rate`,
+Each run writes `runs/<name>/metrics.jsonl` -- a leading `run_start` record
+pinning the config, parameter count, device, seed and token budget, then one
+record per evaluation: schedule and gradient norm, train/validation loss,
+throughput, tokens seen, and the attribution diagnostics on one fixed probe
+batch (`closed_form_resid_max`, `rope_probe_resid_max`, the position-free
+`sign_flip_rate` with its `n_probe_cells` support count, and
 `rel_err_median_probe`) -- plus `runs/<name>/summary.json`. Two runs of the
 same command with the same seed produce identical records except the
 throughput field; `tests/test_train.py` pins that, and the torch-free tests
