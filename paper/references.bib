@@ -359,6 +359,22 @@
   primaryClass  = {cs.CL}
 }
 
+% LRP reformulated over position-token pairs so relevance propagates through
+% the positional encoding (Rotary/Learnable/Absolute): the encoding becomes
+% part of what is attributed TO, not a measured property of the score; no
+% per-distance score function is reported.
+@article{bakish2025positionallrp,
+  title   = {Revisiting LRP: Positional Attribution as the Missing Ingredient
+             for Transformer Explainability},
+  author  = {Bakish, Yarden and Zimerman, Itamar and Chefer, Hila and
+             Wolf, Lior},
+  journal = {arXiv preprint arXiv:2506.02138},
+  year    = {2025},
+  eprint  = {2506.02138},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
 % A data-aware encoder that keeps standard RoPE on the fast bands and learns
 % bounded coordinates for the slow bands, motivated by slow-band wavelengths
 % exceeding the training context. Same slow-band framing as the paper's table,

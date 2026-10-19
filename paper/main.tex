@@ -785,7 +785,10 @@ through attribution patching, the tuned lens, sparse feature circuits and
 transcoder discovery
 \citep{syed2023attributionpatching,belrose2023tunedlens,marks2024sparsefeaturecircuits,dunefsky2024transcoders},
 operates at a fixed position or treats positions as independent examples: the
-encoding is part of the forward pass, never the attribution target. The
+encoding is part of the forward pass, never the attribution target --- the
+closest exception, LRP rules over position--token pairs
+\citep{bakish2025positionallrp}, makes the encoding a recipient of relevance
+rather than the object measured. The
 per-pair algebra is not new \citep{chachamovits2026phase,liang2026roaware},
 the per-frequency structure has been measured on pretrained checkpoints
 \citep{li2026fingerprint}, and the sign reversal we measure does not appear in
@@ -1438,10 +1441,14 @@ from attribution patching \citep{syed2023attributionpatching} to the tuned lens
 \citep{marks2024sparsefeaturecircuits}, transcoder-based discovery
 \citep{dunefsky2024transcoders} and RoPE-LIME
 \citep{picov2026ropelime}, which uses the rotary embedding only as a
-locality kernel for input perturbations on closed models. All of them operate
-at a \emph{fixed} position
-or integrate over positions as independent examples: the positional encoding is
-part of the forward pass, not the attribution target.
+locality kernel for input perturbations on closed models. All of these methods
+attribute within a given forward pass, and none varies the distance between
+two positions; the positional encoding is part of the forward pass, not the
+attribution target. The nearest work from the other side, Bakish and
+colleagues \citep{bakish2025positionallrp}, propagates relevance through
+Rotary, Learnable and Absolute encodings --- there the encoding is a
+recipient of relevance, not the object whose per-distance score function
+is measured.
 
 \textbf{The algebra is not new, and we do not claim it is.} Chachamovits
 \citep{chachamovits2026phase} writes a rotary head as a sum of per-pair terms
