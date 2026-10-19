@@ -50,6 +50,34 @@
   primaryClass  = {cs.CL}
 }
 
+% Attention-entropy stability as the stated design target of context
+% extension, reached by adjusting the RoPE base together with explicit
+% attention-logit scaling: the lineage of the mscale-as-temperature
+% passage.
+@article{zhang2024hundredsamples,
+  title   = {Extending LLMs' Context Window with 100 Samples},
+  author  = {Zhang, Yikai and Li, Junlong and Liu, Pengfei},
+  journal = {arXiv preprint arXiv:2401.07004},
+  year    = {2024},
+  eprint  = {2401.07004},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL}
+}
+
+% General theory of critical inverse-temperature scaling for softmax
+% concentration: below the critical scale competitors stay unseparated,
+% above it the attention entropy collapses.
+@article{hayase2026criticaltemperature,
+  title   = {A Unified Framework for Critical Scaling of Inverse Temperature
+             in Self-Attention},
+  author  = {Hayase, Tomohiro and Karakida, Ryo},
+  journal = {arXiv preprint arXiv:2605.12697},
+  year    = {2026},
+  eprint  = {2605.12697},
+  archivePrefix = {arXiv},
+  primaryClass  = {stat.ML}
+}
+
 @article{sun2022lengthextrap,
   title   = {A Length-Extrapolatable Transformer},
   author  = {Sun, Yutao and Dong, Li and Patra, Barun and Ma, Shuming and
@@ -371,6 +399,35 @@
   journal = {arXiv preprint arXiv:2506.02138},
   year    = {2025},
   eprint  = {2506.02138},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% Exact responses to positional attention edits, from the RoPE derivative and
+% its integral, carried through the softmax without linearisation: a local
+% intervention calculus, not a per-distance score attribution.
+@article{huang2026exactfinite,
+  title   = {Exact Finite Attention Responses From RoPE Derivatives},
+  author  = {Huang, Julie and Chlon, Maggie and Gutin, Gregory and Chlon,
+             Leon},
+  journal = {arXiv preprint arXiv:2609.14127},
+  year    = {2026},
+  eprint  = {2609.14127},
+  archivePrefix = {arXiv},
+  primaryClass  = {stat.ML}
+}
+
+% Bilinear propagation rules for attention violate the implementation
+% invariance axiom in a leave-one-out alignment analysis: a caveat for any
+% rule built on the per-pair algebra; this repository treats it as a
+% measured identity instead.
+@article{you2025lrploo,
+  title   = {When LRP Diverges from Leave-One-Out in Transformers},
+  author  = {You, Weiqiu and Zeng, Siqi and Tsai, Yao-Hung Hubert and
+             Yamada, Makoto and Zhao, Han},
+  journal = {arXiv preprint arXiv:2510.18810},
+  year    = {2025},
+  eprint  = {2510.18810},
   archivePrefix = {arXiv},
   primaryClass  = {cs.LG}
 }

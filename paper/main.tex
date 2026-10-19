@@ -1101,6 +1101,16 @@ carries $\mathrm{mscale}^2$ --- precisely a temperature on the attention
 distribution. At $s = 32$ we measure $\mathrm{mscale} = 1.3465736$, matching the
 closed form $0.1\ln 32 + 1$ to all printed digits.
 
+The temperature reading is not ours alone. Attention-entropy stability is
+already the stated design target of logit-scaling context extensions
+\citep{zhang2024hundredsamples}, and the theory of inverse-temperature
+scaling in self-attention \citep{hayase2026criticaltemperature} proves the
+scale past which the attention entropy collapses. What is new here is the
+source of the temperature: not prescribed by us but inherited, YaRN's
+magnitude factor squared by the split-half rotation into the logit, and
+its consequence measured across the extension range the other works
+optimize for.
+
 \paperfigure{fig08_mscale_entropy}{%
   Normalized attention entropy $H/\ln T$ against extension factor, with and
   without $\mathrm{mscale}$ (left), and the measured $\mathrm{mscale}$ against
@@ -1448,7 +1458,13 @@ attribution target. The nearest work from the other side, Bakish and
 colleagues \citep{bakish2025positionallrp}, propagates relevance through
 Rotary, Learnable and Absolute encodings --- there the encoding is a
 recipient of relevance, not the object whose per-distance score function
-is measured.
+is measured. Exactness itself has a neighbor: exact finite attention
+responses \citep{huang2026exactfinite} predict how a positional attention
+edit responds, from the RoPE derivative $\partial_p z(p) = A z(p)$ and its
+integral, carried through the softmax without linearising either rotation
+or normalisation. The response to an intervention and the score function
+itself are different objects; this paper measures the latter, at every
+relative distance, in closed form.
 
 \textbf{The algebra is not new, and we do not claim it is.} Chachamovits
 \citep{chachamovits2026phase} writes a rotary head as a sum of per-pair terms
@@ -1457,7 +1473,11 @@ our closed form --- and remarks that the term goes negative near $\pi$; the
 same identity appears in KV-cache quantization work \citep{liang2026roaware}, and
 the per-frequency spectral structure has been measured on pretrained
 checkpoints in weight space \citep{li2026fingerprint}. What is claimed here is
-the attribution semantics and its consequence, not the identity.
+the attribution semantics and its consequence, not the identity. Nor is
+the bilinear form innocent: propagation rules for attention built on it
+violate the implementation-invariance axiom \citep{you2025lrploo}. The
+decomposition here is an identity rather than a rule, and the cost of
+its sign structure is measured rather than assumed away.
 
 \textbf{The sign reversal appears unreported.} Our searches returned no paper
 reporting that a feature's contribution to a rotary score changes sign as the
