@@ -219,11 +219,11 @@ NOISE_FLOOR = 1e-12
 def _leaves(fresh, committed, path: str = ""):
     """Yield ``(path, committed, fresh)`` for every leaf that moved materially.
 
-    Two tolerances, because the file mixes two kinds of number:
+    Three tolerances, because the file mixes three kinds of number:
 
-    * **Results** (``max_abs_angle``, ``frac_channels_linearizable``, a spread
-      ratio) are ordinary quantities and are compared to ``1e-12`` *relative* -
-      about 4500 ULP at 1.0, far tighter than any real disagreement.
+    * **Results** (``max_abs_angle``, ``frac_channels_linearizable``) are
+      ordinary quantities and are compared to ``1e-12`` *relative* - about
+      4500 ULP at 1.0, far tighter than any real disagreement.
     * **Error floors** (``relative_position_max_abs_err``,
       ``additivity_max_abs_err``) are not ordinary quantities: they *are* the
       float64 roundoff of subtracting two analytically equal expressions, so
@@ -236,6 +236,18 @@ def _leaves(fresh, committed, path: str = ""):
     That ceiling is strict enough to catch a real regression: a conservation
     error that grew to 1e-6, or an additivity residual that stopped cancelling,
     would both fail it.
+
+    * **Amplified quotients** (``per_feature_contribution_spread_max_ratio``)
+      divide the largest contribution by the smallest residual cell of a
+      cancellation-accumulated double sum, and the cells themselves come out
+      of BLAS matmuls whose summation order the runner's CPU picks. The
+      record so far: the same seeded run gave 477.4180077972933 on the
+      commit machine and 477.4180077964672 on a CI runner - 1.7e-12 relative,
+      above the results window for a reason the arithmetic explains (a noise
+      input sits in the divisor), and far below anything a convention change
+      does (the README quotes this number to three digits). These leaves get
+      ``1e-9`` relative: roughly five hundred times the observed noise, five
+      orders below real staleness.
     """
     if isinstance(fresh, dict):
         for key, value in committed.items():
@@ -245,8 +257,12 @@ def _leaves(fresh, committed, path: str = ""):
         for index, (value, item) in enumerate(zip(fresh, committed, strict=True)):
             yield from _leaves(value, item, f"{path}[{index}]")
     elif isinstance(fresh, float) or isinstance(committed, float):
+        rel_tol = 1e-12
+        if path.endswith(".per_feature_contribution_spread_max_ratio"):
+            # the amplification argument is the third class above
+            rel_tol = 1e-9
         if math.isclose(
-            float(fresh), float(committed), rel_tol=1e-12, abs_tol=NOISE_FLOOR
+            float(fresh), float(committed), rel_tol=rel_tol, abs_tol=NOISE_FLOOR
         ):
             return
         yield path, committed, fresh
@@ -261,16 +277,50 @@ def test_measurements_json_is_current() -> None:
     README and the JSON would agree with each other and both disagree with the
     code. The experiments are seeded, so the comparison is reproducible.
     """
-    # Compared to a few ULP rather than bit-for-bit. The maths is identical, but
+    # Compared per leaf rather than bit-for-bit. The maths is identical, but
     # the host BLAS changes the last bits of a float64 summation, and the
     # committed JSON was produced on a different platform than CI runs on.
-    # rtol=1e-12 is ~4500 ULP at 1.0, far tighter than any real change.
+    # See _leaves for the tolerance classes.
     live = E.run_all().to_dict()
     drift = [(path, committed, fresh) for path, committed, fresh in _leaves(live, MEASUREMENTS)]
     assert not drift, (
-        f"results/measurements.json is stale ({len(drift)} value(s) differ): re-run "
+        f"results/measurements.json is stale ({len(drift)} value(s) differ beyond "
+        f"the per-leaf tolerance): re-run "
         f"`python -m projects.rope_attribution.experiments`. First: {drift[0]}"
     )
+
+
+def test_the_spread_ratio_tolerates_platform_noise_not_staleness() -> None:
+    """The amplified quotient must pass BLAS-order noise, fail staleness.
+
+    A synthetic walk - no recomputation, just the tolerance classes and the
+    pair the record exposes (see _leaves). Under the pre-widening blanket
+    ``1e-12`` the CI pair counts as drift; the widening is what keeps a
+    runner's BLAS kernel out of the verdict while a 1% convention change
+    still fails.
+    """
+    committed = {
+        "feature_attribution": {
+            "per_feature_contribution_spread_max_ratio": 477.4180077972933
+        }
+    }
+    ci_noise = {
+        "feature_attribution": {
+            "per_feature_contribution_spread_max_ratio": 477.4180077964672
+        }
+    }
+    stale = {
+        "feature_attribution": {
+            "per_feature_contribution_spread_max_ratio": 477.4180077972933 * 1.01
+        }
+    }
+    assert list(_leaves(ci_noise, committed)) == [], (
+        "the recorded CI pair must not count as drift"
+    )
+    assert (
+        [p for p, _, _ in list(_leaves(stale, committed))]
+        == [".feature_attribution.per_feature_contribution_spread_max_ratio"]
+    ), "a convention-level change must still count as drift"
 
 
 # ==========================================================================
@@ -1285,7 +1335,7 @@ def test_legacy_scripts_the_readme_warns_about_do_print_literals() -> None:
 
 
 # ==========================================================================
-# "1424 tests"
+# "1425 tests"
 # ==========================================================================
 
 
@@ -1329,7 +1379,7 @@ def collected_node_ids() -> tuple[str, ...]:
 
 
 def test_quoted_test_count_matches_what_pytest_collects() -> None:
-    """``1424 tests``, in both places the README states it.
+    """``1425 tests``, in both places the README states it.
 
     The README counts the suite that existed when it was written. This file is
     the documentation verifier and is deliberately excluded from the comparison,
