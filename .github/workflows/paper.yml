@@ -106,6 +106,16 @@ jobs:
           print(f"all {figures} figures present ({images} embedded images)")
           PY
 
+      # The format gates are tests, not prose: the nine-page main-text limit,
+      # the figure geometry, the bibliography placement and the build command
+      # documented in BUILD.md are all enforced by tests/test_venue_compliance.py
+      # against this same built artifact. Running them here means a format
+      # regression fails CI on the exact push that introduced it.
+      - name: Run the venue compliance gate
+        run: |
+          pip install --quiet pytest
+          python -m pytest tests/test_venue_compliance.py -q
+
       - uses: actions/upload-artifact@v4
         with:
           name: paper-pdf
