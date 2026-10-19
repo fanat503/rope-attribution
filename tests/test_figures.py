@@ -60,3 +60,30 @@ def test_fig11_refuses_a_sweep_artifact_that_disagrees_with_the_module(
     plant(shifted_grid)
     with pytest.raises(ValueError, match="disagrees"):
         F.fig11_sensitivity_sweep()
+
+
+def test_save_refuses_a_suptitle_that_stretches_the_canvas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """fig09 shipped for a while with a 281-character suptitle line and a saved
+    canvas 2.36x its declared size: the plot was 21% of the image width and one
+    panel printed 0.28 in wide. ``_save`` now measures the tight bbox against
+    the declared figsize and refuses anything over 1.6x (wrapping the suptitle
+    brought fig09 to 0.99x). Both controls run the real save path, so deleting
+    the guard makes the negative control fail by not raising.
+    """
+    F = pytest.importorskip("rope_attribution.figures")
+    plt = pytest.importorskip("matplotlib.pyplot")
+    monkeypatch.setattr(F, "FIGS_DIR", tmp_path)
+
+    ok_fig, ok_ax = plt.subplots(figsize=(4.0, 3.0))
+    ok_ax.plot([0.0, 1.0], [0.0, 1.0])
+    path = F._save(ok_fig, "canvas_ok", "a short title")
+    assert path == tmp_path / "canvas_ok.png"
+    assert path.exists()
+
+    tall_fig, tall_ax = plt.subplots(figsize=(4.0, 3.0))
+    tall_ax.plot([0.0, 1.0], [0.0, 1.0])
+    with pytest.raises(ValueError, match="1.6x the declared figsize"):
+        F._save(tall_fig, "canvas_blown", "x" * 300)
+    assert not (tmp_path / "canvas_blown.png").exists()

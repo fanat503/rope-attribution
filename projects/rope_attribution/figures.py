@@ -183,6 +183,20 @@ def _save(
         fig.tight_layout(rect=(0.0, 0.0, 1.0, top))
     else:
         fig.tight_layout()
+    # "tight" grows the canvas to whatever the text needs: a suptitle wider than
+    # the figure turns the plot into an unreadable strip of pixels at print size
+    # (fig09 shipped like that once). Refuse to write a figure whose saved
+    # canvas is more than 1.6x its declared size -- that ratio was measured at
+    # 2.36 before fig09's suptitle was wrapped.
+    tight = fig.get_tightbbox(fig.canvas.get_renderer())
+    declared = fig.get_size_inches()
+    if tight.width > 1.6 * declared[0] or tight.height > 1.6 * declared[1]:
+        plt.close(fig)
+        raise ValueError(
+            f"{stem}: tight bbox {tight.width:.2f}x{tight.height:.2f} in is over "
+            f"1.6x the declared figsize {declared[0]:.2f}x{declared[1]:.2f} in; "
+            "wrap the suptitle or move it into the caption"
+        )
     path = FIGS_DIR / f"{stem}.png"
     fig.savefig(path, dpi=DPI, bbox_inches="tight")
     plt.close(fig)
@@ -1102,16 +1116,15 @@ def fig09_position_conditional_attribution() -> FigureRecord:
     png = _save(
         fig,
         stem,
-        "The central claim: a feature's attribution is a function of distance, so no"
-        " position-free A_ij can express it\n"
-        f"seed={SEED_ATTRIB}, N_FEATURES={N_FEATURES}, head_dim={HEAD_DIM}  |  "
-        f"additivity residual |sum_i c_i - score| = {additivity_residual:.3e}"
-        f"  |  {n_reversing} of {N_FEATURES} features reverse sign at least once\n"
-        "dotted = the feature's mean over delta.  Blue = lower-indexed feature,"
-        " orange = higher-indexed.  experiments.feature_attribution on the same"
-        " grid. The max/min ratio this figure once quoted is a grid-density"
-        " artefact and is deliberately not plotted; see rope_attribution.statistics.",
-        top=0.88,
+        "The central claim: a feature's attribution is a function of distance,\n"
+        "so no position-free A_ij can express it\n"
+        f"seed={SEED_ATTRIB}, N_FEATURES={N_FEATURES}, head_dim={HEAD_DIM}"
+        f"  |  additivity residual {additivity_residual:.3e}\n"
+        f"{n_reversing} of {N_FEATURES} features reverse sign at least once;"
+        "  dotted = the feature's mean over delta\n"
+        "Blue = lower-indexed feature, orange = higher-indexed."
+        "  experiments.feature_attribution on the same grid.",
+        top=0.84,
     )
     csv_path = _write_csv(
         stem,
