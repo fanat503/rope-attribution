@@ -243,7 +243,13 @@ def measure_model(
     freqs = inv_freq(rope_dim, float(cfgv["rope_theta_declared"]))
 
     if deltas is None:
-        deltas = _log_grid(len(DISTANCE_GRID))
+        # The pre-registered grid itself, materialised as the int64 array the
+        # measured path expects (a bare tuple would break .astype/.size
+        # downstream): re-deriving the values here would couple the default to
+        # len(DISTANCE_GRID) by position, silently measuring a different grid
+        # the day the grid gains or loses a point while still publishing
+        # DISTANCE_GRID as the artifact's distance grid.
+        deltas = np.array(DISTANCE_GRID, dtype=np.int64)
 
     per_prompt = []
     for i, text in enumerate(prompts):

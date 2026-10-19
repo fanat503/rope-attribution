@@ -1630,6 +1630,20 @@ def write_results(data: dict, path: Path | None = None) -> Path:
 # --------------------------------------------------------------------------
 
 
+def _published_structural_facts() -> dict:
+    """The published identity cells, read from the committed artifact.
+
+    ``main``'s synthetic column printed these as four string literals until
+    today, mirroring ``results/measurements.json`` cells that rotted silently
+    the day the artifact's last bit moved. Reading the artifact at print time
+    keeps the "no measured value appears as a literal" banner above true by
+    construction, and tests/test_real_model.py pins the rounding this
+    function feeds the printer with.
+    """
+    path = Path(__file__).resolve().parents[2] / "results" / "measurements.json"
+    return json.loads(path.read_text(encoding="utf-8"))["structural_facts"]
+
+
 def _fmt(x: Any, spec: str = ".4g") -> str:
     if x is None:
         return "n/a"
@@ -1725,17 +1739,27 @@ def main() -> None:
             f"     {'identity':<26} {'max|err| on real':>18} {'/ dtype eps':>12}"
             f" {'synthetic (measurements.json)':>28}"
         )
-        for label, key, ratio_key, synth in (
-            ("pair_closed_form", "pair_closed_form_max_abs_err", "pair_closed_form", "3.6e-15"),
-            ("relative_position", "relative_position_max_abs_err", "relative_position", "3.4e-14"),
-            ("bilinearity (scaled)", "bilinearity_max_scaled_err", "bilinearity", "7.4e-16"),
-            ("key_norm_preservation", "key_norm_preservation_max_abs_err", "norm_preservation", "1.8e-15"),
-            ("query_norm_preservation", "query_norm_preservation_max_abs_err", "norm_preservation", "1.8e-15"),
+        # The synthetic column reads results/measurements.json instead of
+        # mirroring its cells as literals (the four strings printed until
+        # today; a last-bit move of the artifact would have rotted them).
+        synth = _published_structural_facts()
+        for label, key, ratio_key, source in (
+            ("pair_closed_form", "pair_closed_form_max_abs_err", "pair_closed_form",
+             "pair_closed_form_max_abs_err"),
+            ("relative_position", "relative_position_max_abs_err", "relative_position",
+             "relative_position_max_abs_err"),
+            ("bilinearity (scaled)", "bilinearity_max_scaled_err", "bilinearity",
+             "bilinearity_max_rel_err"),
+            ("key_norm_preservation", "key_norm_preservation_max_abs_err",
+             "norm_preservation", "key_norm_preservation_max_abs_err"),
+            ("query_norm_preservation", "query_norm_preservation_max_abs_err",
+             "norm_preservation", "query_norm_preservation_max_abs_err"),
         ):
+            synth_text = f"{synth[source]:.1e}"
             print(
                 f"     {label:<26} {_fmt(agg_id[key]['max'], '.3e'):>18}"
                 f" {_fmt(agg_id['residual_over_dtype_eps'][ratio_key]['max'], '.3g'):>12}"
-                f" {synth:>28}"
+                f" {synth_text:>28}"
             )
         print(
             f"     bilinearity normalised by |score| instead (not meaningful on real"

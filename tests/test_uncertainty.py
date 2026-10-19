@@ -318,3 +318,33 @@ def test_the_pairwise_intervals_are_as_printed(
             f"{float(hi):.2f}",
             f"the interval's upper end for {pair['pair']}",
         )
+
+# ---------------------------------------------------------------------------
+# the pre-registered grid
+# ---------------------------------------------------------------------------
+
+
+def test_measure_model_default_deltas_are_the_pre_registered_grid() -> None:
+    """``deltas=None`` must BE the pre-registered grid, not a re-derivation.
+
+    ``_log_grid(len(DISTANCE_GRID))`` happens to equal ``DISTANCE_GRID``
+    today -- until the first person edits a point out of the grid, the
+    default silently becomes a different grid while the artifact keeps
+    publishing ``DISTANCE_GRID`` as the distance axis it measured on. The
+    default is therefore the named constant itself; the positional
+    re-derivation must stay absent from the source.
+    """
+    raw = (
+        _REPO / "projects" / "rope_attribution" / "usefulness.py"
+    ).read_bytes()
+    # Match on a normalized form: the needle spans three lines, and the
+    # worktree's line endings must not decide whether the guard passes
+    # (read_text() would hide this, normalization makes it explicit).
+    source = raw.decode("utf-8").replace("\r\n", "\n")
+    assert (
+        "\n    if deltas is None:\n        # The pre-registered grid itself" in source
+        and "        deltas = np.array(DISTANCE_GRID, dtype=np.int64)\n" in source
+    ), "measure_model must materialise its default deltas from DISTANCE_GRID itself"
+    assert "_log_grid(len(DISTANCE_GRID))" not in source, (
+        "the positional re-derivation of the default grid is back"
+    )

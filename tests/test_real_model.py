@@ -817,3 +817,39 @@ def test_payload_synthetic_baselines_match_the_published_deltas(payload) -> None
 def agg_rows(payload: dict, model_id: str) -> list[dict]:
     """The linearization rows of one model, in delta order."""
     return payload["aggregates"][model_id]["linearization"]
+
+# ---------------------------------------------------------------------------
+# the report's synthetic column
+# ---------------------------------------------------------------------------
+
+
+def test_the_report_column_reads_the_published_cells_exactly() -> None:
+    """Every printed synth value must equal the artifact cell rounded to .1e.
+
+    The column printed four string literals until today. When the artifact
+    moves its last bit the mirror has to move with it -- pinned here so the
+    drift is a test failure instead of a silently wrong comparison.
+    """
+    facts = RM._published_structural_facts()
+    for key, printed in (
+        ("pair_closed_form_max_abs_err", "3.6e-15"),
+        ("relative_position_max_abs_err", "3.4e-14"),
+        ("bilinearity_max_rel_err", "7.4e-16"),
+        ("key_norm_preservation_max_abs_err", "1.8e-15"),
+        ("query_norm_preservation_max_abs_err", "1.8e-15"),
+    ):
+        assert f"{facts[key]:.1e}" == printed, f"{key}: {facts[key]:.1e} != {printed}"
+
+
+def test_the_report_prints_no_measured_literals() -> None:
+    """The 'no measured literal' banner stays true for the printer too.
+
+    The strings that used to occupy the synthetic column are absent as
+    source text; the column is derived from the artifact at print time.
+    """
+    raw = (
+        _REPO / "projects" / "rope_attribution" / "real_model.py"
+    ).read_bytes()
+    text = raw.decode("utf-8").replace("\r\n", "\n")
+    for literal in ('"3.6e-15"', '"3.4e-14"', '"7.4e-16"', '"1.8e-15"'):
+        assert literal not in text, f"{literal} re-entered the printer"

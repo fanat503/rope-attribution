@@ -491,8 +491,11 @@ def _probe_diagnostics(model, ids, deltas, n_pairs: int, seed: int) -> dict:
             for _pair in range(n_pairs):
                 m = int(rng.integers(0, T - 1))
                 n = (m + 1 + int(rng.integers(0, T - 1))) % T
-                if n == m:
-                    n = (m + 1) % T
+                # n != m on every path: the offset (m + 1 + r) with r < T - 1
+                # cannot reach m again modulo T, so no equality guard here --
+                # an earlier revision carried one that could never fire. On a
+                # wrap n lands below m, and the swap below restores the m < n
+                # order the probe assumes.
                 if n < m:
                     m, n = n, m
                 qv, kv = q_np[0, m, head], k_np[0, n, head]
@@ -634,7 +637,7 @@ def train(
     train_in, train_tg, held_in, held_tg = _split_windows(tokens, ctx)
     if len(train_in) < config["batch_size"] or len(held_in) < 1:
         raise ValueError(
-            f"{len(tokens)} tokens make {len(train_in)} training windows of "
+            f"{int(np.asarray(tokens).size)} tokens make {len(train_in)} training windows of "
             f"{ctx}; not enough for a batch of {config['batch_size']} plus "
             "a validation block"
         )
