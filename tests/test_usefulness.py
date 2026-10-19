@@ -267,18 +267,57 @@ def test_the_result_is_not_a_property_of_one_outlier_head(committed: dict) -> No
 
 
 def test_the_module_reproduces_the_committed_json() -> None:
-    """A stale artefact cannot satisfy the numbers the paper quotes."""
+    """A stale artefact cannot satisfy the numbers the paper quotes.
+
+    Only the sweep's inputs may skip this test: torch and the checkpoints,
+    probed through the same load boundary the sweep itself uses. Any error
+    the sweep raises must fail the test, not skip it -- a broad except
+    around ``run_all`` once turned a broken writer path into a green skip
+    badge while the artifact behind it stayed stale.
+    """
     U.run_all  # noqa: B018 - imported for the skip check below
     try:
         import rope_attribution.usefulness as UM
 
-        data = UM.run_all()
+        UM.RM.load_model(UM.DEFAULT_MODEL_IDS[0], seed=UM.DEFAULT_SEED)
     except Exception as exc:  # pragma: no cover - torch/weights unavailable
         pytest.skip(f"checkpoints unavailable: {exc}")
+    data = UM.run_all()
     committed = json.loads(_JSON.read_text(encoding="utf-8"))
     assert data["pooled"] == committed["pooled"], (
         "results/usefulness.json no longer matches what the module produces"
     )
+
+
+def test_the_reproduction_sweep_may_not_be_swallowed() -> None:
+    """The availability gate must wrap the load probe, never the sweep.
+
+    The positive needle pins the gate's shape: probe inside the try, the
+    sweep running at function level after the except. The negative needle
+    pins the exact text of the old broad block, so re-broadening the gate
+    -- the one change that recreates the masked-skip failure class -- is a
+    test failure, not a silent regression.
+    """
+    source = _REPO.joinpath("tests", "test_usefulness.py").read_bytes()
+    source = source.decode("utf-8").replace("\r\n", "\n")
+    gate = (
+        "    try:\n"
+        "        import rope_attribution.usefulness as UM\n"
+        "\n"
+        "        UM.RM.load_model(UM.DEFAULT_MODEL_IDS[0], seed=UM.DEFAULT_SEED)\n"
+        "    except Exception as exc:  # pragma: no cover"
+        " - torch/weights unavailable\n"
+        "        pytest.skip(f\"checkpoints unavailable: {exc}\")\n"
+        "    data = UM.run_all()\n"
+    )
+    assert gate in source, (
+        "the availability gate must cover the load probe, not the sweep"
+    )
+    assert (
+        "        data = UM.run_all()\n"
+        "    except Exception as exc:  # pragma: no cover"
+        " - torch/weights unavailable"
+    ) not in source, "the sweep is back inside the availability except"
 
 
 def test_the_module_docstring_does_not_overclaim() -> None:
