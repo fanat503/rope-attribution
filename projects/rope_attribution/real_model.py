@@ -1312,8 +1312,20 @@ def synthetic_baseline(
                 }
             )
 
+    # A repo-relative location rather than str(path): the artifact is public,
+    # and its first revision stored the absolute machine path here - the
+    # author's home directory, in all three records. tests/test_authorship.py
+    # pins the arrow of history (published_source == results/measurements.json
+    # and no tracked file contains a local home path) so this cannot regress.
+    try:
+        source = measurements_path.relative_to(
+            Path(__file__).resolve().parents[2]
+        ).as_posix()
+    except ValueError:  # a caller passed a path outside the repository
+        source = measurements_path.name
+
     return {
-        "published_source": str(measurements_path),
+        "published_source": source,
         "published_available": bool(published),
         "synthetic_published_32_channel": published,
         "synthetic_same_ladder": control,

@@ -18,6 +18,7 @@ there so a *new* name appearing is caught rather than absorbed.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -227,3 +228,58 @@ def test_the_local_identity_produces_the_right_attribution() -> None:
         pytest.skip("no git identity configured in this checkout")
     name = out.strip()
     assert name == EXPECTED_AUTHOR, f"user.name is {name!r}; expected {EXPECTED_AUTHOR!r}"
+
+
+# ---------------------------------------------------------------------------
+# local filesystem paths inside tracked files
+# ---------------------------------------------------------------------------
+
+
+def test_published_source_fields_are_repo_relative() -> None:
+    """A published artifact cites its source in repository terms, not home terms.
+
+    ``results/real_model.json`` shipped ``published_source`` with the
+    machine-local absolute path of ``results/measurements.json`` - the owner's
+    home directory, Cyrillic username included, in all three records and
+    therefore in every commit published so far. It survived the authorship
+    audits above because it is stored as JSON ``\\u`` escapes, decrypting only
+    at the reader. Real location: ``real_model.py:1316`` wrote ``str(path)``.
+    """
+    artifact = json.loads(
+        (_REPO / "results" / "real_model.json").read_text(encoding="utf-8")
+    )
+
+    sources: list[str] = []
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "published_source" and isinstance(value, str):
+                    sources.append(value)
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(artifact)
+    assert len(sources) == 3, f"expected 3 published_source records, found {len(sources)}"
+    for source in sources:
+        assert source == "results/measurements.json", (
+            f"published_source is not a repository-relative path: {source!r}"
+        )
+
+
+def test_no_tracked_file_embeds_a_local_home_path() -> None:
+    """No tracked file may embed a local home directory.
+
+    The needle is assembled at runtime so that this file does not itself
+    contain the byte sequence it hunts: ``"Users"`` and the separator live on
+    opposite sides of an operator, and the guard cannot become its own false
+    positive (which is exactly what its first revision was).
+    """
+    tracked = [line for line in _git("ls-files").splitlines() if line.strip()]
+    assert tracked, "git ls-files returned nothing; is this a checkout?"
+    needle = b"Users" + b"\\"
+    for rel in tracked:
+        blob = (_REPO / rel).read_bytes()
+        assert needle not in blob, f"{rel} embeds a local home path"

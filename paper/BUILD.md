@@ -87,17 +87,19 @@ section begins on page 9, and the last main-text sentence is on page 9.
 
 ## Regenerating the numbers
 
-The paper's numbers come from three sources, all regenerated from the code:
+The paper's numbers come from four sources, all regenerated from the code:
 
 ```sh
 PYTHONPATH=../projects python -m rope_attribution.experiments   # results/measurements.json
 PYTHONPATH=../projects python -m rope_attribution.statistics   # results/statistics.json
+PYTHONPATH=../projects python -m rope_attribution.sensitivity  # results/sensitivity.json
 PYTHONPATH=../projects python -m rope_attribution.figures      # figures/*.png and *.csv
 ```
 
-All three are seeded. `tests/test_measurements_json_is_current` and its
-statistics counterpart re-run the first two and require the committed files to
-match value by value --- floats to a relative `1e-12`, which tolerates the
-last-bit drift between platforms --- so the paper cannot drift from the data.
+All four are seeded. `tests/test_measurements_json_is_current` and its
+statistics and sensitivity counterparts re-run the first three and require the
+committed files to match value by value --- floats to a relative `1e-12`, which
+tolerates the last-bit drift between platforms --- so the paper cannot drift
+from the data.
 The figure CSV sidecars are re-derived against the paper's claims in
 `tests/test_paper_claims.py`.

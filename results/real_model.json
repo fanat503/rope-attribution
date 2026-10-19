@@ -57929,7 +57929,7 @@
   },
   "synthetic_baseline": {
     "EleutherAI/pythia-160m": {
-      "published_source": "C:\\Users\\\u0418\u043b\u044c\u044f\\Documents\\\u041f\u0440\u043e\u0435\u043a\u0442 \u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e\\results\\measurements.json",
+      "published_source": "results/measurements.json",
       "published_available": true,
       "synthetic_published_32_channel": [
         {
@@ -58009,7 +58009,7 @@
       "seed": 20260906
     },
     "JackFram/llama-160m": {
-      "published_source": "C:\\Users\\\u0418\u043b\u044c\u044f\\Documents\\\u041f\u0440\u043e\u0435\u043a\u0442 \u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e\\results\\measurements.json",
+      "published_source": "results/measurements.json",
       "published_available": true,
       "synthetic_published_32_channel": [
         {
@@ -58089,7 +58089,7 @@
       "seed": 20260906
     },
     "HuggingFaceTB/SmolLM-135M": {
-      "published_source": "C:\\Users\\\u0418\u043b\u044c\u044f\\Documents\\\u041f\u0440\u043e\u0435\u043a\u0442 \u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e\\results\\measurements.json",
+      "published_source": "results/measurements.json",
       "published_available": true,
       "synthetic_published_32_channel": [
         {
