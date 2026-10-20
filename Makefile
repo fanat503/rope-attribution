@@ -8,8 +8,9 @@
 #
 # The checkpoint measurements (real_model.py, usefulness.py, agreement.py) are
 # deliberately not part of `all`: they need CPU torch, which is not a test
-# dependency, and they take about four minutes each. Run `make checkpoints`
-# when you want them.
+# dependency, and they take about four minutes each. The seed-variance sweep
+# (seed_variance.py) re-runs the cost sweep three times, so about ten minutes.
+# Run `make checkpoints` when you want them.
 
 # `-m` takes a DOTTED module path, not a filesystem path. This Makefile shipped
 # `projects/rope_attribution.experiments` with slashes and CI rejected it with a
@@ -56,6 +57,7 @@ postedit:
 checkpoints:
 	$(PYTHON) -m $(PKG).real_model
 	$(PYTHON) -m $(PKG).usefulness
+	$(PYTHON) -m $(PKG).seed_variance
 	$(PYTHON) -m $(PKG).agreement
 
 ## clean: remove generated build output (never touches committed artefacts)

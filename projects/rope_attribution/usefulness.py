@@ -332,13 +332,19 @@ def grid_independence(
 
 
 
-def run_all(model_ids: Sequence[str] = DEFAULT_MODEL_IDS) -> dict:
-    models = [measure_model(m) for m in model_ids]
+def run_all(model_ids: Sequence[str] = DEFAULT_MODEL_IDS, seed: int = DEFAULT_SEED) -> dict:
+    """The whole sweep; ``seed`` drives the content-pair draws only.
+
+    Forwarded to ``measure_model`` unchanged. Callers that vary it are
+    varying the sampling of content pairs, not the models: the checkpoints
+    are loaded in eval mode and the measurement itself is deterministic.
+    """
+    models = [measure_model(m, seed=seed) for m in model_ids]
     return {
         "schema": "rope_attribution/usefulness/v1",
         "distance_grid": list(DISTANCE_GRID),
         "grid_densities": list(GRID_DENSITIES),
-        "seed": DEFAULT_SEED,
+        "seed": seed,
         "models": models,
         "pooled": {
             "sign_flip_fraction": float(

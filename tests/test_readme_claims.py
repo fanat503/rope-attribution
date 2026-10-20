@@ -1335,7 +1335,7 @@ def test_legacy_scripts_the_readme_warns_about_do_print_literals() -> None:
 
 
 # ==========================================================================
-# "1425 tests"
+# "1431 tests"
 # ==========================================================================
 
 
@@ -1379,7 +1379,7 @@ def collected_node_ids() -> tuple[str, ...]:
 
 
 def test_quoted_test_count_matches_what_pytest_collects() -> None:
-    """``1425 tests``, in both places the README states it.
+    """``1431 tests``, in both places the README states it.
 
     The README counts the suite that existed when it was written. This file is
     the documentation verifier and is deliberately excluded from the comparison,

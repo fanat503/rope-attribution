@@ -1,0 +1,139 @@
+{
+  "schema": "rope_attribution/usefulness_seeds/v1",
+  "model_ids": [
+    "EleutherAI/pythia-160m",
+    "JackFram/llama-160m",
+    "HuggingFaceTB/SmolLM-135M"
+  ],
+  "seeds": [
+    20260906,
+    20260907,
+    20260908
+  ],
+  "n_content_pairs": 256,
+  "what_varies": "content-pair draws only; checkpoints are eval-mode and the measurement is otherwise deterministic",
+  "per_seed": [
+    {
+      "seed": 20260906,
+      "pooled": {
+        "sign_flip_fraction": 0.26778187181112223,
+        "sign_flip_fraction_min_head": 0.223783202825119,
+        "sign_flip_fraction_max_head": 0.34858946537778657,
+        "rel_err_median": 1.1271909646727432,
+        "rel_err_p90": 1.1522562162964556
+      },
+      "models": [
+        {
+          "model_id": "EleutherAI/pythia-160m",
+          "sign_flip_fraction_pooled": 0.2762929636080122,
+          "sign_flip_fraction_min_head": 0.223783202825119,
+          "sign_flip_fraction_max_head": 0.34858946537778657,
+          "rel_err_median": 1.1380029882476275,
+          "rel_err_p90": 1.2101356761839903
+        },
+        {
+          "model_id": "JackFram/llama-160m",
+          "sign_flip_fraction_pooled": 0.2629400766160485,
+          "sign_flip_fraction_min_head": 0.24290107522054366,
+          "sign_flip_fraction_max_head": 0.28649583985245203,
+          "rel_err_median": 1.1223959966591848,
+          "rel_err_p90": 1.1522562162964556
+        },
+        {
+          "model_id": "HuggingFaceTB/SmolLM-135M",
+          "sign_flip_fraction_pooled": 0.264112575209306,
+          "sign_flip_fraction_min_head": 0.24236287896320297,
+          "sign_flip_fraction_max_head": 0.29271979093533035,
+          "rel_err_median": 1.1271909646727432,
+          "rel_err_p90": 1.1518396492756615
+        }
+      ]
+    },
+    {
+      "seed": 20260907,
+      "pooled": {
+        "sign_flip_fraction": 0.2677959294841779,
+        "sign_flip_fraction_min_head": 0.2241036617995566,
+        "sign_flip_fraction_max_head": 0.3491942596007376,
+        "rel_err_median": 1.1272984611948416,
+        "rel_err_p90": 1.1516423942681573
+      },
+      "models": [
+        {
+          "model_id": "EleutherAI/pythia-160m",
+          "sign_flip_fraction_pooled": 0.27632395493732403,
+          "sign_flip_fraction_min_head": 0.2241036617995566,
+          "sign_flip_fraction_max_head": 0.3491942596007376,
+          "rel_err_median": 1.1379516025251342,
+          "rel_err_p90": 1.2095551125414117
+        },
+        {
+          "model_id": "JackFram/llama-160m",
+          "sign_flip_fraction_pooled": 0.2629971402996172,
+          "sign_flip_fraction_min_head": 0.2437975796011924,
+          "sign_flip_fraction_max_head": 0.28722923441547704,
+          "rel_err_median": 1.1233768513375733,
+          "rel_err_p90": 1.1516423942681573
+        },
+        {
+          "model_id": "HuggingFaceTB/SmolLM-135M",
+          "sign_flip_fraction_pooled": 0.26406669321559256,
+          "sign_flip_fraction_min_head": 0.24164360845714064,
+          "sign_flip_fraction_max_head": 0.29286619237891043,
+          "rel_err_median": 1.1272984611948416,
+          "rel_err_p90": 1.1515373632816213
+        }
+      ]
+    },
+    {
+      "seed": 20260908,
+      "pooled": {
+        "sign_flip_fraction": 0.2677787938835605,
+        "sign_flip_fraction_min_head": 0.22559386973180076,
+        "sign_flip_fraction_max_head": 0.35009259624098665,
+        "rel_err_median": 1.1270316601911503,
+        "rel_err_p90": 1.1510159214227762
+      },
+      "models": [
+        {
+          "model_id": "EleutherAI/pythia-160m",
+          "sign_flip_fraction_pooled": 0.2763265203670678,
+          "sign_flip_fraction_min_head": 0.22559386973180076,
+          "sign_flip_fraction_max_head": 0.35009259624098665,
+          "rel_err_median": 1.1381522475456844,
+          "rel_err_p90": 1.2087218314252455
+        },
+        {
+          "model_id": "JackFram/llama-160m",
+          "sign_flip_fraction_pooled": 0.26293419616820457,
+          "sign_flip_fraction_min_head": 0.24343030838271085,
+          "sign_flip_fraction_max_head": 0.2864370700204642,
+          "rel_err_median": 1.1231496784437698,
+          "rel_err_p90": 1.1505859248396264
+        },
+        {
+          "model_id": "HuggingFaceTB/SmolLM-135M",
+          "sign_flip_fraction_pooled": 0.26407566511540925,
+          "sign_flip_fraction_min_head": 0.24194078311623052,
+          "sign_flip_fraction_max_head": 0.29120049854428964,
+          "rel_err_median": 1.1270316601911503,
+          "rel_err_p90": 1.1510159214227762
+        }
+      ]
+    }
+  ],
+  "mean": {
+    "sign_flip_fraction": 0.2677855317262869,
+    "sign_flip_fraction_min_head": 0.22449357811882545,
+    "sign_flip_fraction_max_head": 0.34929210707317027,
+    "rel_err_median": 1.1271736953529117,
+    "rel_err_p90": 1.1516381773291295
+  },
+  "sd": {
+    "sign_flip_fraction": 9.135285238515307e-06,
+    "sign_flip_fraction_min_head": 0.0009662580989374746,
+    "sign_flip_fraction_max_head": 0.000756327438264842,
+    "rel_err_median": 0.00013423623187592255,
+    "rel_err_p90": 0.0006201581897789549
+  }
+}

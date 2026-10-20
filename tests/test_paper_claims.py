@@ -273,6 +273,14 @@ CLAIMS: tuple[Claim, ...] = (
         "prov_orders_row",
         r"\$(\d+)\$ orders, bracket \$(\d+\.\d)\$-\$(\d+\.\d)\$ & \\texttt\{results/statistics\.json",
     ),
+    # The provenance table's row for the seed-variance sentence: the same two
+    # numbers, sourced to the artifact that holds them. Checked against the
+    # sentence and the artifact by
+    # tests/test_paper_trained_claims.py::test_the_seed_variance_is_as_printed.
+    Claim(
+        "prov_seed_variance",
+        r"Sec\.~\\ref\{sec:trained\} & \$(\d+\.\d+) \\pm (\d+\.\d+)\\%\$ \(seed s\.d\.\)",
+    ),
     Claim("sign_cross_range", r"changes sign\} somewhere in \$\\delta \\in \[(\d+), (\d+)\]\$"),
     Claim("n_features_sign_cross", r"With \$F = (\d+)\$ features on"),
     Claim(
@@ -617,6 +625,15 @@ CLAIMS += (
         r"pythia vs llama \$([+-]?\d\.\d+)\$ points \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$, "
         r"pythia vs SmolLM \$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$, "
         r"llama vs SmolLM \$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$",
+    ),
+    # The seed-variance sentence, added after the pair-draw sweep: the pooled
+    # rate and its sample sd across three pre-registered content-pair seeds.
+    # Re-derived from results/usefulness_seeds.json in
+    # tests/test_paper_trained_claims.py; the rows are pinned in
+    # tests/test_seed_variance.py.
+    Claim(
+        "seed_variance_sentence",
+        r"under three pre-registered seeds[^$]*\$(\d+\.\d+) \\pm (\d+\.\d+)\\%\$",
     ),
     # Definitional spans and figure-caption numbers that the
     # exhaustiveness scan has to see but that no single number test can

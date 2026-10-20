@@ -449,3 +449,23 @@
   archivePrefix = {arXiv},
   primaryClass  = {cs.CL}
 }
+
+% Diagnoses the content/position ("what"/"where") entanglement in RoPE's
+% key-query match: the query and key phases enter the same cosine as the
+% relative-position term, so content rotates the offset a channel matches at.
+% PoPE replaces that interaction term with a per-frequency learnable offset --
+% the architectural counterpart of the attribution result measured here, which
+% keeps the embedding and asks what a position-free summary would have to
+% carry instead. Verified against the arXiv API on 2026-10-20 (v3, ICML 2026
+% camera-ready comment).
+@inproceedings{gopalakrishnan2026pope,
+  title   = {Decoupling the ``What'' and ``Where'' With Polar Coordinate
+             Positional Embeddings},
+  author  = {Gopalakrishnan, Anand and Csord{\'a}s, Robert and
+             Schmidhuber, J{\"u}rgen and Mozer, Michael C.},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  year    = {2026},
+  eprint  = {2509.10534},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}

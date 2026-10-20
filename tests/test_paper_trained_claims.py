@@ -45,6 +45,7 @@ FLOAT32_EPS = 1.1920928955078125e-07
 
 _USEFULNESS = _REPO / "results" / "usefulness.json"
 _AGREEMENT = _REPO / "results" / "agreement.json"
+_SEEDS = _REPO / "results" / "usefulness_seeds.json"
 
 
 @pytest.fixture(scope="module")
@@ -66,6 +67,13 @@ def usefulness() -> dict:
     if not _USEFULNESS.exists():
         pytest.skip("results/usefulness.json is absent; run usefulness.py")
     return json.loads(_USEFULNESS.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def seeds() -> dict:
+    if not _SEEDS.exists():
+        pytest.skip("results/usefulness_seeds.json is absent; run seed_variance.py")
+    return json.loads(_SEEDS.read_text(encoding="utf-8"))
 
 
 def _ident(trained: dict, model_id: str, name: str) -> dict:
@@ -320,6 +328,25 @@ def test_each_checkpoint_reports_its_own_rate(usefulness: dict) -> None:
             f"the sign-error rate on {model['model_id']}",
         )
     assert len(rates) == 3
+
+
+def test_the_seed_variance_is_as_printed(seeds: dict) -> None:
+    """The uncertainty sentence's mean and sd, re-derived from the sweep."""
+    mean, sd = groups("seed_variance_sentence")[0]
+    assert_paper_number_matches(
+        100.0 * seeds["mean"]["sign_flip_fraction"],
+        mean,
+        "the seed-mean pooled rate",
+    )
+    assert_paper_number_matches(
+        100.0 * seeds["sd"]["sign_flip_fraction"],
+        sd,
+        "the seed standard deviation of the pooled rate",
+    )
+    # The provenance row repeats the sentence's numbers and names the
+    # artifact; if either is edited alone, this fails.
+    prov_mean, prov_sd = groups("prov_seed_variance")[0]
+    assert (prov_mean, prov_sd) == (mean, sd)
 
 
 def test_the_head_range_is_not_one_outlier(usefulness: dict) -> None:

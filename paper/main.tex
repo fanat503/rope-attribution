@@ -512,7 +512,7 @@ band $22.4\%$ to $34.9\%$, so this is not one bad head but the ordinary case. Th
 relative error is larger than the signal itself: median $1.13$ against a peak of
 $1$.
 
-The headline deserves three qualifications.
+The headline deserves four qualifications.
 \emph{First}, $26.8\%$ is the equal-weight mean of the three per-checkpoint
 rates; the mean over all $2790$ heads is $26.70\%$, lower because
 \texttt{SmolLM-135M} contributes $1350$ heads against $720$ each for the other
@@ -536,6 +536,14 @@ larger than the head-level noise floor, so it is model dependence rather than
 sampling. We report it rather than average it away: what survives is the claim
 that a position-free scalar is wrong on roughly a quarter of cells, and the
 per-model figures are what a reader should quote if the number matters.
+
+\emph{Fourth}, the draw of content pairs is itself a source of variation.
+Repeating the sweep under three pre-registered seeds --- the default and its
+two successors, fixed before the run --- gives a pooled rate of
+$26.7786 \pm 0.0009\%$ (mean $\pm$ sample s.d. over the three seeds), three
+orders of magnitude below the between-head standard deviation and below the
+between-checkpoint differences above: the pair draw shifts the headline by
+less than one thousandth of a percentage point.
 
 Two things are worth being precise about. The rate is counted only over cells
 where the exact term carries at least $5\%$ of its own peak --- beyond that the
@@ -902,6 +910,7 @@ Sec.~\ref{sec:partial} & $0.0$, $20.65$, $24.36$ & \texttt{measurements.json :: 
 Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entropy.mscale} \\
  & $0.9233 \to 0.7687$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
  & $0.6792$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
+Sec.~\ref{sec:trained} & $26.7786 \pm 0.0009\%$ (seed s.d.) & \texttt{usefulness\_seeds.json :: mean, sd} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -920,7 +929,11 @@ too, from six grid densities, so that its instability is part of the record
 rather than a claim about a former draft. The ``less
 than $0.4\%$'' claim in Section~\ref{sec:context} is $1 - 0.996840$. The
 ``roughly $1000\times$'' comparison divides
-$1.24572\times10^{6}$ by $1225.06$.
+$1.24572\times10^{6}$ by $1225.06$. The seed standard deviation of the
+headline rate is the sample standard deviation (dividing by one less than
+the number of seeds) of the three per-seed pooled rates in
+\texttt{results/usefulness\_seeds.json}, and the mean is their arithmetic
+mean.
 
 \paragraph{Exact identities reported as equalities.} The claims that
 $\max_k|\D|$ is identical for RoPE and \yarn, that $\Rk$ is a single value
@@ -1441,6 +1454,25 @@ wavelengths that exceed the training context and expose models to unseen
 angles. It is data-aware rather than distance-only --- an axis this paper does
 not vary --- and it leaves the fastest channel, whose linearization is measured
 to fail in Section~\ref{sec:context}, exactly as plain RoPE has it.
+
+A sixth construction diagnoses rather than extends the encoding. PoPE
+\citep{gopalakrishnan2026pope} argues that RoPE entangles the content factor
+(the what) with the relative-position factor (the where): in polar form each
+channel contributes $|q_c||k_c|\cos(\D\theta_c + \alpha_c - \beta_c)$, where
+$\alpha_c$ and $\beta_c$ are the query's and key's own phases, so content
+rotates the offset at which a channel matches and a head cannot express an
+independent content preference and an independent position preference. Their
+Indirect Indexing diagnostic isolates the two factors, and their fix ---
+replacing the interaction term with a per-frequency learnable offset inside
+the cosine --- improves held-out perplexity on OpenWebText at every model
+size they test and extrapolates zero-shot beyond the training
+length where \yarn\ requires fine-tuning. The fix is architectural; the
+measurement here is of the embedding as it stands. For fixed $q,k$ the score
+is exactly a function of $\D$ (Section~\ref{sec:exact}), and what a
+position-free summary of it must carry is the per-pair sign structure
+measured in Section~\ref{sec:trained}: the coupling PoPE removes by
+construction is, from this side, the structure an attribution has to
+represent.
 
 \textbf{Feature-level attribution.} The additive decomposition of activations
 into learned features originates in the superposition line
