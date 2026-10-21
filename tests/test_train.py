@@ -43,16 +43,20 @@ def test_the_named_configs_land_inside_their_bands() -> None:
 
 
 def test_the_counts_sit_where_the_names_say() -> None:
-    """train_124m/208m/303m are honest names, not aspirations."""
+    """The six named configs are honest names, not aspirations."""
+    assert T.count_params(T.CONFIGS["train_102m"]) == 102_312_960
     assert T.count_params(T.CONFIGS["train_124m"]) == 123_551_232
+    assert T.count_params(T.CONFIGS["train_152m"]) == 151_868_928
     assert T.count_params(T.CONFIGS["train_208m"]) == 208_504_320
+    assert T.count_params(T.CONFIGS["train_253m"]) == 252_823_552
     assert T.count_params(T.CONFIGS["train_303m"]) == 303_163_392
 
 
 def test_head_dimension_is_64_in_every_named_config() -> None:
     """The paper's algebra is stated for head_dim 64; so are these models."""
 
-    for name in ("train_124m", "train_208m", "train_303m"):
+    assert set(T.TRAIN_PARAM_BANDS) <= set(T.CONFIGS)
+    for name in T.TRAIN_PARAM_BANDS:
         config = T.CONFIGS[name]
         assert config["head_dim"] == T.HEAD_DIM == 64, name
         assert config["n_heads"] * config["head_dim"] == config["dim"], name
@@ -199,6 +203,8 @@ def test_smoke_run_logs_every_metric_and_finishes(tmp_path: Path) -> None:
     assert summary["steps"] == T.CONFIGS["smoke"]["n_steps"]
     records = [json.loads(line) for line in
                (tmp_path / "run" / "metrics.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert records[0]["event"] == "run_start"
+    assert records[0]["dtype"] == "fp32", "the run must record the arithmetic it used"
     evals = [r for r in records if r["event"] == "eval"]
     assert evals, "no evaluation was logged"
     keys = {
@@ -298,4 +304,125 @@ def test_main_refuses_cpu_and_hands_the_override_to_train(
     )
     T.main()
     assert captured["force_cpu"] is True
-    assert captured["threads"] == 4
+    # The CLI hands the policy over; train() resolves None to 4 on CPU.
+    assert captured["threads"] is None
+
+
+def test_the_default_thread_count_depends_on_the_device() -> None:
+    assert T._resolve_threads("cpu", None) == 4
+    assert T._resolve_threads("cuda", None) == 8
+    assert T._resolve_threads("cuda", 2) == 2
+
+
+def test_cuda_determinism_pins_the_cublas_workspace(monkeypatch) -> None:
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import os
+
+    monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
+    T._set_determinism(0)
+    assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+
+
+def test_xla_refuses_clearly_when_torch_xla_is_absent(monkeypatch) -> None:
+    monkeypatch.setattr(T, "XLA_AVAILABLE", False)
+    with pytest.raises(RuntimeError, match="torch_xla"):
+        T._require_xla()
+
+
+def test_the_cli_passes_xla_through_to_train(monkeypatch) -> None:
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    captured: dict = {}
+
+    def fake_train(*args, **kwargs):
+        captured.update(kwargs)
+        return {"event": "summary", "steps": 0}
+
+    monkeypatch.setattr(T, "train", fake_train)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["train", "--config", "smoke", "--device", "xla", "--run-name", "stub_xla"],
+    )
+    T.main()
+    assert captured["device"] == "xla"
+
+
+def test_data_seed_changes_the_batch_stream_but_not_the_model_seed(tmp_path) -> None:
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    tokens = np.random.default_rng(3).integers(0, 512, size=4096)
+    first = T.train("smoke", tmp_path / "a", tokens, device="cpu", max_steps=2, data_seed=11)
+    second = T.train("smoke", tmp_path / "b", tokens, device="cpu", max_steps=2, data_seed=12)
+    assert first["final_train_loss_ema"] != second["final_train_loss_ema"], (
+        "different data_seed values must draw different batches"
+    )
+    start = json.loads(
+        (tmp_path / "a" / "metrics.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert start["seed"] == T.CONFIGS["smoke"]["seed"]
+    assert start["data_seed"] == 11
+
+
+def test_bf16_is_a_real_choice_and_not_silently_ignored_on_cpu() -> None:
+    """The dtype in a preset has to reach the arithmetic or be refused."""
+    assert T._amp_dtype("cpu", "fp32") is None
+    with pytest.raises(ValueError, match="bf16"):
+        T._amp_dtype("cpu", "bf16")
+    with pytest.raises(ValueError, match="fp32"):
+        T._amp_dtype("cpu", "fp16")
+    if T.TORCH_AVAILABLE:
+        import torch
+
+        assert T._amp_dtype("cuda", "bf16") is torch.bfloat16
+        assert T._amp_dtype("xla", "bf16") is torch.bfloat16
+
+
+def test_tpu_presets_pass_their_dtype_to_the_trainer() -> None:
+    """A preset's bf16 label must be an override, not documentation."""
+    from rope_attribution import tpu_configs as TPU
+
+    for name, preset in TPU.TPU_PRESETS.items():
+        override = TPU.launch_overrides(name)
+        assert override["dtype"] == preset["dtype"] == "bf16", name
+
+
+def test_xla_update_reduces_before_clipping_and_steps_once() -> None:
+    """The data-parallel order: reduce, clip the reduced gradient, step once.
+
+    The fake ``xm`` multiplies each local gradient by ten. If clipping ran
+    first, the parameter update would have norm ten after the fake reduction;
+    with the intended order it has norm one. This is the exact bug a
+    ``xm.optimizer_step`` call after ``xm.reduce_gradients`` would hide.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
+    class FakeXM:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def reduce_gradients(self, model) -> None:
+            self.calls.append("reduce")
+            with torch.no_grad():
+                for parameter in model.parameters():
+                    if parameter.grad is not None:
+                        parameter.grad.mul_(10.0)
+
+        def mark_step(self) -> None:
+            self.calls.append("mark")
+
+    model = torch.nn.Linear(2, 1, bias=False)
+    with torch.no_grad():
+        model.weight.zero_()
+    model.weight.grad = torch.tensor([[3.0, 4.0]])
+    opt = torch.optim.SGD(model.parameters(), lr=1.0)
+    xm = FakeXM()
+    grad_norm = T._reduce_update(model, opt, xm, grad_clip=1.0)
+    assert xm.calls == ["reduce", "mark"], xm.calls
+    assert float(grad_norm) == pytest.approx(50.0), "the norm must be pre-clip, post-reduce"
+    assert float(model.weight.detach().norm()) == pytest.approx(1.0), (
+        "the step must use the clipped, reduced gradient exactly once"
+    )

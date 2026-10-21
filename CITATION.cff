@@ -1,11 +1,10 @@
 cff-version: 1.2.0
 type: software
 message: >-
-  If you use the reference implementations, experiments, or documents in this
-  repository, please cite the RoFormer paper, which introduces the rotary
-  position embedding the work is built on and is given below under
-  preferred-citation, and also the YaRN paper, given below under references.
-  Please also cite this repository itself.
+  If you use the code, experiments, or documents in this repository, please
+  cite the paper given below as preferred-citation. If you use the positional
+  encodings measured here, please also cite the RoFormer and YaRN papers listed
+  under references.
 title: "Attributing RoPE: exact score attribution, and what actually limits it"
 authors:
   - family-names: "Slyatski"

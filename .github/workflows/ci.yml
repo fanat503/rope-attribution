@@ -34,17 +34,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           # Pin the cache key to the file this workflow actually installs.
-          # Left to its default **/requirements.txt glob, setup-python would
-          # match projects/requirements.txt (the GPU pins) instead, keying the
-          # cache on a file CI never installs.
+          # setup-python's default **/requirements.txt glob is broader than
+          # this project's dependency set.
           cache-dependency-path: requirements-dev.txt
 
       - name: Install
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
-          # Installs the package and its numpy dependency. projects/requirements.txt
-          # (torch, transformer-lens, nnsight, ...) is intentionally NOT installed:
+          # Installs the package and its numpy dependency. The GPU/model
+          # stacks are opt-in via real_model_requirements.txt and
+          # train_requirements.txt and are intentionally NOT installed here:
           # no GPU, no model downloads, no multi-gigabyte wheels in CI.
           python -m pip install -e .
 
@@ -55,8 +55,7 @@ jobs:
 
       - name: Lint
         # Scoped by [tool.ruff] include to projects/rope_attribution/ and
-        # tests/. The projects/frontier-01-*.py archive is deliberately outside
-        # that scope; do not widen it here to make a red build green.
+        # tests/. Do not widen it here to make a red build green.
         run: python -m ruff check .
 
       - name: Makefile targets exist and `results` reproduces the committed artefact

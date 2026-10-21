@@ -39,18 +39,25 @@ One seed drives the initialization, the data order and the probe sampling.
 Two runs of the same command on the same torch version, thread count and
 machine produce identical eval records on CPU: every field of every record
 is byte-identical except the single throughput field ``tok_per_s``, which
-is wall-clock by definition. CUDA kernels are pinned to deterministic
-algorithms with ``warn_only`` -- the flag records any kernel
-that cannot comply rather than aborting mid-run.
+is wall-clock by definition. On CUDA the cuBLAS workspace is fixed to
+``:4096:8`` and deterministic algorithms are requested with ``warn_only``:
+a kernel that cannot comply is reported, not silently assumed to be
+reproducible. On TPU (``--device xla``) the trainer is a thin adapter over the
+same loop: it imports ``torch_xla``, builds on the XLA device, all-reduces
+gradients once, clips the reduced gradient, and steps the optimizer once. The
+XLA path is not exercised by CI, which has no TPU; ``docs/TPU_V5E8.md`` says so
+explicitly.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import itertools
 import json
 import math
+import os
 import time
 from pathlib import Path
 
@@ -75,6 +82,7 @@ __all__ = [
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 TRANSFORMERS_AVAILABLE = importlib.util.find_spec("transformers") is not None
 TRAINING_AVAILABLE = TORCH_AVAILABLE and TRANSFORMERS_AVAILABLE
+XLA_AVAILABLE = importlib.util.find_spec("torch_xla") is not None
 
 # The GPT-2 vocabulary, pinning the tokenizer to one every reviewer has used.
 VOCAB_SIZE = 50257
@@ -124,6 +132,25 @@ CONFIGS: dict[str, dict] = {
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
         "seed": 20261010,
+        "dtype": "fp32",
+    },
+    "train_102m": {
+        "n_layers": 9,
+        "n_heads": 12,
+        "head_dim": HEAD_DIM,
+        "dim": 768,
+        "ffn": 3072,
+        "vocab": VOCAB_SIZE,
+        "ctx": 1024,
+        "lr": 6e-4,
+        "n_steps": 80_000,
+        "batch_size": 32,
+        "eval_every": 500,
+        "warmup_steps": 2_000,
+        "lr_floor_fraction": 0.1,
+        "grad_clip": 1.0,
+        "seed": 20261010,
+        "dtype": "fp32",
     },
     "train_124m": {
         "n_layers": 12,
@@ -141,6 +168,25 @@ CONFIGS: dict[str, dict] = {
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
         "seed": 20261010,
+        "dtype": "fp32",
+    },
+    "train_152m": {
+        "n_layers": 16,
+        "n_heads": 12,
+        "head_dim": HEAD_DIM,
+        "dim": 768,
+        "ffn": 3072,
+        "vocab": VOCAB_SIZE,
+        "ctx": 1024,
+        "lr": 6e-4,
+        "n_steps": 110_000,
+        "batch_size": 32,
+        "eval_every": 500,
+        "warmup_steps": 2_000,
+        "lr_floor_fraction": 0.1,
+        "grad_clip": 1.0,
+        "seed": 20261010,
+        "dtype": "fp32",
     },
     "train_208m": {
         "n_layers": 24,
@@ -158,6 +204,25 @@ CONFIGS: dict[str, dict] = {
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
         "seed": 20261010,
+        "dtype": "fp32",
+    },
+    "train_253m": {
+        "n_layers": 16,
+        "n_heads": 16,
+        "head_dim": HEAD_DIM,
+        "dim": 1024,
+        "ffn": 4096,
+        "vocab": VOCAB_SIZE,
+        "ctx": 1024,
+        "lr": 6e-4,
+        "n_steps": 130_000,
+        "batch_size": 32,
+        "eval_every": 500,
+        "warmup_steps": 2_000,
+        "lr_floor_fraction": 0.1,
+        "grad_clip": 1.0,
+        "seed": 20261010,
+        "dtype": "fp32",
     },
     "train_303m": {
         "n_layers": 20,
@@ -175,14 +240,18 @@ CONFIGS: dict[str, dict] = {
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
         "seed": 20261010,
+        "dtype": "fp32",
     },
 }
 
 #: The named configurations must land inside these bands; a config that edits
 #: its widths out of its band fails the suite instead of shipping.
 TRAIN_PARAM_BANDS = {
+    "train_102m": (95_000_000, 120_000_000),
     "train_124m": (100_000_000, 130_000_000),
+    "train_152m": (140_000_000, 170_000_000),
     "train_208m": (190_000_000, 220_000_000),
+    "train_253m": (240_000_000, 270_000_000),
     "train_303m": (290_000_000, 320_000_000),
 }
 
@@ -277,11 +346,100 @@ class MetricsWriter:
 def _set_determinism(seed: int) -> None:
     import torch
 
+    # cuBLAS needs a fixed workspace for deterministic reductions. The variable
+    # must be set before the CUDA context is initialised, which is why this
+    # happens before the model is built. ``setdefault`` leaves an explicit
+    # caller choice intact.
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     torch.manual_seed(seed)
     np.random.seed(seed)
     torch.use_deterministic_algorithms(True, warn_only=True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def _resolve_threads(device: str, threads: int | None) -> int:
+    """The torch thread count: an explicit value wins, else CPU 4 / GPU 8."""
+    if threads is not None:
+        return int(threads)
+    return 4 if device == "cpu" else 8
+
+
+def _require_xla():
+    """Import torch_xla and return its XLA model module, or refuse clearly.
+
+    Importing ``torch_xla`` is what registers the ``xla`` device with torch, so
+    this must run before the first ``torch.device("xla")`` / ``.to("xla")``.
+    """
+    if not XLA_AVAILABLE:
+        raise RuntimeError(
+            "device 'xla' requested but torch_xla is not installed; "
+            "install the TPU build of torch_xla on the TPU host "
+            "(see docs/TPU_V5E8.md)"
+        )
+    import torch_xla.core.xla_model as xm
+
+    return xm
+
+
+def _amp_dtype(device: str, dtype: str):
+    """The autocast dtype, or ``None`` for a full-precision run.
+
+    ``dtype`` is an explicit training choice, never a label: a ``bf16`` run on
+    CPU is refused rather than silently trained in fp32, because a metrics file
+    that says ``bf16`` must describe the arithmetic that produced it. CUDA and
+    XLA both support bfloat16 autocast; the master weights and optimizer states
+    stay fp32, which is what makes the run reproducible rather than a
+    lower-precision copy of AdamW.
+    """
+    if dtype not in ("fp32", "bf16"):
+        raise ValueError(f"dtype must be 'fp32' or 'bf16', not {dtype!r}")
+    if dtype == "fp32":
+        return None
+    if device not in ("cuda", "xla"):
+        raise ValueError(
+            f"dtype='bf16' is supported on cuda and xla, not {device!r}; "
+            "use dtype='fp32' for a CPU run"
+        )
+    import torch
+
+    return torch.bfloat16
+
+
+def _autocast_context(device: str, dtype: str):
+    """Autocast only around the forward pass; the loss stays in fp32."""
+    amp_dtype = _amp_dtype(device, dtype)
+    if amp_dtype is None:
+        return contextlib.nullcontext()
+    import torch
+
+    return torch.autocast(device_type=device, dtype=amp_dtype)
+
+
+def _reduce_update(model, opt, xm, grad_clip: float):
+    """All-reduce once, clip the reduced gradient, then step once.
+
+    The order is the point. Clipping each rank's local gradient before the
+    all-reduce would make the effective clip threshold depend on how many
+    chips happened to see a large gradient; calling ``xm.optimizer_step`` after
+    an explicit ``reduce_gradients`` would all-reduce a second time. This helper
+    is deliberately torch_xla-free at import time so the order can be tested on
+    CPU with a fake ``xm``.
+    """
+    import torch
+
+    if xm is not None:
+        xm.reduce_gradients(model)
+    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    opt.step()
+    if xm is not None:
+        xm.mark_step()
+    return grad_norm
+
+
+def _to_numpy_f64(tensor):
+    """Transfer to CPU first, then widen: never double the device transfer."""
+    return tensor.detach().cpu().numpy().astype(np.float64)
 
 
 def _cos_sin_torch(positions: np.ndarray, head_dim: int, base: float, device):
@@ -478,14 +636,14 @@ def _probe_diagnostics(model, ids, deltas, n_pairs: int, seed: int) -> dict:
     for index in sorted(capture["pre_rope"]):
         q_pre, k_pre = capture["pre_rope"][index]
         q_post, k_post = capture["post_rope"][index]
-        q_np = q_pre.to(torch.float64).cpu().numpy()
-        k_np = k_pre.to(torch.float64).cpu().numpy()
+        q_np = _to_numpy_f64(q_pre)
+        k_np = _to_numpy_f64(k_pre)
         ref_q = _apply_rope_ref_4d(q_np, ref_cos, ref_sin)
         ref_k = _apply_rope_ref_4d(k_np, ref_cos, ref_sin)
         rope_resid = max(
             rope_resid,
-            float(np.max(np.abs(q_post.to(torch.float64).cpu().numpy() - ref_q))),
-            float(np.max(np.abs(k_post.to(torch.float64).cpu().numpy() - ref_k))),
+            float(np.max(np.abs(_to_numpy_f64(q_post) - ref_q))),
+            float(np.max(np.abs(_to_numpy_f64(k_post) - ref_k))),
         )
         for head in range(q_np.shape[2]):
             for _pair in range(n_pairs):
@@ -590,6 +748,7 @@ def train(
     override: dict | None = None,
     force_cpu: bool = False,
     threads: int | None = None,
+    data_seed: int | None = None,
 ) -> dict:
     """One training run. Returns the summary record it also writes.
 
@@ -612,13 +771,17 @@ def train(
     params = count_params(config)
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
+    xm = _require_xla() if device == "xla" else None
+    dtype = str(config.get("dtype", "fp32"))
+    # Validate before building the model or creating the writer: a bad dtype
+    # must not leave a half-initialised run directory behind.
+    _amp_dtype(device, dtype)
     refusal = _cpu_refusal(config_name, params, device, force_cpu)
     if refusal:
         raise RuntimeError(refusal)
     _set_determinism(config["seed"])
-    torch.set_num_threads(
-        threads if threads is not None else (4 if device == "cpu" else 8)
-    )
+    if xm is None:
+        torch.set_num_threads(_resolve_threads(device, threads))
     model = build_model(config, device=device)
     decayed, decayless = [], []
     for name, parameter in model.named_parameters():
@@ -632,7 +795,7 @@ def train(
         betas=(0.9, 0.95),
         eps=1e-8,
     )
-    rng = np.random.default_rng(config["seed"])
+    rng = np.random.default_rng(config["seed"] if data_seed is None else data_seed)
     ctx = config["ctx"]
     train_in, train_tg, held_in, held_tg = _split_windows(tokens, ctx)
     if len(train_in) < config["batch_size"] or len(held_in) < 1:
@@ -656,8 +819,10 @@ def train(
             "param_formula": _PARAM_FORMULA_DOC,
             "n_params": params,
             "device": device,
+            "dtype": dtype,
             "tokens_total": int(len(tokens)),
             "seed": config["seed"],
+            "data_seed": None if data_seed is None else int(data_seed),
         }
     )
     deltas = np.array(DISTANCE_GRID, dtype=np.int64)
@@ -666,22 +831,27 @@ def train(
         picks = rng.integers(0, len(train_in), size=config["batch_size"])
         ids = torch.from_numpy(train_in[picks]).to(device)
         targets = torch.from_numpy(train_tg[picks]).to(device)
-        logits = model(ids)
+        # Forward in bf16 when requested; the cross-entropy and the master
+        # weights stay fp32. A bf16 label in the metrics therefore describes
+        # the arithmetic that actually ran.
+        with _autocast_context(device, dtype):
+            logits = model(ids)
         loss = F.cross_entropy(
-            logits.reshape(-1, logits.shape[-1]).float(), targets.reshape(-1)
+            logits.float().reshape(-1, logits.shape[-1]), targets.reshape(-1)
         )
         opt.zero_grad(set_to_none=True)
         loss.backward()
-        grad_norm = torch.nn.utils.clip_grad_norm_(
-            model.parameters(), config["grad_clip"]
-        )
         # The update that follows is the (step + 1)-th, so the schedule is
         # read at step + 1: without this the first update would run at
         # lr_at(0) == 0 and waste a step of the budget.
         current_lr = lr_at(step + 1, config)
         for group in opt.param_groups:
             group["lr"] = current_lr
-        opt.step()
+        # Data-parallel replicas: reduce once, then clip the reduced gradient,
+        # then step once. Every rank initialises from the same config["seed"];
+        # only data_seed differs, so the replicas remain one synchronised
+        # model rather than eight independent runs.
+        grad_norm = _reduce_update(model, opt, xm, config["grad_clip"])
         loss_value = float(loss.item())
         loss_ema = loss_value if loss_ema is None else 0.9 * loss_ema + 0.1 * loss_value
         tokens_seen += int(ids.numel())
@@ -689,12 +859,12 @@ def train(
         if step % config["eval_every"] == 0 or step == config["n_steps"]:
             val_ids = torch.from_numpy(held_in[: config["batch_size"]]).to(device)
             val_targets = torch.from_numpy(held_tg[: config["batch_size"]]).to(device)
-            with torch.no_grad():
+            with torch.no_grad(), _autocast_context(device, dtype):
                 val_logits = model(val_ids)
-                val_loss = F.cross_entropy(
-                    val_logits.reshape(-1, val_logits.shape[-1]).float(),
-                    val_targets.reshape(-1),
-                ).item()
+            val_loss = F.cross_entropy(
+                val_logits.float().reshape(-1, val_logits.shape[-1]),
+                val_targets.reshape(-1),
+            ).item()
             probe = train_in[0][None, :]
             diagnostics = _probe_diagnostics(
                 model, probe, deltas, n_pairs=12, seed=probe_seed
@@ -729,10 +899,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", choices=sorted(CONFIGS), required=True)
     parser.add_argument("--run-name", default=None)
-    parser.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
+    parser.add_argument("--device", choices=("auto", "cuda", "cpu", "xla"), default="auto")
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--force-cpu", action="store_true")
-    parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--threads", type=int, default=None)
     args = parser.parse_args()
     if not TORCH_AVAILABLE:
         raise SystemExit("torch is not installed; see train_requirements.txt")
