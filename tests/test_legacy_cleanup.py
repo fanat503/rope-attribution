@@ -2,23 +2,24 @@
 
 Why these tests exist
 ---------------------
-`LEGACY.md` audited the pre-paper tree under `projects/frontier-01-*` and
-recommended removing two classes of file, which was done on 2026-10-17:
+An audit of the pre-paper tree under `projects/frontier-01-*` recommended
+removing two classes of file, which was done on 2026-10-17:
 `settings.json` / `settings-ideal.json` — machine-readable, results-shaped
 objects whose contents were typed-in illustrative constants — and the six
-near-duplicate "FINAL" bundles the audit calls the documents a reader is most
-likely to mistake for a result. Three process documents that operate against a
-`projects/bundle/` directory that does not exist were removed with them.
+near-duplicate "FINAL" bundles the audit called the documents a reader is most
+likely to mistake for a result. Three process documents that operated against a
+`projects/bundle/` directory that does not exist were removed with them. The
+rest of that archive was removed from the working tree in October 2026; it
+remains in git history at tag `pre-legacy-cleanup-2026-10-20`.
 
 The check runs against `git ls-files`, not the filesystem, and the difference
-matters. The legacy scripts that wrote the two JSON files survive, so following
-the legacy instructions can regenerate them in a working tree; that local
-artifact is not the hazard. A *tracked* file is: it is what a reader of the
-repository would find and could cite.
+matters. A local regeneration of the two JSON files is not the hazard: a
+*tracked* file is, because it is what a reader of the repository would find and
+could cite.
 
 Mutation verdict: regenerate `projects/settings.json`, run `git add -f
 projects/settings.json`, and `test_removed_legacy_file_stays_untracked` fails
-naming that path; `git rm --cached` it again and the test passes. No surviving
+naming that path; `git rm --cached` it again and the test passes. No maintained
 code path produces any of the other ten files, so for them the same verdict
 holds by construction.
 """
@@ -97,7 +98,8 @@ def test_removed_legacy_file_stays_untracked(path: str) -> None:
     tracked = _tracked(path)
     assert not tracked, (
         f"{tracked!r} is tracked again, but it was removed on 2026-10-17 as "
-        f"part of the legacy cleanup (see LEGACY.md). Re-adding it re-creates "
-        f"the hazard the cleanup removed: machine-readable fake results, or a "
-        f"procedure addressed to an agent that asserts them."
+        f"part of the legacy cleanup (history at tag "
+        f"pre-legacy-cleanup-2026-10-20). Re-adding it re-creates the hazard "
+        f"the cleanup removed: machine-readable fake results, or a procedure "
+        f"addressed to an agent that asserts them."
     )
