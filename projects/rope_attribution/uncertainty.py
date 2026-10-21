@@ -4,8 +4,8 @@ Why this module exists
 ----------------------
 The paper's central empirical finding is that the best position-free scalar gets
 the sign wrong on a fraction of per-pair, per-distance cells. Every number
-supporting it is reported as a point estimate: 26.8% pooled, 1.13 median
-relative error, 22.4%-34.9% across heads. A point estimate without an interval
+supporting it is reported as a point estimate: 27.0% pooled, 1.13 median
+relative error, 20.2%-36.3% across heads. A point estimate without an interval
 is an assertion that the estimate is exact, which on 2790 heads and three
 checkpoints it is not.
 

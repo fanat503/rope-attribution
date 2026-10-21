@@ -853,3 +853,149 @@ def test_the_report_prints_no_measured_literals() -> None:
     text = raw.decode("utf-8").replace("\r\n", "\n")
     for literal in ('"3.6e-15"', '"3.4e-14"', '"7.4e-16"', '"1.8e-15"'):
         assert literal not in text, f"{literal} re-entered the printer"
+
+
+def test_kv_layout_is_checked_across_all_layers() -> None:
+    """A later layer with a different GQA layout must not be reported as layer 0."""
+    assert RM._check_kv_layout(0, 4, 8, None) == (4, 2)
+    assert RM._check_kv_layout(1, 4, 8, (4, 2)) == (4, 2)
+    with pytest.raises(RuntimeError, match="disagree"):
+        RM._check_kv_layout(5, 2, 8, (4, 2))
+
+
+def test_gpt2_has_rope_reports_a_known_load_failure(monkeypatch) -> None:
+    def fail(*args, **kwargs):
+        raise OSError("no network")
+
+    monkeypatch.setattr(RM, "load_model", fail)
+    report = RM.gpt2_has_rope("not-a-model")
+    assert report["error"].startswith("OSError")
+
+
+def test_gpt2_has_rope_does_not_hide_a_programming_error(monkeypatch) -> None:
+    """An AttributeError is this code's bug, not a fact about the checkpoint."""
+    def bug(*args, **kwargs):
+        raise AttributeError("loader bug")
+
+    monkeypatch.setattr(RM, "load_model", bug)
+    with pytest.raises(AttributeError):
+        RM.gpt2_has_rope("not-a-model")
+
+
+def test_the_cli_can_name_an_open_checkpoint() -> None:
+    args = RM._parse_args(
+        [
+            "--model",
+            "google/gemma-2b",
+            "--model",
+            "google/gemma-2-2b",
+            "--no-write",
+            "--no-gpt2-check",
+            "--seed",
+            "3",
+            "--out",
+            "gemma.json",
+        ]
+    )
+    assert args.models == ["google/gemma-2b", "google/gemma-2-2b"]
+    assert args.no_write is True
+    assert args.no_gpt2_check is True
+    assert args.seed == 3
+    assert args.out == Path("gemma.json")
+
+
+def test_the_cli_defaults_to_the_paper_checkpoints() -> None:
+    args = RM._parse_args([])
+    assert args.models is None
+    assert args.seed == RM.DEFAULT_SEED
+    assert args.no_write is False
+    assert args.no_gpt2_check is False
+
+
+def test_main_passes_the_requested_models_to_run_all(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_run_all(**kwargs):
+        captured.update(kwargs)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(RM, "run_all", fake_run_all)
+    with pytest.raises(SystemExit):
+        RM.main(["--model", "a", "--model", "b", "--no-gpt2-check"])
+    assert captured["model_ids"] == ("a", "b")
+    assert captured["with_gpt2_check"] is False
+
+
+def test_main_defaults_to_the_three_checkpoints(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_run_all(**kwargs):
+        captured.update(kwargs)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(RM, "run_all", fake_run_all)
+    with pytest.raises(SystemExit):
+        RM.main([])
+    assert captured["model_ids"] == RM.DEFAULT_MODEL_IDS
+    assert captured["with_gpt2_check"] is True
+
+
+def test_fused_qkv_is_split_per_head_not_in_contiguous_thirds() -> None:
+    """GPT-NeoX packs ``(q, k, v)`` inside each head.
+
+    The old code split the flat projection output into three equal chunks. That
+    is correct for head 0 and wrong for every later head, which silently made
+    the Pythia measurements a mixture of different heads. This test compares
+    every head against the layout the model itself uses.
+    """
+    transformers = pytest.importorskip("transformers")
+    torch = pytest.importorskip("torch")
+    cfg = transformers.GPTNeoXConfig(
+        vocab_size=64,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=1,
+        num_attention_heads=4,
+        max_position_embeddings=64,
+        rotary_pct=1.0,
+        rotary_emb_base=10000.0,
+    )
+    model = transformers.GPTNeoXForCausalLM(cfg).eval()
+    attn = model.gpt_neox.layers[0].attention
+    x = torch.randn(1, 5, 32)
+    qkv = attn.query_key_value(x)
+    q, k, v = RM.split_fused_qkv(attn, qkv)
+    view = qkv.view(1, 5, 4, 3, 8)
+    torch.testing.assert_close(q, view[..., 0, :].reshape(1, 5, 32))
+    torch.testing.assert_close(k, view[..., 1, :].reshape(1, 5, 32))
+    torch.testing.assert_close(v, view[..., 2, :].reshape(1, 5, 32))
+    torch.testing.assert_close(RM.join_fused_qkv(attn, q, k, v), qkv)
+
+    # The projector used by the real measurements must expose the same q/k.
+    q_hat, k_hat = RM._qkv_projector(attn)(x)
+    torch.testing.assert_close(q_hat, q)
+    torch.testing.assert_close(k_hat, k)
+
+
+def test_qk_normalised_checkpoints_are_refused_before_the_forward_pass() -> None:
+    """A pre-norm hook would measure a vector the model never rotates."""
+    transformers = pytest.importorskip("transformers")
+    torch = pytest.importorskip("torch")
+    cfg = transformers.LlamaConfig(
+        vocab_size=64,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=1,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        max_position_embeddings=64,
+    )
+    model = transformers.LlamaForCausalLM(cfg).eval()
+    model.model.layers[0].self_attn.q_norm = torch.nn.Identity()
+
+    class _Tokenizer:
+        def __call__(self, _text, return_tensors=None):
+            return {"input_ids": torch.tensor([[1, 2, 3, 4]])}
+
+    with pytest.raises(NotImplementedError, match="QK-normalised"):
+        RM.collect_head_vectors(model, _Tokenizer(), "ignored")

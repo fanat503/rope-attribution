@@ -64,6 +64,7 @@ dependencies; the module imports without them and reports
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import math
@@ -380,6 +381,60 @@ def load_model(model_id: str = DEFAULT_MODEL_IDS[0], seed: int = DEFAULT_SEED) -
 # --------------------------------------------------------------------------
 
 
+def _is_gpt_neox_attention(attn: Any) -> bool:
+    """True for the per-head QKV layout used by GPT-NeoX.
+
+    GPT-NeoX stores ``(q, k, v)`` **per head**:
+    ``(B, T, H, 3 * head_dim)``. Splitting the flat output into three equal
+    chunks happens to work for head 0 and silently mixes heads afterwards.
+    The class-name check is deliberately narrow: a different fused projection
+    may use the contiguous layout, and guessing would repeat the bug.
+    """
+    return type(attn).__name__ == "GPTNeoXAttention"
+
+
+def split_fused_qkv(attn: Any, qkv: Any) -> tuple[Any, Any, Any]:
+    """Split a fused ``query_key_value`` output into flat q, k, v.
+
+    Returns ``(q, k, v)`` each shaped ``(B, T, inner)``. The per-head layout is
+    reconstructed and then flattened in head order, so downstream code can
+    reshape by ``head_dim`` exactly as it does for separate projections.
+    """
+    if _is_gpt_neox_attention(attn):
+        batch, n_tokens, _ = qkv.shape
+        head_dim = head_dim_of(attn)
+        if qkv.shape[-1] % (3 * head_dim):
+            raise RuntimeError(
+                f"fused QKV width {qkv.shape[-1]} is not 3 * n_heads * {head_dim}"
+            )
+        n_heads = qkv.shape[-1] // (3 * head_dim)
+        view = qkv.view(batch, n_tokens, n_heads, 3, head_dim)
+        q = view[..., 0, :].reshape(batch, n_tokens, n_heads * head_dim)
+        k = view[..., 1, :].reshape(batch, n_tokens, n_heads * head_dim)
+        v = view[..., 2, :].reshape(batch, n_tokens, n_heads * head_dim)
+        return q, k, v
+    return tuple(qkv.chunk(3, dim=-1))
+
+
+def join_fused_qkv(attn: Any, q: Any, k: Any, v: Any) -> Any:
+    """Inverse of :func:`split_fused_qkv`, preserving the model's layout."""
+    if _is_gpt_neox_attention(attn):
+        import torch
+
+        batch, n_tokens, inner = q.shape
+        head_dim = head_dim_of(attn)
+        if inner % head_dim:
+            raise RuntimeError(f"q width {inner} is not a multiple of {head_dim}")
+        n_heads = inner // head_dim
+        pieces = [
+            part.reshape(batch, n_tokens, n_heads, head_dim) for part in (q, k, v)
+        ]
+        return torch.stack(pieces, dim=-2).reshape(batch, n_tokens, 3 * inner)
+    import torch
+
+    return torch.cat((q, k, v), dim=-1)
+
+
 def _qkv_projector(attn: Any) -> Callable[[Any], tuple[Any, Any]] | None:
     """Return ``f(residual_input) -> (q_hat, k_hat)``, or ``None``.
 
@@ -396,8 +451,7 @@ def _qkv_projector(attn: Any) -> Callable[[Any], tuple[Any, Any]] | None:
     if fused is not None and hasattr(fused, "weight"):
 
         def proj_fused(x: Any) -> tuple[Any, Any]:
-            # GPT-NeoX packs q, k and v in that order along the last axis.
-            q, k, _v = fused(x).chunk(3, dim=-1)
+            q, k, _v = split_fused_qkv(attn, fused(x))
             return q, k
 
         return proj_fused
@@ -532,6 +586,30 @@ def _expand_kv_to_heads(k: Any, t: int, n_heads: int, hd: int, n_kv_heads: int) 
     return per_head.reshape(1, t, n_heads, hd)
 
 
+def _check_kv_layout(
+    idx: int,
+    n_kv_heads: int,
+    n_heads: int,
+    first: tuple[int, int] | None,
+) -> tuple[int, int]:
+    """Return the layer-0 ``(n_kv_heads, groups)``, refusing a mixed layout.
+
+    A checkpoint with a different key/value layout in a later layer would make
+    the single reported ``n_kv_heads``/``n_kv_groups`` a lie about most of the
+    model. The old code read only layer 0 and said nothing.
+    """
+    groups = n_heads // n_kv_heads
+    if first is None:
+        return n_kv_heads, groups
+    if (n_kv_heads, groups) != first:
+        raise RuntimeError(
+            "attention layers disagree on the key/value layout: layer 0 has "
+            f"{first[0]} key heads in {first[1]} group(s), layer {idx} has "
+            f"{n_kv_heads} key heads in {groups} group(s)"
+        )
+    return first
+
+
 def collect_head_vectors(
     model: Any,
     tokenizer: Any,
@@ -548,6 +626,14 @@ def collect_head_vectors(
     attns = attention_modules(model)
     if not attns:
         raise RuntimeError("no attention module with a recognised q/k projection")
+    for idx, attn in enumerate(attns):
+        if hasattr(attn, "q_norm") or hasattr(attn, "k_norm"):
+            raise NotImplementedError(
+                "QK-normalised attention is not supported by collect_head_vectors: "
+                "the q_proj/k_proj outputs are normalised after projection, so a "
+                "hook on the projection would measure a vector the model never "
+                f"rotates (layer {idx})"
+            )
 
     ids = tokenizer(text, return_tensors="pt")["input_ids"]
     if max_tokens is not None and ids.shape[1] > max_tokens:
@@ -587,8 +673,12 @@ def collect_head_vectors(
             raise RuntimeError(
                 f"n_heads={nh} is not a multiple of the key head count {n_kv_heads}"
             )
-        if idx == 0:
-            n_kv_first, groups_first = n_kv_heads, nh // n_kv_heads
+        n_kv_first, groups_first = _check_kv_layout(
+            idx,
+            n_kv_heads,
+            nh,
+            None if n_kv_first is None else (n_kv_first, groups_first),
+        )
         qs.append(q.view(1, t, nh, hd).transpose(1, 2))
         ks.append(k.view(1, t, nh, hd).transpose(1, 2))
 
@@ -877,7 +967,11 @@ def gpt2_has_rope(model_id: str = "gpt2") -> dict:
     """
     try:
         loaded = load_model(model_id)
-    except Exception as exc:
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        # Known loader failures (missing weights, bad config, unavailable
+        # network) are reported. Anything else -- AttributeError, TypeError --
+        # is a bug in this function or in the loader and must not be hidden
+        # behind an "error" field that looks like a property of the model.
         return {"model_id": model_id, "error": f"{type(exc).__name__}: {exc}"}
 
     rot = find_rotary(loaded.model)
@@ -1653,8 +1747,53 @@ def _fmt(x: Any, spec: str = ".4g") -> str:
         return str(x)
 
 
-def main() -> None:
-    data = run_all()
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """The command line for measuring arbitrary checkpoints.
+
+    ``--model`` is repeatable so an open Gemma checkpoint can be measured without
+    changing the defaults (the three small checkpoints the paper uses). The
+    checkpoint must be one ``transformers`` can load, and the module's
+    layout checks still decide whether the measurement is meaningful for that
+    architecture; a failure is reported per model, not hidden.
+    """
+    parser = argparse.ArgumentParser(
+        description="Re-measure the RoPE structural facts on pretrained checkpoints."
+    )
+    parser.add_argument(
+        "--model",
+        action="append",
+        dest="models",
+        metavar="HF_ID",
+        help="checkpoint id, repeatable (default: the three paper checkpoints)",
+    )
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="JSON output path (default: results/real_model.json)",
+    )
+    parser.add_argument(
+        "--no-write",
+        action="store_true",
+        help="measure and print, but do not overwrite a results artifact",
+    )
+    parser.add_argument(
+        "--no-gpt2-check",
+        action="store_true",
+        help="skip the GPT-2 premise check when measuring an unrelated model",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = _parse_args(argv)
+    model_ids = tuple(args.models) if args.models else DEFAULT_MODEL_IDS
+    data = run_all(
+        model_ids=model_ids,
+        seed=args.seed,
+        with_gpt2_check=not args.no_gpt2_check,
+    )
     rule = "=" * 78
 
     print(rule)
@@ -1673,23 +1812,24 @@ def main() -> None:
     print()
 
     g = data["gpt2_rope_check"]
-    print(rule)
-    print("0. Does GPT-2 use RoPE?  (a premise this module had to check)")
-    print(rule)
-    if g and "error" in g:
-        print(f"  could not load {g['model_id']}: {g['error']}")
-    elif g:
-        print(
-            f"  {g['model_id']} ({g['model_type']}): rotary module found = "
-            f"{g['rotary_module_found']}"
-        )
-        print(
-            f"    learned absolute position table: {g['learned_absolute_position_embedding']}"
-            f" (size {g['learned_position_table_size']})"
-            f" | rope_theta in config: {g['rope_theta_in_config']}"
-        )
-        print(f"  -> {g['conclusion']}")
-    print()
+    if g is not None:
+        print(rule)
+        print("0. Does GPT-2 use RoPE?  (a premise this module had to check)")
+        print(rule)
+        if "error" in g:
+            print(f"  could not load {g['model_id']}: {g['error']}")
+        else:
+            print(
+                f"  {g['model_id']} ({g['model_type']}): rotary module found = "
+                f"{g['rotary_module_found']}"
+            )
+            print(
+                f"    learned absolute position table: {g['learned_absolute_position_embedding']}"
+                f" (size {g['learned_position_table_size']})"
+                f" | rope_theta in config: {g['rope_theta_in_config']}"
+            )
+            print(f"  -> {g['conclusion']}")
+        print()
 
     for model in data["models"]:
         mid = model["model_id"]
@@ -1883,8 +2023,11 @@ def main() -> None:
                 )
         print()
 
-    out = write_results(data)
-    print(f"wrote {out}")
+    if args.no_write:
+        print("(results not written: --no-write)")
+    else:
+        out = write_results(data, args.out)
+        print(f"wrote {out}")
 
 
 if __name__ == "__main__":

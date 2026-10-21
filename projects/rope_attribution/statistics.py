@@ -430,7 +430,7 @@ def run_all(
     }
 
 
-def main() -> None:
+def main(out: Path | None = None) -> None:
     result = run_all()
     cfg = result["configuration"]
 
@@ -463,7 +463,11 @@ def main() -> None:
         print(f"   {key:<22} mean={entry['mean']:>10.4f}  sd={entry['std']:>9.4f} "
               f"({100 * entry['relative_std']:.1f}% of the mean)")
 
-    out = Path(__file__).resolve().parent.parent.parent / "results" / "statistics.json"
+    out = (
+        Path(out)
+        if out is not None
+        else Path(__file__).resolve().parent.parent.parent / "results" / "statistics.json"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print()

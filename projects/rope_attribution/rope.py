@@ -204,6 +204,16 @@ def _rotary_dim_ladder(inv_f: np.ndarray, n_rot: int) -> np.ndarray:
     dim = inv_f.shape[0] * 2
     if dim % n_rot == 0:
         return inv_f[:: dim // n_rot][: n_rot // 2]
+    if dim < 4:
+        # Rebuilding the ladder reads the base from inv_f[1], which exists only
+        # for a head with at least two rotary pairs. A 2-wide head whose rotary
+        # block is not a divisor used to raise IndexError from deep inside the
+        # formula; say what is actually wrong instead.
+        raise ValueError(
+            f"cannot rebuild a rotary ladder for head_dim={dim}, "
+            f"rotary_dim={n_rot}: the base is read from inv_f[1], which needs "
+            "at least two rotary pairs"
+        )
     base = float(inv_f[1]) ** (-dim / 2.0)
     return base ** (-2.0 * np.arange(n_rot // 2, dtype=np.float64) / n_rot)
 

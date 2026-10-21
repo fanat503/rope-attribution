@@ -141,23 +141,23 @@ def test_the_paper_quotes_the_checkpoint_mean_not_the_head_mean(
 ) -> None:
     """A real methodological distinction the paper left implicit.
 
-    The paper's headline "26.8%" is the *unweighted mean of the three
-    per-checkpoint means*. The mean over all 2790 heads is 26.70% - lower,
+    The paper's headline "27.0%" is the *unweighted mean of the three
+    per-checkpoint means*. The mean over all 2790 heads is 26.90% - lower,
     because SmolLM contributes 1350 heads against 720 each for the other two.
     Both are defensible summaries; they are not the same number, and the paper
     does not say which it used.
 
-    This test pins both, and states that they differ by about 0.08 percentage
+    This test pins both, and states that they differ by about 0.14 percentage
     points, so a reader cannot quietly swap one for the other.
     """
     _ids, rates = per_head
     head_mean = sum(r for model in rates for r in model) / sum(len(m) for m in rates)
     checkpoint_mean = sum(sum(m) / len(m) for m in rates) / len(rates)
 
-    assert abs(checkpoint_mean - 0.2678) < 0.0005, checkpoint_mean
-    assert abs(head_mean - 0.2670) < 0.0005, head_mean
+    assert abs(checkpoint_mean - 0.2704) < 0.0005, checkpoint_mean
+    assert abs(head_mean - 0.2690) < 0.0005, head_mean
 
-    # The two differ by about 0.08 percentage points, which is LARGER than the
+    # The two differ by about 0.14 percentage points, which is LARGER than the
     # half-width of the pooled interval - the checkpoint mean falls outside it.
     # That is the substantive point: a reader who assumes the headline is the
     # head-weighted mean, or vice versa, is not making a rounding-level mistake.
@@ -196,7 +196,7 @@ def test_the_three_checkpoints_differ_measurably(
         assert not pair["agrees_at_95"], pair
     # and the spread of the three means must be in the range the paper reports
     means = out["per_checkpoint_mean"]
-    assert min(means) > 0.26 and max(means) < 0.28, means
+    assert min(means) > 0.26 and max(means) < 0.29, means
 
 
 def test_the_interval_comes_from_heads_not_cells(per_head: tuple[list[str], list[list[float]]]) -> None:
@@ -223,7 +223,7 @@ def test_the_interval_comes_from_heads_not_cells(per_head: tuple[list[str], list
 
 
 def test_the_two_means_the_paper_distinguishes(usefulness: dict) -> None:
-    """26.8% is the equal-weight mean of per-checkpoint means; 26.70% is the
+    """27.0% is the equal-weight mean of per-checkpoint means; 26.90% is the
     mean over all 2790 heads. Both are pinned, so the passage cannot collapse
     them into one number."""
     checkpoint, n, head = groups("boot_two_means")[0]
@@ -255,15 +255,14 @@ def test_the_two_means_the_paper_distinguishes(usefulness: dict) -> None:
         "the head-pooled mean where the paper restates it",
     )
     # The passage's other quantitative claim: the two differ by more than
-    # the pooled interval's half-width. Re-derived here, and it is *less*
-    # than two half-widths --- which is what made the earlier "more than
-    # twice" wording wrong and why that phrase is now absent.
+    # twice the pooled interval's half-width. Re-derived here rather than
+    # inferred from the wording; the current artifact satisfies the stronger
+    # statement, so the paper makes it.
     out = UNC.bootstrap_ci([rate for row in rates for rate in row])
     half_width = 100.0 * 0.5 * (out["ci_high"] - out["ci_low"])
     delta = 100.0 * float(np.mean([np.mean(row) for row in rates])) - head_mean
-    assert delta > half_width, (delta, half_width)
-    assert delta < 2.0 * half_width, (delta, half_width)
-    assert "twice that interval's half-width" not in TEX_FLAT
+    assert delta > 2.0 * half_width, (delta, half_width)
+    assert "twice that interval's half-width" in TEX_FLAT
 
 
 def test_the_head_counts_are_the_ones_in_the_json(usefulness: dict) -> None:

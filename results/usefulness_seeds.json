@@ -16,28 +16,28 @@
     {
       "seed": 20260906,
       "pooled": {
-        "sign_flip_fraction": 0.26778187181112223,
-        "sign_flip_fraction_min_head": 0.223783202825119,
-        "sign_flip_fraction_max_head": 0.34858946537778657,
+        "sign_flip_fraction": 0.27042014920964974,
+        "sign_flip_fraction_min_head": 0.20166028581175846,
+        "sign_flip_fraction_max_head": 0.36304557124518616,
         "rel_err_median": 1.1271909646727432,
-        "rel_err_p90": 1.1522562162964556
+        "rel_err_p90": 1.1571620678460923
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.2762929636080122,
-          "sign_flip_fraction_min_head": 0.223783202825119,
-          "sign_flip_fraction_max_head": 0.34858946537778657,
-          "rel_err_median": 1.1380029882476275,
-          "rel_err_p90": 1.2101356761839903
+          "sign_flip_fraction_pooled": 0.28420779580359473,
+          "sign_flip_fraction_min_head": 0.20166028581175846,
+          "sign_flip_fraction_max_head": 0.36304557124518616,
+          "rel_err_median": 1.110079867406656,
+          "rel_err_p90": 1.1788640898546598
         },
         {
           "model_id": "JackFram/llama-160m",
           "sign_flip_fraction_pooled": 0.2629400766160485,
           "sign_flip_fraction_min_head": 0.24290107522054366,
           "sign_flip_fraction_max_head": 0.28649583985245203,
-          "rel_err_median": 1.1223959966591848,
-          "rel_err_p90": 1.1522562162964556
+          "rel_err_median": 1.127202629434862,
+          "rel_err_p90": 1.1571620678460923
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
@@ -52,28 +52,28 @@
     {
       "seed": 20260907,
       "pooled": {
-        "sign_flip_fraction": 0.2677959294841779,
-        "sign_flip_fraction_min_head": 0.2241036617995566,
-        "sign_flip_fraction_max_head": 0.3491942596007376,
+        "sign_flip_fraction": 0.2704666247061382,
+        "sign_flip_fraction_min_head": 0.2011289589331717,
+        "sign_flip_fraction_max_head": 0.36277463148170463,
         "rel_err_median": 1.1272984611948416,
-        "rel_err_p90": 1.1516423942681573
+        "rel_err_p90": 1.1572184626154864
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.27632395493732403,
-          "sign_flip_fraction_min_head": 0.2241036617995566,
-          "sign_flip_fraction_max_head": 0.3491942596007376,
-          "rel_err_median": 1.1379516025251342,
-          "rel_err_p90": 1.2095551125414117
+          "sign_flip_fraction_pooled": 0.28433604060320467,
+          "sign_flip_fraction_min_head": 0.2011289589331717,
+          "sign_flip_fraction_max_head": 0.36277463148170463,
+          "rel_err_median": 1.109373282701073,
+          "rel_err_p90": 1.1762345796913762
         },
         {
           "model_id": "JackFram/llama-160m",
           "sign_flip_fraction_pooled": 0.2629971402996172,
           "sign_flip_fraction_min_head": 0.2437975796011924,
           "sign_flip_fraction_max_head": 0.28722923441547704,
-          "rel_err_median": 1.1233768513375733,
-          "rel_err_p90": 1.1516423942681573
+          "rel_err_median": 1.128009420589615,
+          "rel_err_p90": 1.1572184626154864
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
@@ -88,28 +88,28 @@
     {
       "seed": 20260908,
       "pooled": {
-        "sign_flip_fraction": 0.2677787938835605,
-        "sign_flip_fraction_min_head": 0.22559386973180076,
-        "sign_flip_fraction_max_head": 0.35009259624098665,
-        "rel_err_median": 1.1270316601911503,
-        "rel_err_p90": 1.1510159214227762
+        "sign_flip_fraction": 0.2703749561937353,
+        "sign_flip_fraction_min_head": 0.20043911117840785,
+        "sign_flip_fraction_max_head": 0.36078541599743014,
+        "rel_err_median": 1.1268769834772496,
+        "rel_err_p90": 1.1569137067795712
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.2763265203670678,
-          "sign_flip_fraction_min_head": 0.22559386973180076,
-          "sign_flip_fraction_max_head": 0.35009259624098665,
-          "rel_err_median": 1.1381522475456844,
-          "rel_err_p90": 1.2087218314252455
+          "sign_flip_fraction_pooled": 0.2841150072975921,
+          "sign_flip_fraction_min_head": 0.20043911117840785,
+          "sign_flip_fraction_max_head": 0.36078541599743014,
+          "rel_err_median": 1.110271029754101,
+          "rel_err_p90": 1.1782692583381378
         },
         {
           "model_id": "JackFram/llama-160m",
           "sign_flip_fraction_pooled": 0.26293419616820457,
           "sign_flip_fraction_min_head": 0.24343030838271085,
           "sign_flip_fraction_max_head": 0.2864370700204642,
-          "rel_err_median": 1.1231496784437698,
-          "rel_err_p90": 1.1505859248396264
+          "rel_err_median": 1.1268769834772496,
+          "rel_err_p90": 1.1569137067795712
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
@@ -123,17 +123,17 @@
     }
   ],
   "mean": {
-    "sign_flip_fraction": 0.2677855317262869,
-    "sign_flip_fraction_min_head": 0.22449357811882545,
-    "sign_flip_fraction_max_head": 0.34929210707317027,
-    "rel_err_median": 1.1271736953529117,
-    "rel_err_p90": 1.1516381773291295
+    "sign_flip_fraction": 0.2704205767031744,
+    "sign_flip_fraction_min_head": 0.20107611864111266,
+    "sign_flip_fraction_max_head": 0.36220187290810696,
+    "rel_err_median": 1.1271221364482782,
+    "rel_err_p90": 1.1570980790803833
   },
   "sd": {
-    "sign_flip_fraction": 9.135285238515307e-06,
-    "sign_flip_fraction_min_head": 0.0009662580989374746,
-    "sign_flip_fraction_max_head": 0.000756327438264842,
-    "rel_err_median": 0.00013423623187592255,
-    "rel_err_p90": 0.0006201581897789549
+    "sign_flip_fraction": 4.5835751380061324e-05,
+    "sign_flip_fraction_min_head": 0.0006122997171593452,
+    "sign_flip_fraction_max_head": 0.0012341453414051323,
+    "rel_err_median": 0.00021900652951198523,
+    "rel_err_p90": 0.00016214176353989115
   }
 }

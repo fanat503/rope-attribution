@@ -9,9 +9,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -309,24 +306,43 @@ def test_the_position_free_residual_is_what_the_mean_summary_actually_incurs() -
     assert np.sqrt(baseline / contrib.size) / residual > 1e13
 
 
-def test_main_writes_the_report_it_prints() -> None:
+def _assert_json_close(computed, committed, where: str = "root") -> None:
+    """Recursively compare a computed result with the committed JSON.
 
+    Floats must agree to ``EXACT_TOL`` relative; a changed committed value, a
+    renamed field, or an extra row is a failure. That is the point: the test
+    exists to detect drift, not to re-write the artifact and agree with itself.
+    """
+    if isinstance(committed, dict):
+        assert isinstance(computed, dict), where
+        assert computed.keys() == committed.keys(), f"{where}: keys differ"
+        for key in committed:
+            _assert_json_close(computed[key], committed[key], f"{where}.{key}")
+    elif isinstance(committed, list):
+        assert isinstance(computed, list), where
+        assert len(computed) == len(committed), f"{where}: length differs"
+        for index, (got, want) in enumerate(zip(computed, committed, strict=True)):
+            _assert_json_close(got, want, f"{where}[{index}]")
+    elif isinstance(committed, bool) or not isinstance(committed, (int, float)):
+        assert computed == committed, where
+    else:
+        assert computed == pytest.approx(committed, rel=EXACT_TOL, abs=1e-15), where
+
+
+def test_the_committed_statistics_json_is_current(tmp_path: Path) -> None:
+    """Recompute, compare value by value, and leave the artifact untouched.
+
+    The previous version ran the module as a subprocess, which *overwrote*
+    ``results/statistics.json`` and then read the file it had just written: it
+    could never detect a stale artifact. ``main`` now accepts an explicit
+    output path, so this test writes to ``tmp_path`` and compares against the
+    committed bytes.
+    """
     root = Path(__file__).resolve().parents[1]
-    env = {**os.environ, "PYTHONPATH": str(root / "projects"), "PYTHONIOENCODING": "utf-8"}
-    proc = subprocess.run(
-        [sys.executable, "-m", "rope_attribution.statistics"],
-        cwd=root,
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=600,
-    )
-    assert proc.returncode == 0, proc.stderr[-2000:]
-    out = root / "results" / "statistics.json"
-    assert out.exists(), "the module must write results/statistics.json when run"
-    data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["configuration"]["head_dim"] == S.HEAD_DIM
-    assert len(data["ratio_vs_density"]) == len(S.GRID_DENSITIES)
-    # stdout is informational; the JSON file is the contract this test checks.
+    committed_path = root / "results" / "statistics.json"
+    before = committed_path.read_bytes()
+    committed = json.loads(before)
+    out = tmp_path / "statistics.json"
+    S.main(out=out)
+    _assert_json_close(json.loads(out.read_text(encoding="utf-8")), committed)
+    assert committed_path.read_bytes() == before, "the test must not rewrite the artifact"
