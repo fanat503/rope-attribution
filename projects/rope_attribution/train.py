@@ -343,6 +343,53 @@ class MetricsWriter:
         return [json.loads(line) for line in self._lines]
 
 
+def _save_checkpoint(
+    model,
+    config: dict,
+    path: Path,
+    *,
+    step: int,
+    n_params: int,
+) -> str:
+    """Save the trained weights, not a resumable training state.
+
+    The checkpoint is for evaluation and for the open-model path the README
+    describes: it contains the CPU-side ``state_dict`` plus the config needed
+    to rebuild the module. Optimizer and RNG state are deliberately omitted.
+    A file that looks resumable but silently restarts AdamW from zero is worse
+    than a file that says what it is.
+
+    Writing to a sibling temporary path and replacing atomically means a crash
+    during a multi-gigabyte write cannot leave ``checkpoint.pt`` truncated.
+    """
+    import torch
+
+    # XLA tensors cannot be serialised by the CPU checkpoint path directly;
+    # moving every tensor to CPU first is also what makes the same file usable
+    # after a CUDA run.
+    state = {
+        key: value.detach().cpu() if torch.is_tensor(value) else value
+        for key, value in model.state_dict().items()
+    }
+    payload = {
+        "format": "rope_attribution/train-checkpoint/v1",
+        "config": dict(config),
+        "step": int(step),
+        "n_params": int(n_params),
+        "model": state,
+    }
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    try:
+        torch.save(payload, temporary)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return path.name
+
+
 def _set_determinism(seed: int) -> None:
     import torch
 
@@ -749,6 +796,7 @@ def train(
     force_cpu: bool = False,
     threads: int | None = None,
     data_seed: int | None = None,
+    save_checkpoint: bool = True,
 ) -> dict:
     """One training run. Returns the summary record it also writes.
 
@@ -809,6 +857,9 @@ def train(
     writer = MetricsWriter(run_dir)
     step = 0
     loss_ema: float | None = None
+    best_val_loss: float | None = None
+    best_step: int | None = None
+    final_val_loss: float | None = None
     start = time.perf_counter()
     tokens_seen = 0
     writer.log(
@@ -865,6 +916,10 @@ def train(
                 val_logits.float().reshape(-1, val_logits.shape[-1]),
                 val_targets.reshape(-1),
             ).item()
+            final_val_loss = float(val_loss)
+            if best_val_loss is None or val_loss < best_val_loss:
+                best_val_loss = float(val_loss)
+                best_step = step
             probe = train_in[0][None, :]
             diagnostics = _probe_diagnostics(
                 model, probe, deltas, n_pairs=12, seed=probe_seed
@@ -875,19 +930,40 @@ def train(
                     "step": step,
                     "lr": current_lr,
                     "grad_norm": float(grad_norm),
+                    "train_loss": loss_value,
                     "train_loss_ema": loss_ema,
                     "val_loss": val_loss,
+                    # Kept as a convenience field for a reader who thinks in
+                    # perplexity; it is exp(val_loss), not a separate model.
+                    "val_perplexity": (
+                        float(math.exp(min(50.0, val_loss)))
+                        if math.isfinite(val_loss)
+                        else None
+                    ),
                     "tokens_seen": tokens_seen,
                     "tok_per_s": tokens_seen / max(1e-9, time.perf_counter() - start),
                     **diagnostics,
                 }
             )
+    checkpoint_name = None
+    if save_checkpoint:
+        checkpoint_name = _save_checkpoint(
+            model,
+            config,
+            run_dir / "checkpoint.pt",
+            step=step,
+            n_params=params,
+        )
     summary = {
         "event": "summary",
         "config_name": config_name,
         "n_params": params,
         "steps": step,
         "final_train_loss_ema": loss_ema,
+        "final_val_loss": final_val_loss,
+        "best_val_loss": best_val_loss,
+        "best_step": best_step,
+        "checkpoint": checkpoint_name,
         "device": device,
     }
     writer.log(summary)
@@ -903,6 +979,11 @@ def main() -> None:
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--force-cpu", action="store_true")
     parser.add_argument("--threads", type=int, default=None)
+    parser.add_argument(
+        "--no-checkpoint",
+        action="store_true",
+        help="do not write run_dir/checkpoint.pt at the end of the run",
+    )
     args = parser.parse_args()
     if not TORCH_AVAILABLE:
         raise SystemExit("torch is not installed; see train_requirements.txt")
@@ -926,9 +1007,16 @@ def main() -> None:
                 "path needs train_requirements.txt"
             )
         tokens = _load_wikitext_tokens()
-    summary = train(args.config, run_dir, tokens, device=args.device,
-                    max_steps=args.max_steps, force_cpu=args.force_cpu,
-                    threads=args.threads)
+    summary = train(
+        args.config,
+        run_dir,
+        tokens,
+        device=args.device,
+        max_steps=args.max_steps,
+        force_cpu=args.force_cpu,
+        threads=args.threads,
+        save_checkpoint=not args.no_checkpoint,
+    )
     print("wrote", run_dir, json.dumps(summary))
 
 

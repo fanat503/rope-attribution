@@ -208,19 +208,57 @@ def test_smoke_run_logs_every_metric_and_finishes(tmp_path: Path) -> None:
     evals = [r for r in records if r["event"] == "eval"]
     assert evals, "no evaluation was logged"
     keys = {
-        "step", "lr", "grad_norm", "train_loss_ema", "val_loss",
-        "tokens_seen", "tok_per_s", "closed_form_resid_max",
+        "step", "lr", "grad_norm", "train_loss", "train_loss_ema", "val_loss",
+        "val_perplexity", "tokens_seen", "tok_per_s", "closed_form_resid_max",
         "rope_probe_resid_max", "sign_flip_rate", "rel_err_median_probe",
         "n_probe_cells",
     }
     for record in evals:
         assert keys <= set(record), sorted(keys - set(record))
+        assert np.isfinite(record["train_loss"])
         assert np.isfinite(record["train_loss_ema"])
         assert np.isfinite(record["val_loss"])
+        assert np.isfinite(record["val_perplexity"])
         assert record["closed_form_resid_max"] < 1e-11
         assert record["lr"] == pytest.approx(
             T.lr_at(record["step"], T.CONFIGS["smoke"])
         ), "the logged lr must be the lr the step actually ran at"
+    assert summary["final_val_loss"] == pytest.approx(evals[-1]["val_loss"])
+    assert summary["best_val_loss"] <= summary["final_val_loss"]
+    assert summary["best_step"] in {record["step"] for record in evals}
+
+
+def test_the_run_writes_a_loadable_checkpoint(tmp_path: Path) -> None:
+    """A run without weights is not reusable, and a silently half-written
+    checkpoint is worse than none. The final file must load, name its config,
+    and contain CPU tensors with the exact parameter count reported."""
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
+    tokens = np.random.default_rng(17).integers(0, 512, size=4096)
+    summary = T.train("smoke", tmp_path / "run", tokens, device="cpu")
+    path = tmp_path / "run" / "checkpoint.pt"
+    assert path.exists()
+    assert not path.with_suffix(".pt.tmp").exists()
+    assert summary["checkpoint"] == "checkpoint.pt"
+
+    payload = torch.load(path, map_location="cpu")
+    assert payload["format"] == "rope_attribution/train-checkpoint/v1"
+    assert payload["config"] == T.CONFIGS["smoke"]
+    assert payload["step"] == T.CONFIGS["smoke"]["n_steps"]
+    assert payload["n_params"] == T.count_params(T.CONFIGS["smoke"])
+    assert payload["model"]["embed.weight"].device.type == "cpu"
+    assert payload["model"]["embed.weight"].shape == (
+        T.CONFIGS["smoke"]["vocab"],
+        T.CONFIGS["smoke"]["dim"],
+    )
+
+    T.train(
+        "smoke", tmp_path / "no_checkpoint", tokens, device="cpu",
+        save_checkpoint=False,
+    )
+    assert not (tmp_path / "no_checkpoint" / "checkpoint.pt").exists()
 
 
 def test_two_smoke_runs_log_identical_series(tmp_path: Path) -> None:

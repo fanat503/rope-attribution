@@ -184,10 +184,11 @@ def test_the_three_checkpoints_differ_measurably(
     """A finding the paper did not previously have: the three do not agree.
 
     Every pairwise interval excludes zero, so the per-checkpoint rates differ by
-    more than head-to-head variation can explain. The difference is small in
-    absolute terms - about 1.2 to 1.3 percentage points - but it is real, and the
-    paper's prose used to imply the three were interchangeable. This test fails if
-    that changes, which is the point: it pins the finding rather than the wording.
+    more than head-to-head variation can explain. The absolute differences run
+    from 0.12 to 2.13 percentage points --- small next to the 27% headline, but
+    larger than the head-level noise floor --- and the paper's prose used to
+    imply the three were interchangeable. This test fails if that changes,
+    which is the point: it pins the finding rather than the wording.
     """
     ids, rates = per_head
     out = UNC.checkpoint_agreement(rates, ids)
@@ -262,6 +263,7 @@ def test_the_two_means_the_paper_distinguishes(usefulness: dict) -> None:
     half_width = 100.0 * 0.5 * (out["ci_high"] - out["ci_low"])
     delta = 100.0 * float(np.mean([np.mean(row) for row in rates])) - head_mean
     assert delta > 2.0 * half_width, (delta, half_width)
+    assert "computed before rounding, the two differ by more than twice" in TEX_FLAT
     assert "twice that interval's half-width" in TEX_FLAT
 
 

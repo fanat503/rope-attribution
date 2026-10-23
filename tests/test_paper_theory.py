@@ -198,6 +198,8 @@ def test_the_paper_does_not_claim_zero_crossed_means_blind() -> None:
     """Pin the wording, so the corrected statement cannot silently revert."""
     tex = re.sub(r"\s+", " ", (_REPO / "paper" / "main.tex").read_text(encoding="utf-8"))
     assert "completely position-blind if and only if" not in tex
+    assert "position-free only if every pair it touches has $\\Ak = \\Bk = 0$" in tex
+    assert "position-free only if every pair it touches has $\\Bk = 0$" not in tex
     assert "is \\emph{not} a blind case" in tex
 
 
@@ -212,3 +214,52 @@ def test_every_proposition_in_the_paper_has_a_proof() -> None:
     proofs = tex.count("\\begin{proof}")
     assert statements >= 3, statements
     assert proofs >= statements, f"{statements} propositions but {proofs} proofs"
+
+
+def test_the_theory_companion_carries_the_corrected_condition() -> None:
+    """The companion document must not reintroduce the backwards statement.
+
+    Mutation verdict: restoring ``B_k = 0`` as the position-free condition, or
+    deleting the theorem's conclusion, fails this test. It is the documentation
+    counterpart of the numerical tests above, not a substitute for them.
+    """
+    doc = (_REPO / "THEORY_AND_PROOFS.md").read_text(encoding="utf-8")
+    assert "if and only if `A_k = B_k = 0`" in doc
+    assert "`B_k = 0` is therefore **not** a" in doc
+    assert "position-blind case" in doc
+    # The companion must keep the vector norm and the per-pair amplitude apart.
+    assert "Corollary 2 (norms are position-free)" in doc
+    assert "norm-preservation half of the gate/phase split" in doc
+    # The peak-to-peak range is at most 2R_k, not exactly 2R_k: equality needs
+    # both extrema in the grid, which a finite grid need not contain.
+    assert "min_n c_n <= 2 R_k" in doc
+    assert "min_n c_n = 2 R_k" not in doc
+
+
+def test_the_paper_does_not_call_the_amplitude_position_blind() -> None:
+    """``R_k`` is position-independent, not position-blind.
+
+    Mutation verdict: restoring ``position-blind amplitudes $R_k^{ij}$`` in the
+    well-posed-object paragraph fails here. The distinction matters because the
+    paper's whole point is that the amplitude is the position-free part.
+    """
+    tex = re.sub(r"\s+", " ", (_REPO / "paper" / "main.tex").read_text(encoding="utf-8"))
+    assert "position-blind amplitudes" not in tex
+    assert "position-independent amplitudes $R_k^{ij}$" in tex
+
+
+def test_the_conclusion_does_not_reintroduce_the_partial_rope_norm_cost() -> None:
+    """Partial rotary is orthogonal; the old conclusion said the opposite.
+
+    Mutation verdict: restoring ``at the cost of losing norm preservation``
+    fails here. The numerical proof is already in ``test_experiments.py``; this
+    test only keeps the prose from contradicting it again.
+    """
+    tex = re.sub(r"\s+", " ", (_REPO / "paper" / "main.tex").read_text(encoding="utf-8"))
+    assert "at the cost of losing norm preservation" not in tex
+    assert "the rotated block remains orthogonal and preserves the norm exactly" in tex
+    # The norm is not the score's position-free part.  The old abstract called
+    # |q| "the magnitude gate"; that confuses a vector norm with the per-pair
+    # amplitude R_k and is exactly the overclaim the proof does not support.
+    assert "the magnitude gate $|q|$ is exactly position-independent" not in tex
+    assert "query and key magnitudes are exactly position-independent" in tex

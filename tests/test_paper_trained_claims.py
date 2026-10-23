@@ -46,6 +46,7 @@ FLOAT32_EPS = 1.1920928955078125e-07
 _USEFULNESS = _REPO / "results" / "usefulness.json"
 _AGREEMENT = _REPO / "results" / "agreement.json"
 _SEEDS = _REPO / "results" / "usefulness_seeds.json"
+_GRID = _REPO / "results" / "usefulness_grid_independence.json"
 
 
 @pytest.fixture(scope="module")
@@ -76,6 +77,13 @@ def seeds() -> dict:
     return json.loads(_SEEDS.read_text(encoding="utf-8"))
 
 
+@pytest.fixture(scope="module")
+def grid_independence() -> dict:
+    if not _GRID.exists():
+        pytest.skip("results/usefulness_grid_independence.json is absent")
+    return json.loads(_GRID.read_text(encoding="utf-8"))
+
+
 def _ident(trained: dict, model_id: str, name: str) -> dict:
     return trained["aggregates"][model_id]["identities"][name]
 
@@ -85,7 +93,15 @@ def _shares(trained: dict, model_id: str) -> dict:
 
 
 def _blind(trained: dict, model_id: str) -> float:
-    return trained["aggregates"][model_id]["frac_position_blind_across_heads"]["mean"]
+    """The fraction of live pair-channel cells meeting the cutoff.
+
+    This is the pooled count over the pooled live denominator, not the mean of
+    per-prompt head medians (``frac_position_blind_across_heads``). The paper
+    says "the fraction meeting the cutoff" and "of pairs", so the pooled
+    fraction is the estimand; using the median-of-medians here would quote a
+    number 34% low for pythia.
+    """
+    return trained["aggregates"][model_id]["frac_position_blind_pooled"]
 
 
 # --------------------------------------------------------------------------
@@ -163,9 +179,9 @@ def test_the_relative_position_identity_is_exact_on_trained_weights(trained: dic
     )
     assert worst < 1e-10, f"the identity is not exact on trained weights: {worst}"
     # The literal *string*, not a float: the accepted interval is derived from the
-    # decimal the paper wrote, and float("1.14") would hand it exponent -52.
+    # decimal the paper wrote, and float("4.55") would hand it exponent -52.
     assert_paper_sci_matches(
-        worst, literal("trained_relpos_worst"), -12, "the trained relative-position error"
+        worst, literal("trained_relpos_worst"), -13, "the trained relative-position error"
     )
 
 
@@ -245,7 +261,7 @@ def test_the_quoted_interquartile_range_is_pythias_own(trained: dict) -> None:
     """A one-checkpoint sentence, and the paper now says which checkpoint.
 
     Both ends of the printed range are pythia-160m's own quartiles
-    (0.1169 and 0.9919). The label used to say 'pooled'; llama and
+    (0.1860 and 0.9917). The label used to say 'pooled'; llama and
     SmolLM sit at 0.151/0.988 and 0.154/0.989, so naming the model is
     the honest version of what was measured.
     """
@@ -262,7 +278,7 @@ def test_the_quoted_interquartile_range_is_pythias_own(trained: dict) -> None:
 
 
 def test_almost_every_channel_is_position_carrying(trained: dict) -> None:
-    """The claim that makes the gate/phase split useless on real weights."""
+    """The claim that most pairs carry a non-negligible phase on real weights."""
     for model, index in ((PYTHIA, 1), (LLAMA, 2), (SMOLLM, 3)):
         written = float(literal("trained_blind_fraction", index))
         assert_paper_number_matches(
@@ -270,8 +286,11 @@ def test_almost_every_channel_is_position_carrying(trained: dict) -> None:
         )
     fractions = [_blind(trained, m) for m in (PYTHIA, LLAMA, SMOLLM)]
     assert all(0.001 < f < 0.02 for f in fractions), fractions
-    # "remarkably consistent across three unrelated architectures"
-    assert max(fractions) / min(fractions) < 1.5, fractions
+    # The paper says the rate is "within a factor of two" across three
+    # unrelated architectures.  The spread is wider than the pre-fix
+    # artifact's 1.5x but still under 2x; the threshold is stated here so a
+    # future drift is visible rather than absorbed by a loose inequality.
+    assert max(fractions) / min(fractions) < 2.0, fractions
     assert trained["position_blind_ratio"] == 0.01
 
 
@@ -280,7 +299,61 @@ def test_the_stated_band_brackets_every_checkpoint(trained: dict) -> None:
     hi = float(literal("trained_blind_band", 2))
     for model in (PYTHIA, LLAMA, SMOLLM):
         pct = 100.0 * _blind(trained, model)
+        # The band is deliberately wider than the printed per-model values:
+        # pythia's exact 0.5405% must lie inside it without relying on
+        # rounding to 0.54%. A band that only contains the rounded numbers
+        # would exclude the measurement it is summarising.
         assert lo <= pct <= hi, (model, pct, lo, hi)
+        assert hi - lo < 0.5, (lo, hi)
+
+
+def test_the_position_blind_cutoff_matches_the_code(trained: dict) -> None:
+    """The paper's cutoff is ``|B_k|/R_k < 1%``, not a movement of that share.
+
+    Mutation verdict: restoring "its share moves by less than 1% across the
+    distance range" fails here. ``real_model.py`` tests
+    ``|B_k| < BLIND_RATIO * |A_k|``; the paper must describe that convention,
+    and it must keep the reminder that even ``B_k = 0`` still oscillates.
+    """
+    assert "$|B_k|/R_k$" in TEX_FLAT
+    assert "below one percent" in TEX_FLAT
+    assert "|B_k| < 0.01\\,|A_k|" in TEX_FLAT
+    assert "share moves by less than" not in TEX_FLAT
+    assert "even when $B_k$ vanishes" in TEX_FLAT
+    assert float(literal("trained_blind_cutoff")) == trained["position_blind_ratio"]
+    assert trained["position_blind_ratio"] == 0.01
+
+
+def test_the_seed_sd_is_not_overstated_as_three_orders(trained: dict) -> None:
+    """0.0182 / 4.58e-5 is about 400x, i.e. 2.6 orders, not three.
+
+    Mutation verdict: restoring "three orders of magnitude" fails here. The
+    numerical ratio is already checked by the seed-variance tests; this keeps
+    the prose from rounding it up by half an order of magnitude.
+    """
+    assert "three orders of magnitude" not in TEX_FLAT
+    assert "more than two orders of magnitude" in TEX_FLAT
+    # The ratio the sentence is describing, recomputed from the two artifacts.
+    head_sd = 0.0182
+    seed_sd = 4.5835751380061324e-05
+    ratio = head_sd / seed_sd
+    assert 300.0 < ratio < 500.0, ratio
+
+
+def test_the_limitations_scope_the_configuration_claim() -> None:
+    """The old sentence said all measurements use one configuration; false.
+
+    Mutation verdict: restoring "All measurements use $d = 64$" fails here.
+    The sensitivity sweep varies base and head dimension, and the trained
+    section uses checkpoints and 256 content pairs per head and prompt.
+    """
+    assert "Single synthetic configuration" in TEX_FLAT
+    assert "All measurements use" not in TEX_FLAT
+    assert "varies the base and the head dimension" in TEX_FLAT
+    assert (
+        "Section~\\ref{sec:trained} uses the three checkpoints and their content-pair"
+        in TEX_FLAT
+    )
 
 
 def test_the_worth_section_prices_the_best_surrogate_not_a_strawman(
@@ -349,12 +422,37 @@ def test_the_seed_variance_is_as_printed(seeds: dict) -> None:
     assert (prov_mean, prov_sd) == (mean, sd)
 
 
+def test_the_sampling_disclosure_matches_the_artifact(trained: dict) -> None:
+    """The sample count and the excluded degenerate entries are not decoration.
+
+    Mutation verdict: changing the paper's 256, 1.47, 11.06 or 462{,}144 without
+    re-running ``real_model.py`` fails here. The values are read from
+    ``results/real_model.json``; the paper cannot silently describe a different
+    sweep from the one that produced the shares.
+    """
+    assert int(literal("trained_content_pairs")) == trained["n_content_pairs_per_head"]
+    aggregates = trained["aggregates"]
+    samples = [entry["n_samples"] for entry in aggregates.values()]
+    lo, hi = groups("trained_sample_range")[0]
+    assert_paper_number_matches(min(samples) / 1e6, lo, "the smallest sample count")
+    assert_paper_number_matches(max(samples) / 1e6, hi, "the largest sample count")
+
+    degenerate = sum(entry["n_degenerate_pairs_excluded"] for entry in aggregates.values())
+    written = int(literal("trained_degenerate").replace("{,}", ""))
+    assert written == degenerate, (written, degenerate)
+    # The excluded entries are llama-specific; the other two checkpoints have
+    # none. If that changes, the sentence's model name must change with it.
+    assert aggregates[LLAMA]["n_degenerate_pairs_excluded"] > 0
+    assert aggregates[PYTHIA]["n_degenerate_pairs_excluded"] == 0
+    assert aggregates[SMOLLM]["n_degenerate_pairs_excluded"] == 0
+
+
 def test_the_head_range_is_not_one_outlier(usefulness: dict) -> None:
     """If a single head failed, the honest claim would be about that head.
 
     The band's two ends are pinned at the paper's own precision instead
-    of a +-1.0-point slack: the extremes over all 2790 heads are 22.378%
-    and 34.859%, which round to the printed 22.4% and 34.9%. A one-point
+    of a +-1.0-point slack: the extremes over all 2790 heads are 20.166%
+    and 36.305%, which round to the printed 20.2% and 36.3%. A one-point
     slack would have passed a band that is nearly a point off the data.
     """
     total = sum(m["n_heads"] for m in usefulness["models"])
@@ -389,6 +487,32 @@ def test_the_materiality_cut_is_disclosed(usefulness: dict) -> None:
     assert "An earlier version of this" in TEX_FLAT
     drift = float(literal("worth_grid_drift"))
     assert 0 < drift < 50, drift
+
+
+def test_the_grid_sweep_reports_the_realized_density(
+    grid_independence: dict,
+) -> None:
+    """The requested density is not the density that was run.
+
+    ``65`` is the requested spacing; integer rounding collapses it to 56
+    distinct distances, so the realized span is 56/9 = 6.2x, not 7x. The
+    artifact carries both numbers, and the paper must not quote the nominal
+    one as if it were measured.
+
+    Mutation verdict: restoring "which spans densities 9, 17 and 65 --- a
+    7x change" fails the phrase assertion below, and claiming 65 realized
+    distances fails the ``n_deltas`` assertion.
+    """
+    densities = grid_independence["densities"]
+    assert densities == [9, 17, 65], densities
+    realized = [
+        grid_independence["per_density"][str(d)]["n_deltas"] for d in densities
+    ]
+    assert realized == [9, 17, 56], realized
+    assert max(realized) / min(realized) < 7.0, realized
+    assert "do not all survive integer rounding" in TEX_FLAT
+    assert "realized span is below the nominal $7\\times$" in TEX_FLAT
+    assert "--- a $7\\times$ change" not in TEX_FLAT
 
 
 def test_the_ranking_agreement_rates_are_as_printed(agreement_data: dict) -> None:

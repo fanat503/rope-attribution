@@ -122,9 +122,10 @@ DEFAULT_SEED = 20260906
 #: shared machine and one-shot inference does not need every core.
 NUM_THREADS = 4
 
-#: Fraction of a rotary pair's position-free amplitude above which a pair counts
-#: as position-bearing. "Effectively position-blind" means
-#: ``|B_k| < BLIND_RATIO * |A_k|``.
+#: Ratio ``|B_k| / |A_k|`` below which a pair is called effectively
+#: position-blind by convention, i.e. ``|B_k| < BLIND_RATIO * |A_k|``. This is
+#: not an algebraic dichotomy: even ``B_k = 0`` leaves ``A_k cos(D_k)``, which
+#: still oscillates with distance.
 BLIND_RATIO = 0.01
 
 #: Distances at which the linearization is measured - the same grid
@@ -1090,11 +1091,11 @@ def measure_position_channels(
                 if not live.any():
                     continue
                 s = b_abs[live] / amp[live]
-                blind = ((b_abs < BLIND_RATIO * a_abs) & live).astype(np.float64)
+                blind = (b_abs < BLIND_RATIO * a_abs) & live
                 pooled_shares.append(s)
-                pooled_blind.append(blind)
+                pooled_blind.append(blind[live])
                 head_shares.append(s)
-                head_blind.append(float(blind.mean()))
+                head_blind.append(float(blind[live].mean()))
             if not head_shares:
                 continue
             all_s = np.concatenate(head_shares)
@@ -1141,6 +1142,7 @@ def measure_position_channels(
         "n_heads": int(hv.n_heads),
         "n_content_pairs_per_head": int(n_pairs),
         "n_samples": int(shares.size),
+        "n_blind": int(blind.sum()),
         "n_degenerate_pairs_excluded": int(degenerate),
         "share_quantiles": _quantiles(shares),
         "share_mean": float(shares.mean()),
@@ -1537,6 +1539,7 @@ def aggregate(model: dict) -> dict:
     layer_median: list[float] = []
     layer_blind: list[float] = []
     n_samples = 0
+    n_blind = 0
     degenerate = 0
     pooled_hist: np.ndarray | None = None
     pooled_edges: list[float] = []
@@ -1547,6 +1550,7 @@ def aggregate(model: dict) -> dict:
     for pp in model["per_prompt"]:
         pos = pp["position_channels"]
         n_samples += int(pos["n_samples"])
+        n_blind += int(pos["n_blind"])
         degenerate += int(pos["n_degenerate_pairs_excluded"])
         share_q.extend(float(v) for v in pos["share_quantiles"]["values"])
         blind.append(float(pos["frac_position_blind_overall"]))
@@ -1603,6 +1607,13 @@ def aggregate(model: dict) -> dict:
     qp = model["per_prompt"][0]["position_channels"]["share_quantiles"]
     return {
         "n_samples": n_samples,
+        "n_blind": n_blind,
+        # The pooled rate must use the same live-channel denominator as the
+        # per-prompt rows. Carrying both the count and the ratio makes a stale
+        # artifact detectable without re-running the measurement.
+        "frac_position_blind_pooled": (
+            float(n_blind / n_samples) if n_samples else None
+        ),
         "n_degenerate_pairs_excluded": degenerate,
         "histogram_pooled_bin_edges": pooled_edges or [
             i / HISTOGRAM_BINS for i in range(HISTOGRAM_BINS + 1)

@@ -507,6 +507,12 @@ def test_measured_position_channels_are_self_consistent(vectors) -> None:
     assert qv["values"] == sorted(qv["values"]), "quantiles must be non-decreasing"
     assert all(0.0 <= v <= 1.0 for v in qv["values"])
     assert 0.0 <= out["frac_position_blind_overall"] <= 1.0
+    # n_blind and n_samples are the numerator and denominator of the rate.
+    # Keeping both in the payload makes a stale artifact detectable: a rate
+    # computed over dead channels cannot satisfy this identity.
+    assert out["n_blind"] / out["n_samples"] == pytest.approx(
+        out["frac_position_blind_overall"], rel=0.0, abs=1e-15
+    )
     hist = out["share_histogram_0_to_1"]
     assert sum(hist["counts"]) == out["n_samples"]
     assert len(hist["counts"]) == len(hist["bin_edges"]) - 1
@@ -514,8 +520,67 @@ def test_measured_position_channels_are_self_consistent(vectors) -> None:
     for key in ("median_share_across_heads", "frac_position_blind_across_heads"):
         _assert_spread_well_formed(out[key])
     # The threshold is reported, not just applied.
-    assert str(RM.BLIND_RATIO) in out["position_blind_threshold"]["statement"]
+    assert out["position_blind_threshold"]["statement"] == (
+        f"|B_k| < {RM.BLIND_RATIO} * |A_k|"
+    )
     assert out["position_blind_threshold"]["ratio"] == RM.BLIND_RATIO
+
+
+def test_degenerate_pairs_are_excluded_from_the_blind_fraction(monkeypatch) -> None:
+    """A dead pair has no phase; it must not count as “not blind” in the mean.
+
+    Mutation verdict: reverting to ``blind.mean()`` over every rotary channel of
+    a live content pair makes this fail: the dead channel contributes a zero, so
+    the reported fraction becomes 0.5 instead of 1.0. ``n_samples`` already
+    counts only live channels, and the artifact labels the dead ones
+    ``n_degenerate_pairs_excluded``; this test keeps the denominator consistent
+    with both.
+    """
+    q = np.zeros((1, 1, 4, 4), dtype=np.float64)
+    # Content pair (0, 2): rotary channel 0 is dead, channel 1 is live and
+    # aligned. Content pair (2, 3) is entirely dead and is skipped.
+    q[0, 0, 0] = (0.0, 1.0, 0.0, 0.0)
+    k = np.tile(np.array([1.0, 1.0, 1.0, 0.0]), (1, 1, 4, 1))
+    hv = RM.HeadVectors(q, k, head_dim=4, n_layers=1, n_heads=1)
+    monkeypatch.setattr(
+        RM, "_content_pairs", lambda seq_len, n_pairs, rng: [(0, 2), (2, 3)]
+    )
+    out = RM.measure_position_channels(
+        hv, np.array([1.0, 0.5]), rope_dim=4, n_pairs=2
+    )
+    assert out["n_samples"] == 1
+    assert out["n_blind"] == 1
+    assert out["n_degenerate_pairs_excluded"] == 3
+    assert out["frac_position_blind_overall"] == 1.0
+    # The per-head summary must use the same denominator, not just the pooled one.
+    assert out["per_head"]["0.0"]["frac_position_blind"] == 1.0
+
+
+def test_the_blind_convention_is_the_documented_inequality() -> None:
+    """Boundary behaviour of ``|B_k| < BLIND_RATIO * |A_k|``, not prose.
+
+    Mutation verdict: flipping ``<`` to ``<=``, changing the threshold, or
+    dropping the ``|A_k|`` factor changes at least one of these three outcomes.
+    A one-pair, one-head fixture makes the convention testable without a
+    checkpoint. The deliberately equal-ratio case is *not* blind under the
+    documented strict inequality.
+    """
+
+    def measured(b_over_a: float) -> float:
+        # A = 1, B = b_over_a for the single rotary pair.
+        q = np.tile(np.array([1.0, 0.0]), (1, 1, 4, 1))
+        k = np.tile(np.array([1.0, b_over_a]), (1, 1, 4, 1))
+        hv = RM.HeadVectors(q, k, head_dim=2, n_layers=1, n_heads=1)
+        out = RM.measure_position_channels(
+            hv, np.array([1.0]), rope_dim=2, n_pairs=4
+        )
+        return out["frac_position_blind_overall"]
+
+    assert measured(0.0) == 1.0
+    assert measured(0.0099) == 1.0
+    assert measured(0.01) == 0.0
+    assert measured(0.0101) == 0.0
+    assert measured(1.0) == 0.0
 
 
 def test_measure_position_channels_rejects_an_inconsistent_rope_dim(vectors) -> None:
@@ -694,6 +759,9 @@ def test_payload_fractions_are_fractions(payload) -> None:
             pos = pp["position_channels"]
             assert pp["n_tokens"] >= 2
             assert 0.0 <= pos["frac_position_blind_overall"] <= 1.0
+            assert pos["n_blind"] / pos["n_samples"] == pytest.approx(
+                pos["frac_position_blind_overall"], rel=0.0, abs=1e-15
+            )
             qv = pos["share_quantiles"]
             assert qv["values"] == sorted(qv["values"])
             assert all(0.0 <= v <= 1.0 for v in qv["values"])
@@ -742,9 +810,18 @@ def test_payload_aggregates_agree_with_the_per_prompt_measurements(payload) -> N
         assert agg["n_samples"] == sum(
             pp["position_channels"]["n_samples"] for pp in model["per_prompt"]
         )
+        assert agg["n_blind"] == sum(
+            pp["position_channels"]["n_blind"] for pp in model["per_prompt"]
+        )
         assert agg["n_degenerate_pairs_excluded"] == sum(
             pp["position_channels"]["n_degenerate_pairs_excluded"]
             for pp in model["per_prompt"]
+        )
+        # The pooled rate is not the unweighted mean of per-prompt rates when
+        # prompts have different lengths; it is the pooled count over the
+        # pooled live denominator.
+        assert agg["frac_position_blind_pooled"] == pytest.approx(
+            agg["n_blind"] / agg["n_samples"], rel=0.0, abs=1e-15
         )
         _assert_spread_well_formed(agg["median_share_across_heads"])
         _assert_spread_well_formed(agg["frac_position_blind_across_heads"])

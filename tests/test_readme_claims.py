@@ -643,7 +643,7 @@ def test_unrotated_subscore_spread_is_exactly_zero() -> None:
     assert partial["rotated_fraction"] == 0.25, "the rotated quarter is 0.25, not a quarter by chance"
 
 
-def test_rotated_subscore_spread_is_12_03() -> None:
+def test_rotated_subscore_spread_is_20_65() -> None:
     _, rotated = readme_groups(
         r"is\s+exactly `([\d.]+)`, while the rotated quarter varies by `([\d.]+)`",
         "the partial-RoPE spreads",
@@ -986,7 +986,7 @@ _FILE_SUFFIXES = (
 # (`models/llama/modeling_llama.py`, `scaled_rope/...` in `jquesnelle/yarn`) do
 # not need an entry: the rule below only treats a slash-bearing token as
 # repository-local when its first segment is a real top-level entry here.
-KNOWN_ABSENT = frozenset({"projects/fig_*.png"})
+KNOWN_ABSENT = frozenset({"projects/fig_*.png", "projects/frontier-01-*"})
 
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./*-]*$")
 
@@ -1128,8 +1128,6 @@ def test_the_path_scan_covers_the_paths_that_matter() -> None:
         "projects.rope_attribution.usefulness",
         "figures/fig09_position_conditional_attribution.png",
         "figures/fig03",
-        "projects/frontier-01-*.py",
-        "projects/frontier-01-*.md",
         "requirements-dev.txt",
         "NOTICE.md",
         "LICENSE",
@@ -1137,7 +1135,6 @@ def test_the_path_scan_covers_the_paths_that_matter() -> None:
         "rope.py",
         "experiments.py",
         "figures.py",
-        "frontier-01-bag-of-words-test.py",
     ):
         assert expected in kinds, f"the path scan missed {expected!r}; it found {sorted(kinds)}"
 
@@ -1149,7 +1146,6 @@ def test_the_path_scan_covers_the_paths_that_matter() -> None:
 _DOCS_SCANNED_FOR_COMMANDS = (
     "README.md",
     "figures/README.md",
-    "LEGACY.md",
     "paper/BUILD.md",
     "NOTICE.md",
 )
@@ -1313,29 +1309,79 @@ def test_readme_names_figures_and_paths_it_links_to_with_markdown() -> None:
 
 
 # ==========================================================================
-# "several scripts print hardcoded illustrative values rather than computing them"
+# trained-checkpoint numbers quoted in the README
 # ==========================================================================
 
+_TRAINED_JSON = _REPO / "results" / "real_model.json"
 
-def test_legacy_scripts_the_readme_warns_about_do_print_literals() -> None:
-    bag = (_REPO / "projects" / "frontier-01-bag-of-words-test.py").read_text(encoding="utf-8")
-    assert re.search(r"acc(?:uracy)?\s+0\.\d", bag), (
-        "the README says frontier-01-bag-of-words-test.py assigns retrieval "
-        "accuracies as literals; no such literal is there any more"
+
+def test_readme_trained_statistics_match_the_artifact() -> None:
+    """The ranges in the README are the ones in ``results/real_model.json``.
+
+    Mutation verdict: changing either the README range or the artifact makes
+    this fail. It is the detector that was missing when the README still said
+    ``0.6-0.7%`` and ``0.011``/``67-93x``; no test read the trained artifact,
+    so those stale numbers survived the rest of the audit.
+    """
+    trained = json.loads(_TRAINED_JSON.read_text(encoding="utf-8"))
+    models = ("EleutherAI/pythia-160m", "JackFram/llama-160m", "HuggingFaceTB/SmolLM-135M")
+    blind = [
+        100.0 * trained["aggregates"][m]["frac_position_blind_pooled"]
+        for m in models
+    ]
+    lo, hi = readme_groups(
+        r"only (0\.\d+)-(0\.\d+)%\s+of pairs meet the cutoff",
+        "the position-blind percentage range",
     )
-    assert re.search(r"=\s*D\s*\*\*\s*2\s*/\s*2", bag), (
-        "the README says that script computes 'interaction' as D**2 / 2 by definition"
+    # The band is deliberately wider than the printed per-model values, so it
+    # must contain the measurements without relying on rounding. An absurdly
+    # wide band would also "contain" them, hence the width cap.
+    lo_f, hi_f = float(lo), float(hi)
+    assert lo_f <= min(blind) <= max(blind) <= hi_f, (blind, lo, hi)
+    assert hi_f - lo_f < 0.5, (lo, hi)
+
+    quantiles = [
+        trained["aggregates"][m]["share_quantiles_across_prompts"] for m in models
+    ]
+    share_lo, share_hi = readme_groups(
+        r"spans `(0\.\d+)` to `(0\.\d+)` depending", "the leading-feature share range"
     )
-    graphs = (_REPO / "projects" / "frontier-01-graphs-ULTIMATE-V11.py").read_text(
-        encoding="utf-8"
+    assert_readme_number_matches(
+        min(q["min"] for q in quantiles), share_lo, "the lower leading-feature share"
     )
-    assert re.search(r"=\s*[\[\(]\s*[-\d]", graphs), (
-        "the README says frontier-01-graphs-ULTIMATE-V11.py plots literal lists"
+    assert_readme_number_matches(
+        max(q["max"] for q in quantiles), share_hi, "the upper leading-feature share"
     )
+    factor_lo, factor_hi = readme_groups(
+        r"on the head\s+[—-]\s+a factor of ([\d.]+)-([\d.]+)x",
+        "the leading-feature share factor range",
+    )
+    factors = [q["max"] / q["min"] for q in quantiles]
+    assert_readme_number_matches(
+        min(factors), factor_lo, "the smaller leading-feature share factor"
+    )
+    assert_readme_number_matches(
+        max(factors), factor_hi, "the larger leading-feature share factor"
+    )
+
+    # The relative-position identity reaches float64 precision because the
+    # rotation is evaluated in float64; the per-pair closed form and
+    # bilinearity stay at the float32 floor. A blanket "all identities hold
+    # at ~1e-7" erases that distinction and contradicts the paper's 4.55e-13.
+    readme_flat = re.sub(r"\s+", " ", README_TEXT)
+    assert "The exact identities hold to the **float32** floor" not in readme_flat
+    rel_literal = readme_groups(
+        r"is exact to `([\d.eE+-]+)`", "the relative-position float64 value"
+    )[0]
+    rel_max = max(
+        trained["aggregates"][m]["identities"]["relative_position_max_abs_err"]["max"]
+        for m in models
+    )
+    assert_readme_number_matches(rel_max, rel_literal, "the relative-position error")
 
 
 # ==========================================================================
-# "1431 tests"
+# the quoted test count
 # ==========================================================================
 
 
@@ -1379,7 +1425,7 @@ def collected_node_ids() -> tuple[str, ...]:
 
 
 def test_quoted_test_count_matches_what_pytest_collects() -> None:
-    """``1431 tests``, in both places the README states it.
+    """The quoted count, in both places the README states it.
 
     The README counts the suite that existed when it was written. This file is
     the documentation verifier and is deliberately excluded from the comparison,

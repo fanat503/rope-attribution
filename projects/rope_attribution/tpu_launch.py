@@ -52,6 +52,10 @@ def _mp_fn(index: int, preset_name: str, run_name: str) -> None:
         device="xla",
         override=override,
         data_seed=data_seed,
+        # Rank 0 is the canonical metric series and the synchronized model is
+        # identical on every rank after the all-reduce, so one checkpoint is
+        # enough. Writing eight copies of a multi-gigabyte file is wasteful.
+        save_checkpoint=(int(index) == 0),
     )
     xm.master_print(f"[rank {index}] {json.dumps(summary)}")
 

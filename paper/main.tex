@@ -4,10 +4,10 @@
 %  Self-contained NeurIPS-format preprint (two-column review layout).
 %  Build:  pdflatex main && bibtex main && pdflatex main && pdflatex main
 %
-%  EVERY quantitative claim in this paper is traceable to one of:
-%    results/measurements.json   (canonical, committed)
-%    figures/figNN_*.csv          (CSV sidecar of the plotted array)
-%  The appendix section "Provenance of every number" carries the audit.
+%  EVERY quantitative claim in this paper is traceable to a committed
+%  structured artifact under results/ or to a figures/figNN_*.csv sidecar.
+%  The appendix section "Provenance of every number", and the claim registry
+%  in tests/test_paper_claims.py, carry the audit row by row.
 %
 %  Figures are included by relative path and guarded with \IfFileExists
 %  so that the document still compiles with an empty ../figures/.
@@ -111,8 +111,9 @@ for a fixed pair of positions, the RoPE attention score is exactly bilinear in
 the content vectors, so the additive feature decomposition
 $\mathrm{score} = \sum_{ij} f_i g_j A_{ij}(\delta)$ is exact, not approximate;
 we measure the residual at $3.9\times10^{-14}$. Because the rotary transform is
-orthogonal, the magnitude gate $|q|$ is exactly position-independent, which
-promotes the gate/phase split from heuristic to theorem. Second, the exactness
+orthogonal, query and key magnitudes are exactly position-independent; the
+per-pair closed form then separates a content-only amplitude from a
+distance-only angle. Second, the exactness
 does not extend to position-\emph{free} coefficients: $A_{ij}$ is a function of
 the relative distance $\delta$, and we measure one feature's contribution
 reversing sign across the distance range while
@@ -156,13 +157,13 @@ itself, and it is exactly computable.
 
 Three results follow, and we state them as precisely as we can.
 
-\paragraph{R1: attribution is exact, and the gate/phase split is a theorem.}
+\paragraph{R1: attribution is exact, and the magnitudes are position-free.}
 For a fixed position pair the score is exactly bilinear in $(q, k)$, so the
 additive decomposition holds to $3.9\times10^{-14}$. Moreover, because
 $\R_{\delta}$ is orthogonal, $|q|$ and $|k|$ are exactly
 position-independent. Any claim that RoPE corrupts bilinearity, or smears the
-gate with position, is false at the score level, and we measure it to be false
-rather than asserting it.
+magnitude with position, is false at the score level, and we measure it to be
+false rather than asserting it.
 
 \paragraph{R2: the real obstacle is position-conditionality, not bilinearity.}
 $A_{ij}$ depends on $\delta$. A single feature's contribution is a function of
@@ -202,7 +203,7 @@ compare RoPE and \yarn\ we compare \emph{quantities of the position encoding}
 --- angles, linearizable fractions, error ratios. We do not claim any scheme is
 better in practice: all are in real use, our table ranks them on angle geometry
 only, and Section~\ref{sec:context} shows that a favourable ranking on one axis
-does not transfer to the amplitude-weighted one. The conclusions are
+does not transfer to the amplitude-weighted one. The algebraic conclusions are
 model-independent by construction, which is deliberate: they are claims about
 the structure of the score under a particular positional encoding, and they
 would hold for any head using it.
@@ -268,8 +269,8 @@ The practical consequence for attribution is a distinction we think is worth
 making sharply. A feature's contribution to the \emph{logits} is exactly
 additive and exactly position-conditional, and that is what this paper
 measures. A feature's contribution to the attention \emph{weights} is neither,
-and the error between the two is not small in general --- it grows as the
-number of keys grows and as the logit spread grows. So an additive attribution
+and the error between the two is not small in general --- it can grow with the
+number of keys and with the logit spread. So an additive attribution
 method applied to RoPE attention can be exactly right about the score and
 still be wrong about the weights, and if the object of study is the weights,
 the obstruction is the softmax rather than the position encoding.
@@ -379,9 +380,8 @@ Equation~\ref{eq:additive}, $A_{ij}(\delta)$ carries an explicit $\delta$, even
 though the score it sums to depends on $\delta$ alone
 (Equation~\ref{eq:relative}). By
 Proposition~\ref{prop:cond}, a single feature's contribution
-$c_i(\delta) = \sum_j A_{ij}(\delta)$ is a function of distance, and by
-Proposition~\ref{prop:blind} it is position-free only if every pair it touches
-has $\Bk = 0$.
+$c_i(\delta) = \sum_j A_{ij}(\delta)$ is a function of distance, and it is
+position-free only if every pair it touches has $\Ak = \Bk = 0$.
 
 \paperfigure{fig09_position_conditional_attribution}{%
   Per-feature contribution against relative distance. Eight synthetic
@@ -396,8 +396,8 @@ than a magnitude ratio. With $F = 8$ features on the $54$-point distance grid,
 \textbf{every one of the eight contributions changes sign} somewhere in
 $\delta \in [1, 8192]$. The magnitude of $|c_i|$ varies with a coefficient of
 variation of $0.70 \pm 0.03$ across seeds, and the magnitudes at the two ends of
-the range are the same size to within a factor of $10^{-0.08}$. What varies is
-not how large the contribution is but which way it points.
+the range are, on average, the same size to within a factor of $10^{-0.08}$.
+What varies is not how large the contribution is but which way it points.
 
 This is the central result, and it is a stronger one than a large ratio would
 have been. A feature whose attribution reverses sign cannot be summarised by any
@@ -473,7 +473,7 @@ Equations~\ref{eq:A}--\ref{eq:B}. Then
 so the well-posed attribution object is not a $1\times1$ coefficient $A_{ij}$
 but the $\delta$-indexed family
 $\bigl\{A_{ij}^{(0)}(\delta), \dots, A_{ij}^{(\half-1)}(\delta)\bigr\}$,
-together with the position-blind amplitudes $R_k^{ij}$. Equivalently, per
+together with the position-independent amplitudes $R_k^{ij}$. Equivalently, per
 feature, $c_i(\delta) = \sum_j g_j A_{ij}(\delta)$ is an explicit finite sum of
 $\half$ sinusoids in $\delta$ whose frequencies $\invf_k$ and amplitudes
 $R_k^{ij}$ are fixed by the content.
@@ -504,57 +504,58 @@ the number below is the cost of the \emph{best} position-free attribution, not
 the cost of a careless one.
 
 Across the three trained checkpoints of Section~\ref{sec:trained}, over every
-rotary layer and head, that optimum reports the wrong sign on $26.8\%$ of
-per-pair, per-distance cells. Per model the rate is $27.6\%$ on
+rotary layer and head, that optimum reports the wrong sign on $27.0\%$ of
+per-pair, per-distance cells. Per model the rate is $28.4\%$ on
 \texttt{pythia-160m}, $26.3\%$ on \texttt{llama-160m} and $26.4\%$ on
 \texttt{SmolLM-135M}. Across all $2790$ heads the per-head rate never leaves the
-band $22.4\%$ to $34.9\%$, so this is not one bad head but the ordinary case. The
-relative error is larger than the signal itself: median $1.13$ against a peak of
-$1$.
+band $20.2\%$ to $36.3\%$, so this is not one bad head but the ordinary case. For
+a pair, relative error is the largest absolute deviation from the exact
+per-distance value over the grid, divided by that pair's own peak absolute
+contribution; the median is over pairs. The relative error is larger than the
+signal itself: median $1.13$ against a peak of $1$.
 
 The headline deserves four qualifications.
-\emph{First}, $26.8\%$ is the equal-weight mean of the three per-checkpoint
-rates; the mean over all $2790$ heads is $26.70\%$, lower because
+\emph{First}, $27.0\%$ is the equal-weight mean of the three per-checkpoint
+rates; the mean over all $2790$ heads is $26.90\%$, lower because
 \texttt{SmolLM-135M} contributes $1350$ heads against $720$ each for the other
-two. These are different estimators: the headline is the equal-weight $26.8\%$,
-while the interval below belongs to the head-pooled $26.70\%$, and the two
-differ by more than that interval's half-width.
+two. These are different estimators: the headline is the equal-weight $27.0\%$,
+while the interval below belongs to the head-pooled $26.90\%$; computed before
+rounding, the two differ by more than twice that interval's half-width.
 \emph{Second}, the interval. Resampling with replacement over heads --- over
 \emph{heads} and not over the cells inside them, because cells within a head
 share a query and a key and so are not independent --- gives a $95\%$ percentile
-interval of $[0.2665, 0.2674]$ around $0.2670$; the between-head standard
-deviation of the per-head rates is $0.0129$.
+interval of $[0.2683, 0.2697]$ around $0.2690$; the between-head standard
+deviation of the per-head rates is $0.0182$.
 An interval for the pooled mean does not cover the equal-weight headline; and it
 says nothing about variation across prompts or across the distance grid, which
 is a real limitation of the estimate and is stated as one.
 \emph{Third}, and most substantively, the three checkpoints do \emph{not}
 agree. A bootstrap over the per-head rates rejects equality for every pair:
-pythia vs llama $+1.34$ points $[+1.19, +1.48]$, pythia vs SmolLM
-$+1.22$ $[+1.08, +1.36]$, llama vs SmolLM $-0.12$ $[-0.18, -0.05]$. The effect
-is about a percentage point, which is small next to the $26.8\%$ itself but
-larger than the head-level noise floor, so it is model dependence rather than
-sampling. We report it rather than average it away: what survives is the claim
-that a position-free scalar is wrong on roughly a quarter of cells, and the
-per-model figures are what a reader should quote if the number matters.
+pythia vs llama $+2.13$ points $[+1.92, +2.34]$, pythia vs SmolLM
+$+2.01$ $[+1.79, +2.21]$, llama vs SmolLM $-0.12$ $[-0.18, -0.05]$. The
+pythia-vs-others gap is about two percentage points, small next to the
+$27.0\%$ itself but larger than the head-level noise floor, so that gap is
+model dependence, not sampling; the llama--SmolLM gap is a tenth of a point
+and not material. We report the per-model figures rather than average them
+away; a reader who needs the number should quote them.
 
 \emph{Fourth}, the draw of content pairs is itself a source of variation.
 Repeating the sweep under three pre-registered seeds --- the default and its
 two successors, fixed before the run --- gives a pooled rate of
-$26.7786 \pm 0.0009\%$ (mean $\pm$ sample s.d. over the three seeds), three
-orders of magnitude below the between-head standard deviation and below the
-between-checkpoint differences above: the pair draw shifts the headline by
-less than one thousandth of a percentage point.
+$27.0421 \pm 0.0046\%$ (mean $\pm$ sample s.d. over the three seeds), more
+than two orders of magnitude below the between-head standard deviation and
+below the between-checkpoint differences above: the pair draw shifts the
+headline by less than one hundredth of a percentage point.
 
 Two things are worth being precise about. The rate is counted only over cells
 where the exact term carries at least $5\%$ of its own peak --- beyond that the
 exact value is numerically indistinguishable from zero and ``sign'' is not
 meaningful. And the statistic is mildly sensitive to how densely the distance
 range is sampled, because a coarser grid misses the cells nearest the zero
-crossings; the drift is $0.1779$ across the sweep actually run, which spans
-densities $9$, $17$ and $65$ --- a $7\times$ change. An earlier version of this
-sentence claimed a $14\times$ span, referring to a five-density sweep that is no
-longer the one measured; the narrower sweep is what the artefact contains and
-the number is quoted against it. Either way it is two orders of magnitude
+crossings; the drift is $0.2389$ across the sweep actually run, whose requested
+densities $9$, $17$ and $65$ do not all survive integer rounding, so the
+realized span is below the nominal $7\times$. An earlier version claimed a
+$14\times$ span from a five-density sweep that is no longer the one measured. Either way it is two orders of magnitude
 better behaved than the withdrawn $\max/\min$ ratio, and it is reported
 rather than hidden.
 
@@ -568,12 +569,12 @@ each head's rotary pairs were ranked by exact contribution and by the
 position-free constant, per (query, key, distance) triple at the distances of
 the pre-registered grid --- distances that reach past the training context,
 where the decomposition stays defined analytically. The two
-name the same first pair on $55.7\%$ of the triples of \texttt{pythia-160m},
+name the same first pair on $49.4\%$ of the triples of \texttt{pythia-160m},
 $56.6\%$ on \texttt{llama-160m} and $60.1\%$ on \texttt{SmolLM-135M}, against
 $12.5\%$ and $3.1\%$ for random choice over the $8$- and $32$-pair heads. On the
 larger heads the surrogate's pick lands inside the exact top three on $77.8\%$
 and $77.2\%$ of triples --- close, but first place is what is claimed, and the
-position-free object misses it on more than a third of the votes. Per head the
+position-free object misses it on about half of the votes. Per head the
 rate spans $7.1\%$ to $93.6\%$ --- wide, but no head dips to its checkpoint's
 random choice; the aggregate conceals spread, not an all-or-nothing split. Rows
 whose exact contributions are identically zero cast no vote, and their count is
@@ -586,19 +587,22 @@ Everything above is measured on synthetic vectors. That is a real limitation for
 a claim about what trained models do, and it is also avoidable for the narrower
 question of whether the algebra survives contact with real weights. We repeat the
 central measurements on activations taken from three trained checkpoints, across
-$5$ relative distances and every attention head of every rotary layer.
+$5$ relative distances and every attention head of every rotary layer, with
+$256$ random content pairs per head and prompt. The artifact records
+$1.47$M--$11.06$M (layer, head, content-pair, rotary-pair) samples and the
+$462{,}144$ degenerate \texttt{llama} pair-channel entries excluded.
 
 Three findings, in decreasing order of how much they matter.
 
 \textbf{The identities hold on trained weights, at the dtype floor.} The
 relative-position property $\R_m^{\!\top}\R_n = \R_{n-m}$ is exact for real
-projections, with a worst absolute error of $1.14\times10^{-12}$ across all three
+projections, with a worst absolute error of $4.55\times10^{-13}$ across all three
 checkpoints. The per-pair closed form of
 Equation~\ref{eq:perpair} reproduces brute-force scores to a median relative
-error of $5.06\times10^{-8}$ on \texttt{pythia-160m}, $3.57\times10^{-8}$ on
+error of $6.68\times10^{-8}$ on \texttt{pythia-160m}, $3.57\times10^{-8}$ on
 \texttt{llama-160m} and $5.85\times10^{-8}$ on \texttt{SmolLM-135M}, against a
 float32 epsilon of $1.19\times10^{-7}$; bilinearity in content behaves the same
-way at $8.65\times10^{-8}$, $5.99\times10^{-8}$ and $7.52\times10^{-8}$ --- each
+way at $7.70\times10^{-8}$, $5.99\times10^{-8}$ and $7.52\times10^{-8}$ --- each
 a scaled residual, divided by the magnitude sum on which bilinearity is exact
 rather than by the score, whose cancellation on a real head would dominate the
 naive ratio. These
@@ -609,23 +613,26 @@ checkpoint does not introduce a correction term to any of it.
 \textbf{The obstruction of Section~\ref{sec:cond} is a fact about the weights.} The
 share of an attention score taken by a feature's contribution is not a stable
 quantity across heads. Pooling over heads, layers and prompts, the leading
-feature's share ranges from $0.0108$ to $0.9999$ on \texttt{pythia-160m}, a
-factor of $92.9$; on \texttt{llama-160m} it spans $0.0148$ to $0.9999$, a factor of $67.6$; on
+feature's share ranges from $0.0181$ to $0.9999$ on \texttt{pythia-160m}, a
+factor of $55.4$; on \texttt{llama-160m} it spans $0.0148$ to $0.9999$, a factor of $67.6$; on
 \texttt{SmolLM-135M}, $0.0150$ to $0.9999$, a factor of $66.8$. The
-interquartile range on \texttt{pythia-160m} alone runs from $0.117$ to $0.992$.
+interquartile range on \texttt{pythia-160m} alone runs from $0.186$ to $0.992$.
 Some heads hand
 almost the entire score to one feature; others spread it. Any per-feature
 attribution method that reports one number per feature has to pick a convention
 for that spread, and the convention will dominate the answer.
 
-\textbf{Most channels are position-carrying.} A channel counts as position-blind
-when its share moves by less than $1\%$ across the distance range. Measured on
-trained weights, the position-blind fraction is $0.0068$ on
-\texttt{pythia-160m}, $0.0061$ on \texttt{llama-160m} and $0.0060$ on
-\texttt{SmolLM-135M}: between $0.5\%$ and $0.7\%$, and remarkably consistent
-across three unrelated architectures. The gate/phase split of
-Proposition~\ref{prop:gate} is therefore not a useful approximation on real
-weights --- almost everything is phase.
+\textbf{Most pairs have a non-negligible position-carrying term.} We call a
+rotary pair position-blind \emph{by convention} when the position-carrying share
+of its amplitude, $|B_k|/R_k$, is below one percent (equivalently, $|B_k| <
+0.01\,|A_k|$). This is a cutoff, not an algebraic fact: even when $B_k$ vanishes
+it leaves $A_k\cos(\D)$, which still oscillates with distance. Measured on
+trained weights, the fraction meeting the cutoff is $0.0054$ on
+\texttt{pythia-160m}, $0.0065$ on \texttt{llama-160m} and $0.0063$ on
+\texttt{SmolLM-135M}: between $0.54\%$ and $0.66\%$, within a factor of two
+across three unrelated architectures. Treating the pair as a position-free
+gate is therefore not a useful approximation on real weights: almost every pair
+has a non-negligible phase offset.
 
 One negative result belongs here rather than in a footnote. We began with
 \texttt{gpt2}, and it has no rotary embedding at all: position enters through a
@@ -727,7 +734,7 @@ temperature, monotone in entropy across $18$ scales).
 
 In decreasing order of how much they constrain the conclusions.
 
-\textbf{No downstream model, and no learned features.} The algebraic claims
+\textbf{No downstream task, and no learned features.} The algebraic claims
 rest on synthetic vectors with fixed seeds; Section~\ref{sec:trained} confirms
 the central identities on activations from three trained checkpoints at
 $135$--$160$M parameters. Neither connects to a task: there is no retrieval
@@ -737,27 +744,27 @@ non-negative coefficients --- the shape of a sparse code and none of its
 content --- so nothing here is evidence about real feature geometry. Where we
 say \yarn\ is better on linearizable fraction we mean better on that
 number, and Section~\ref{sec:context} shows it does not track the
-amplitude-weighted error. In particular the sign reversal in
+amplitude-weighted error. In particular the measured sign reversal in
 Section~\ref{sec:cond} is a property of random directions in a $64$-dimensional
 head; we have measured the head-to-head dispersion of feature shares on real
 weights, but not the sign reversal itself for real features.
 
-\textbf{Single configuration.} All measurements use $d = 64$,
-$\mathrm{base} = 10000$, $s = 32$, pre-extension context $2048$,
-and one query/key draw per experiment. We have
-not swept head dimension, and the claim about which channels dominate the
-error should be expected to depend on $d$ through $\half$; we did not measure
-that dependence and do not claim it. The entropy result of
+\textbf{Single synthetic configuration.} The main synthetic experiments use
+$d = 64$, $\mathrm{base} = 10000$, $s = 32$, pre-extension context $2048$,
+and one query/key draw per experiment. The robustness sweep in
+Appendix~\ref{app:provenance} varies the base and the head dimension, and
+Section~\ref{sec:trained} uses the three checkpoints and their content-pair
+sweeps. That sweep does not resolve which channels dominate the error, which
+should be expected to depend on $d$ through $\half$; we do not claim that
+dependence. The entropy result of
 Section~\ref{sec:mscale} uses a random query against $256$ random keys, so it is
 a property of that synthetic configuration; we claim only that
 $\mathrm{mscale}$ acts as a temperature there, monotone across $18$ scales.
 
-\textbf{Approximation choices.} Linearization is one first-order
-approximation: $\cos\D \mapsto 1 - \D^2/2$, $\sin\D \mapsto\D$ with a
-$0.1\rad$ threshold. A different truncation, or a per-channel threshold, would
-move the linearizable fractions and would leave the amplitude-weighted
-conclusion intact only if it did not change which channels dominate; we
-verified that qualitatively through the per-pair error but did not sweep
+\textbf{Approximation choices.} Linearization uses $\cos\D \mapsto 1 -
+\D^2/2$, $\sin\D \mapsto\D$ with a $0.1\rad$ threshold. A different truncation
+or a per-channel threshold would move the linearizable fractions; we verified
+the amplitude-weighted conclusion only qualitatively and did not sweep
 thresholds.
 
 \textbf{Scope of the exactness claim.} Exactness at the score level is a
@@ -774,37 +781,12 @@ patching, and a trained model.
 \section{Related Work}
 \label{sec:related}
 
-The positioning, paragraph by paragraph, is in Appendix~\ref{app:related}; in
-brief: \alpibib\ \citep{press2021train} removes position from the attention
-pattern by a linear bias, so it has no per-channel angle spectrum and no
-version of the linearization problem of Section~\ref{sec:context}. Among
-extension schemes, position interpolation \citep{chen2023positionalinterp} is
-the most favourable on linearizable fraction in our table, \yarn\
-\citep{peng2023yarn} keeps the base and ramps per frequency, which is what
-makes $\max_k|\D|$ invariant under it, and raising the base does neither; nor
-does DaRoPE \citep{levy2026darope}, which keeps plain RoPE on the fast bands
-and learns bounded coordinates for the slow ones. None of them keeps the fastest
-channel within $0.1\rad$ for more than three tokens: \yarn\ and the base raise
-leave it untouched, and interpolation damps it by only the extension factor
-$s$, so none rescues a global linearization. Feature-level attribution, from
-superposition and sparse
-autoencoders \citep{elhage2022toymodels,cunningham2023sparseautoencoders}
-through attribution patching, the tuned lens, sparse feature circuits and
-transcoder discovery
-\citep{syed2023attributionpatching,belrose2023tunedlens,marks2024sparsefeaturecircuits,dunefsky2024transcoders},
-operates at a fixed position or treats positions as independent examples: the
-encoding is part of the forward pass, never the attribution target --- the
-closest exception, LRP rules over position--token pairs
-\citep{bakish2025positionallrp}, makes the encoding a recipient of relevance
-rather than the object measured. The
-per-pair algebra is not new \citep{chachamovits2026phase,liang2026roaware},
-the per-frequency structure has been measured on pretrained checkpoints
-\citep{li2026fingerprint}, and the sign reversal we measure does not appear in
-the work we survey: the closest work \citep{jedryszek2026retrieval} excludes
-sign-inconsistent bands as numerically unreliable. Recent analyses ask how
-much position a channel carries
-\citep{wu2026endofrope,jonasson2025rotaryoffset,chiang2025diminefficiency,xiong2025dope,mikaeili2026untwistingrope,loveland2026graph,picov2026ropelime};
-ours is the sign, per feature and per distance.
+Appendix~\ref{app:related} gives the full positioning. In brief, no positional
+extension keeps the fastest channel within $0.1\rad$ for more than three
+tokens, and no feature-attribution method attributes the RoPE score per
+distance; the per-pair algebra is known
+\citep{chachamovits2026phase,liang2026roaware}, but the sign reversal is not
+reported in the work we survey. Ours is the sign, per feature and per distance.
 % =====================================================================
 \section{Conclusion}
 
@@ -813,9 +795,8 @@ in the relative frame, where the score is $q^{\!\top}\R_{\delta}k$ and each of
 the $\half$ rotary pairs contributes a sinusoid with a position-independent
 amplitude and a linear phase. Three consequences. Attribution at the score level
 is exact for a fixed position pair, to $3.9\times10^{-14}$, and orthogonality
-makes the magnitude gate
-exactly position-independent, so the gate/phase split is a theorem rather than
-an approximation. Position-conditionality, not bilinearity, is the operative
+makes the query and key magnitudes exactly position-independent, so norm
+preservation is a theorem rather than an approximation. Position-conditionality, not bilinearity, is the operative
 obstruction: a feature's contribution reverses sign across
 distance while the total stays additive to $5.0\times10^{-14}$, so
 position-free per-feature attribution is mis-specified under RoPE and the
@@ -825,22 +806,20 @@ worst channel at all --- $\max_k|\D|$ is identical for RoPE and \yarn\ at every
 distance tested --- so \yarn\ buys a larger linearizable majority, at an
 amplitude-weighted error ratio of only $0.996840$, not a safe global
 linearization. Partial RoPE is the one construction that delivers an exactly
-position-free sub-score, at the cost of losing norm preservation.
-Section~\ref{sec:synthesis} collects how the three results relate, and the
-short version is that exactness, position-conditionality, and linearizability
-are three separate problems that are easy to conflate.
+position-free sub-score, because a fraction of its channels are never rotated;
+the rotated block remains orthogonal and preserves the norm exactly.
 
-The measurements are structural and model-independent by design, and we have
-been explicit about what that excludes: no downstream model, no learned
-features, no retrieval benchmark, no accuracy figure. The three pretrained
-checkpoints of Section~\ref{sec:trained} confirm the identities they are asked
-about and nothing more; we do not evaluate them on any task. What is claimed
-here is a correct and carefully measured characterization of the score's
-structure under RoPE, and nothing beyond it. Appendix~\ref{app:note} records
-two corrections to statements that are common in informal write-ups of this
-area.
+The measurements are structural; the algebra is model-independent by design:
+no downstream task, no learned features, no retrieval benchmark, no accuracy
+figure. The checkpoints of Section~\ref{sec:trained} confirm the identities and
+provide descriptive statistics but are not evaluated on a task;
+Appendix~\ref{app:note} records two corrections to informal statements.
 
 % =====================================================================
+% Force the appendix onto a fresh page, so the page-limit check measures the
+% main text rather than a shared page. If the main text spills past page 9, the
+% appendix moves to page 11 and tests/test_venue_compliance.py fails.
+\clearpage
 \appendix
 \section{Provenance of every number}
 \label{app:provenance}
@@ -865,16 +844,6 @@ dimension $32$ to $128$ at base $10^{4}$ leaves it at $25.6\%$ to $26.3\%$. The
 median relative error stays above $1.0$ everywhere, from $1.03$ to $1.18$; the
 artifact is \texttt{results/sensitivity.json}, plotted in
 Figure~\ref{app:fig:sensitivity} with the published configuration marked.
-\paperfigure{fig11_sensitivity_sweep}{%
-  The configuration sweep behind this paragraph. Left: the pooled rate against
-  the rotary base on a log axis at head dimension $64$ (error bars: $\pm 1$ SD
-  across the sweep's seeds; dashed: the published base). Right: the rate
-  against head dimension at base $10^{4}$ (left axis) and the median relative
-  error against the same head dimension (squares, right axis; dotted: the
-  $1.0$ reference). Every plotted value is read from
-  \texttt{results/sensitivity.json}, the artifact this paragraph quotes; the
-  CSV sidecar holds the same array.%
-}{app:fig:sensitivity}
 
 \paragraph{Claims and their source files.}
 % Full-width float: this three-column audit table is ~216pt wider than a
@@ -910,7 +879,7 @@ Sec.~\ref{sec:partial} & $0.0$, $20.65$, $24.36$ & \texttt{measurements.json :: 
 Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entropy.mscale} \\
  & $0.9233 \to 0.7687$ & \texttt{entropy\_ratio\_unscaled}, \texttt{\_mscaled} \\
  & $0.6792$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
-Sec.~\ref{sec:trained} & $26.7786 \pm 0.0009\%$ (seed s.d.) & \texttt{usefulness\_seeds.json :: mean, sd} \\
+Sec.~\ref{sec:trained} & $27.0421 \pm 0.0046\%$ (seed s.d.) & \texttt{usefulness\_seeds.json :: mean, sd} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1288,11 +1257,12 @@ claim. Both statements hold for every $\delta$, so the norms carry no positional
 information while the angle $\D$ is where all of it enters.
 \end{proof}
 
-Proposition~\ref{prop:gate} is the load-bearing statement for the gate/phase
-split used in sparse-feature interpretability: the ``gate'' $|q|$ is not an
-approximation of the position-free part, it is \emph{exactly} the
-position-free part, and the ``phase'' is the entire remainder. We measure the
-numerical residual of this orthogonality in Section~\ref{sec:exact}.
+Proposition~\ref{prop:gate} is the load-bearing statement for norm preservation:
+the rotation changes the angle but not the magnitude. The per-pair closed form
+below supplies the complementary content/position split used in sparse-feature
+interpretability: $\Rk$ and $\psik$ are functions of the content alone, while
+only $\D$ depends on distance. We measure the numerical residual of the
+orthogonality in Section~\ref{sec:exact}.
 
 \subsection{The per-pair closed form}
 \label{sec:pair}
@@ -1552,6 +1522,18 @@ structural precondition any of those methods must handle. Our per-distance
 attribution has not been connected to a circuit, and we have not shown that
 measuring it identifies anything about a trained model.
 
+\textbf{What exactness does not buy.} A faithful decomposition is not a
+validated circuit. \citet{zhang2026circuiteval} show that circuits can closely
+reproduce a model's successful decisions while accounting for only a minority of
+its errors, so agreement on successes is not sufficient evidence of a mechanism.
+At the behavioural level, \citet{enouen2026shifting} find that the choice of
+positional encoding changes whether in-context retrieval relies on positional
+or semantic mechanisms across a suite of open-weight models. That is a downstream
+claim, and this paper makes none: we establish what the score attribution must
+represent, not which behaviour it explains. Exactness removes one structural
+objection to a RoPE attribution; it does not supply the circuit or behavioural
+validation those works ask for.
+
 \section{The extension comparison, in full}
 \label{app:figs:context}
 
@@ -1599,6 +1581,20 @@ measuring it identifies anything about a trained model.
     \bottomrule
   \end{tabular}
 \end{table*}
+
+% The sensitivity sweep is quoted in the provenance appendix but its figure
+% lives here: it was the only main-text float that spilled onto the appendix
+% page, which made the nine-page accounting ambiguous. The label keeps the
+% ``app:'' prefix and the in-appendix reference is unchanged.
+\paperfigure{fig11_sensitivity_sweep}{%
+  The configuration sweep behind the robustness paragraph above. Left: the pooled
+  rate against the rotary base on a log axis at head dimension $64$ (error bars:
+  $\pm 1$ SD across the sweep's seeds; dashed: the published base). Right: the
+  rate against head dimension at base $10^{4}$ (left axis) and the median
+  relative error against the same head dimension (squares, right axis; dotted:
+  the $1.0$ reference). Every plotted value is read from
+  \texttt{results/sensitivity.json}; the CSV sidecar holds the same array.%
+}{app:fig:sensitivity}
 
 \paperfigure{fig03_max_vs_median_angle}{%
   Maximum (solid) and median (dashed) per-channel angle against relative

@@ -498,7 +498,7 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         "limitations_config",
-        r"All measurements use \$d = (\d+)\$, \$\\mathrm\{base\} = (\d+)\$, "
+        r"The main synthetic experiments use \$d = (\d+)\$, \$\\mathrm\{base\} = (\d+)\$, "
         r"\$s = (\d+)\$, pre-extension context \$(\d+)\$",
     ),
     Claim("exact_identity_residue", r"residue in each case is \$(0\.0)\$ or a single ULP"),
@@ -514,7 +514,7 @@ CLAIMS: tuple[Claim, ...] = (
 CLAIMS += (
     Claim(
         "trained_relpos_worst",
-        r"worst absolute error of \$(\d+\.\d+)\\times10\^\{-12\}\$ across all three",
+        r"worst absolute error of \$(\d+\.\d+)\\times10\^\{-13\}\$ across all three",
     ),
     Claim("trained_float32_eps", r"float32 epsilon of \$(1\.\d+)\\times10\^\{-7\}\$"),
     Claim(
@@ -552,10 +552,29 @@ CLAIMS += (
     ),
     Claim(
         "trained_blind_fraction",
-        r"position-blind fraction is \$(0\.\d+)\$ on \\texttt\{pythia-160m\}, "
+        r"fraction meeting the cutoff is \$(0\.\d+)\$ on \\texttt\{pythia-160m\}, "
         r"\$(0\.\d+)\$ on \\texttt\{llama-160m\} and \$(0\.\d+)\$ on",
     ),
+    Claim(
+        "trained_blind_cutoff",
+        r"\|B_k\| < (0\.01)\\,\|A_k\|",
+    ),
     Claim("trained_blind_band", r"between \$(0\.\d+)\\%\$ and \$(0\.\d+)\\%\$"),
+    # The sampling disclosure: 256 content pairs per head and prompt, the
+    # resulting sample range, and the degenerate pair-channel entries excluded.
+    # Checked against results/real_model.json in test_paper_trained_claims.py.
+    Claim(
+        "trained_content_pairs",
+        r"with\s+\$(\d+)\$ random content pairs per head and prompt",
+    ),
+    Claim(
+        "trained_sample_range",
+        r"records\s+\$(\d+\.\d+)\$M--\$(\d+\.\d+)\$M",
+    ),
+    Claim(
+        "trained_degenerate",
+        r"the\s+\$(\d+\{,\}\d+)\$ degenerate \\texttt\{llama\} pair-channel entries",
+    ),
     Claim("gpt2_no_rope", r"learned absolute table of size \$(\d+)\$"),
     # fig10: the seed sweep that makes the central claim a claim about the
     # decomposition rather than about one lucky draw.
@@ -567,45 +586,47 @@ CLAIMS += (
     # ---- Section~\ref{sec:worth}: what a position-free scalar costs ---------
     Claim(
         "worth_pooled_flip",
-        r"wrong sign on \$(26\.\d)\\%\$ of per-pair, per-distance\s+cells",
+        r"wrong sign on \$(27\.\d)\\%\$ of per-pair, per-distance\s+cells",
     ),
     Claim(
         "worth_per_model_flip",
-        r"rate is \$(27\.\d)\\%\$ on\s+\\texttt\{pythia-160m\}, \$(26\.\d)\\%\$ on \\texttt\{llama-160m\} and "
+        r"rate is \$(28\.\d)\\%\$ on\s+\\texttt\{pythia-160m\}, \$(26\.\d)\\%\$ on \\texttt\{llama-160m\} and "
         r"\$(26\.\d)\\%\$ on\s+\\texttt\{SmolLM-135M\}",
     ),
     Claim(
         "worth_head_count",
-        r"all \$(2790)\$ heads the per-head rate never leaves the\s+band \$(22\.\d)\\%\$ to \$(34\.\d)\\%\$",
+        r"all \$(2790)\$ heads the per-head rate never leaves the\s+band \$(20\.\d)\\%\$ to \$(36\.\d)\\%\$",
     ),
     Claim(
         "worth_head_range",
-        r"the per-head rate never leaves the\s+band \$(22\.\d)\\%\$ to \$(34\.\d)\\%\$",
+        r"the per-head rate never leaves the\s+band \$(20\.\d)\\%\$ to \$(36\.\d)\\%\$",
     ),
     Claim("worth_rel_err", r"median \$(1\.\d+)\$ against a peak of \$1\$"),
     Claim("worth_materiality", r"at least \$(\d+)\\%\$ of its own peak"),
     Claim(
         "worth_grid_drift",
-        r"drift is \$(0\.1779)\$ across the sweep actually run, which spans\s+"
-        r"densities \$(9)\$, \$(17)\$ and \$(65)\$ --- a \$(7)\\times\$ change",
+        r"drift is \$(0\.2389)\$ across the sweep actually run, whose requested "
+        r"densities \$(9)\$, \$(17)\$ and \$(65)\$ do not all survive integer "
+        r"rounding, so the realized span is below the nominal \$(7)\\times\$\. "
+        r"An earlier version claimed a \$(14)\\times\$ span",
     ),
-    # The qualifications the paper puts on the 26.8% headline: which
+    # The qualifications the paper puts on the 27.0% headline: which
     # estimator it is, the interval around it, and the pairwise
     # disagreement. Every number here is re-derived from the per-head
     # rates in `test_uncertainty.py`; the patterns are also what the
     # exhaustiveness scan sees the passage through, so all three
-    # mentions of 26.8/26.70 are claimed.
+    # mentions of 27.0/26.90 are claimed.
     Claim(
         "boot_two_means",
-        r"\$(26\.8)\\%\$ is the equal-weight mean of the three per-checkpoint "
+        r"\$(27\.0)\\%\$ is the equal-weight mean of the three per-checkpoint "
         r"rates; the mean over all \$(\d+)\$ heads is \$(26\.\d\d)\\%\$",
     ),
     Claim(
         "boot_head_mean_restated",
-        r"the headline is the equal-weight \$(26\.8)\\%\$, while the interval "
+        r"the headline is the equal-weight \$(27\.0)\\%\$, while the interval "
         r"below belongs to the head-pooled \$(26\.\d\d)\\%\$",
     ),
-    Claim("boot_headline_restated", r"next to the \$(26\.8)\\%\$ itself"),
+    Claim("boot_headline_restated", r"next to the \$(27\.0)\\%\$ itself"),
     Claim(
         "boot_head_counts",
         r"\\texttt\{SmolLM-135M\} contributes \$(\d+)\$ heads against \$(\d+)\$ "
@@ -652,8 +673,11 @@ CLAIMS += (
     ),
     Claim("method_freq_formula", r"\$\\invf_k = \\mathrm\{base\}\^\{(-2)k/d\}\$"),
     Claim("prop_gate_positive", r"whenever \$R_k > (0)\$"),
-    Claim("prop_blind_zero", r"it touches has \$\\Bk = (0)\$"),
-    Claim("blind_one_percent", r"moves by less than \$(1)\\%\$ across the distance range"),
+    # The position-free condition is A_k = B_k = 0, not B_k = 0. The old pattern
+    # matched the latter and stayed green after the paper was corrected, which is
+    # exactly the drift this registry exists to catch.
+    Claim("prop_blind_zero", r"it touches has \$\\Ak = \\Bk = (0)\$"),
+
     Claim("pair_past_one", r"past \$(1)\$, i\.e\. worse than deleting the term"),
     Claim("yarn_scales_fast_one", r"scales those channels by exactly \$(1)\$"),
     Claim("threshold_rad_within", r"within \$(0\.1)\\rad\$ for more than three tokens"),
@@ -767,7 +791,7 @@ CLAIMS += (
     # would have scored on heads with 8 and 32 pairs.
     Claim(
         "worth_rank_top1",
-        r"name the same first pair on \$(55\.7)\\%\$ of the triples of "
+        r"name the same first pair on \$(49\.4)\\%\$ of the triples of "
         r"\\texttt\{pythia-160m\}, \$(56\.6)\\%\$ on \\texttt\{llama-160m\} and "
         r"\$(60\.1)\\%\$ on \\texttt\{SmolLM-135M\}",
     ),
@@ -2970,7 +2994,7 @@ def test_the_paper_states_a_limitations_section() -> None:
         ("no learned features", "none of its content"),
         ("no evaluation", "no retrieval benchmark, no language-modelling evaluation"),
         ("sign reversal is synthetic", "property of random directions in a"),
-        ("single configuration", "We have not swept head dimension"),
+        ("single configuration", "varies the base and the head dimension"),
     ):
         assert required in limitations, f"Limitations no longer states: {label}"
     assert "This matters enough to state before the results" in TEX_FLAT
@@ -2983,7 +3007,7 @@ def test_the_paper_disclaims_the_three_forbidden_things() -> None:
         "There is no sparse autoencoder anywhere in this work",
         "There is no retrieval benchmark and no accuracy measurement",
         "We do not claim any scheme is better in practice",
-        "The conclusions are model-independent by construction",
+        "The algebraic conclusions are model-independent by construction",
         "no retrieval benchmark, no accuracy figure",
         # Section~\ref{sec:trained} now measures on trained weights, so the
         # disclaimer is about what those measurements are *for*, not about their
@@ -2993,6 +3017,32 @@ def test_the_paper_disclaims_the_three_forbidden_things() -> None:
         "Section~" + chr(92) + "ref{sec:trained} then repeats the central",
     ):
         assert phrase in disclaimer, f"the paper no longer says: {phrase!r}"
+
+
+def test_the_scope_and_softmax_qualifiers_are_explicit() -> None:
+    """Three claims that were true only with a qualifier.
+
+    The endpoint comparison is an average, not a per-seed guarantee; the
+    softmax's denominator effect can grow, but no universal monotonicity is
+    measured; and only the algebra is model-independent, not the synthetic
+    sign-reversal experiment. These are prose guards for exactly those three
+    corrections, not a general style rule.
+    """
+    assert "on average, the same size to within a factor of" in TEX_FLAT
+    assert "can grow with the number of keys" in TEX_FLAT
+    assert "it grows as the number of keys grows" not in TEX_FLAT
+    assert "The algebraic conclusions are model-independent" in TEX_FLAT
+    assert "The conclusions are model-independent" not in TEX_FLAT
+    assert "No downstream task, and no learned features" in TEX_FLAT
+    assert "No downstream model, and no learned features" not in TEX_FLAT
+    assert "computed before rounding, the two differ by more than twice" in TEX_FLAT
+    # The pairwise bootstrap has three gaps; only the pythia-vs-others two
+    # are large next to the between-head spread. The llama--SmolLM gap is a
+    # tenth of a point and must not be folded into "about two percentage
+    # points, larger than the noise floor".
+    assert "the llama--SmolLM gap is a tenth of a point" in TEX_FLAT
+    assert "the llama--SmolLM gap is a tenth of a point and not material" in TEX_FLAT
+    assert "The effect is about two percentage points" not in TEX_FLAT
 
 
 def test_no_affirmative_claim_of_a_trained_model_real_activations_or_accuracy() -> None:
@@ -3034,11 +3084,11 @@ def test_the_paper_does_not_deny_the_trained_checkpoints_exist() -> None:
     The trained section measures on three pretrained checkpoints, so that
     absolute denial was false; it was replaced by what is actually absent (a
     downstream model, learned features, a retrieval benchmark) plus an explicit
-    statement that those checkpoints are not evaluated on any task. This pins
+    statement that those checkpoints are not evaluated on a task. This pins
     the replacement and catches a rewording that resurrects the false sentence.
     """
     assert "no trained model" not in TEX_FLAT
-    assert "we do not evaluate them on any task" in TEX_FLAT
+    assert "but are not evaluated on a task" in TEX_FLAT
 
 
 def test_the_only_accuracy_number_in_the_paper_is_the_one_it_refuses_to_report() -> None:

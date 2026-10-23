@@ -104,6 +104,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 294912,
+            "n_blind": 1709,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -2801,6 +2802,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 294912,
+            "n_blind": 1521,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -5498,6 +5500,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 294912,
+            "n_blind": 1586,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -8195,6 +8198,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 294912,
+            "n_blind": 1706,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -10892,6 +10896,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 294912,
+            "n_blind": 1448,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -15234,6 +15239,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 986048,
+            "n_blind": 6948,
             "n_degenerate_pairs_excluded": 193600,
             "share_quantiles": {
               "percentiles": [
@@ -17931,6 +17937,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 1110336,
+            "n_blind": 7241,
             "n_degenerate_pairs_excluded": 69312,
             "share_quantiles": {
               "percentiles": [
@@ -20628,6 +20635,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 1129760,
+            "n_blind": 7154,
             "n_degenerate_pairs_excluded": 49888,
             "share_quantiles": {
               "percentiles": [
@@ -23325,6 +23333,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 1112864,
+            "n_blind": 7145,
             "n_degenerate_pairs_excluded": 66784,
             "share_quantiles": {
               "percentiles": [
@@ -26022,6 +26031,7 @@
             "n_heads": 12,
             "n_content_pairs_per_head": 256,
             "n_samples": 1097088,
+            "n_blind": 7026,
             "n_degenerate_pairs_excluded": 82560,
             "share_quantiles": {
               "percentiles": [
@@ -30582,6 +30592,7 @@
             "n_heads": 9,
             "n_content_pairs_per_head": 256,
             "n_samples": 2211840,
+            "n_blind": 13174,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -35169,6 +35180,7 @@
             "n_heads": 9,
             "n_content_pairs_per_head": 256,
             "n_samples": 2211840,
+            "n_blind": 14059,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -39756,6 +39768,7 @@
             "n_heads": 9,
             "n_content_pairs_per_head": 256,
             "n_samples": 2211840,
+            "n_blind": 14004,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -44343,6 +44356,7 @@
             "n_heads": 9,
             "n_content_pairs_per_head": 256,
             "n_samples": 2211840,
+            "n_blind": 13926,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -48930,6 +48944,7 @@
             "n_heads": 9,
             "n_content_pairs_per_head": 256,
             "n_samples": 2211840,
+            "n_blind": 14769,
             "n_degenerate_pairs_excluded": 0,
             "share_quantiles": {
               "percentiles": [
@@ -56305,6 +56320,8 @@
   "aggregates": {
     "EleutherAI/pythia-160m": {
       "n_samples": 1474560,
+      "n_blind": 7970,
+      "frac_position_blind_pooled": 0.005405002170138889,
       "n_degenerate_pairs_excluded": 0,
       "histogram_pooled_bin_edges": [
         0.0,
@@ -56846,6 +56863,8 @@
     },
     "JackFram/llama-160m": {
       "n_samples": 5436096,
+      "n_blind": 35514,
+      "frac_position_blind_pooled": 0.0065329972097623,
       "n_degenerate_pairs_excluded": 462144,
       "histogram_pooled_bin_edges": [
         0.0,
@@ -57387,6 +57406,8 @@
     },
     "HuggingFaceTB/SmolLM-135M": {
       "n_samples": 11059200,
+      "n_blind": 69932,
+      "frac_position_blind_pooled": 0.006323423032407407,
       "n_degenerate_pairs_excluded": 0,
       "histogram_pooled_bin_edges": [
         0.0,

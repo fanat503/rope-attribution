@@ -16,15 +16,10 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 
-# `authors` is a single person, Ilya Slyatski, and nobody else. The earlier
-# comment here claimed the field had to stay empty because LICENSE and
-# CITATION.cff were unfilled and two conflicting candidate names appeared in a
-# patch that does not exist in this repository. All three files are now filled,
-# and tests/test_author_metadata.py pins them together so the field cannot drift
-# from them again.
+# One author. CITATION.cff, LICENSE, and the paper are pinned to the same name
+# by tests/test_author_metadata.py.
 #
-# `readme` points at README.md, which now describes this package rather than the
-# unrelated curriculum document the old comment referred to.
+# `readme` points at README.md, which describes this package.
 authors = [{ name = "Ilya Slyatski" }]
 readme = "README.md"
 
