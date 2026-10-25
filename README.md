@@ -311,10 +311,12 @@ RoPE.
 
 > The paper previously led with a worst-feature ratio of `920x`. That number was a
 > sampling artefact — a `max/min` over a grid, so it grows without bound as the
-> grid gets denser. `rope_attribution/statistics.py` reproduces the growth (a
-> factor of 32 across six grid densities, non-monotone, seed standard deviation
-> exceeding its own mean) and the paper withdrew the claim. `tests/test_paper_claims.py`
-> fails if it is reinstated.
+> grid gets denser. On the same vectors, `rope_attribution/statistics.py`
+> reproduces the growth: the ratio spans `571x` across six grid densities, is
+> non-monotone, and its seed standard deviation is `0.93x` its mean (`1.13x` for
+> the pooled variant). The paper withdrew the claim, and
+> `tests/test_paper_claims.py` fails if it is reinstated or if the per-feature
+> and pooled statistics are conflated again.
 
 **YaRN does not shrink the largest angle, and does not come from a bigger base.**
 `max|D_k|` is *identical* for plain RoPE and YaRN at every distance measured

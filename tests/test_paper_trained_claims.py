@@ -52,35 +52,35 @@ _GRID = _REPO / "results" / "usefulness_grid_independence.json"
 @pytest.fixture(scope="module")
 def trained() -> dict:
     if not _JSON.exists():
-        pytest.skip("results/real_model.json is absent; run real_model.py")
+        pytest.fail("results/real_model.json is absent; it is committed evidence, not an optional input")
     return json.loads(_JSON.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def agreement_data() -> dict:
     if not _AGREEMENT.exists():
-        pytest.skip("results/agreement.json is absent; run agreement.py")
+        pytest.fail("results/agreement.json is absent; it is committed evidence")
     return json.loads(_AGREEMENT.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def usefulness() -> dict:
     if not _USEFULNESS.exists():
-        pytest.skip("results/usefulness.json is absent; run usefulness.py")
+        pytest.fail("results/usefulness.json is absent; it is committed evidence")
     return json.loads(_USEFULNESS.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def seeds() -> dict:
     if not _SEEDS.exists():
-        pytest.skip("results/usefulness_seeds.json is absent; run seed_variance.py")
+        pytest.fail("results/usefulness_seeds.json is absent; it is committed evidence")
     return json.loads(_SEEDS.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def grid_independence() -> dict:
     if not _GRID.exists():
-        pytest.skip("results/usefulness_grid_independence.json is absent")
+        pytest.fail("results/usefulness_grid_independence.json is absent; it is committed evidence")
     return json.loads(_GRID.read_text(encoding="utf-8"))
 
 
@@ -492,7 +492,7 @@ def test_the_relative_error_exceeds_the_signal(usefulness: dict) -> None:
         assert model["rel_err_median"] > 1.0, model["model_id"]
 
 
-def test_the_materiality_cut_is_disclosed(usefulness: dict) -> None:
+def test_the_materiality_cut_is_disclosed(usefulness: dict, grid_independence: dict) -> None:
     """A threshold that helps the result must be stated where it is used."""
     assert int(literal("worth_materiality")) == 5
     assert "numerically indistinguishable from zero" in TEX_FLAT
@@ -500,8 +500,11 @@ def test_the_materiality_cut_is_disclosed(usefulness: dict) -> None:
     # on, and the earlier 14x span is named as the earlier version's error.
     assert "the sweep actually run" in TEX_FLAT
     assert "An earlier version of this" in TEX_FLAT
-    drift = float(literal("worth_grid_drift"))
-    assert 0 < drift < 50, drift
+    assert_paper_number_matches(
+        grid_independence["sign_flip_drift"],
+        literal("worth_grid_drift"),
+        "the sign-flip grid drift",
+    )
 
 
 def test_the_grid_sweep_reports_the_realized_density(

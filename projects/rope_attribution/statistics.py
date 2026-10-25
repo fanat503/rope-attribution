@@ -136,6 +136,11 @@ GRID_DENSITIES = (5, 17, 54, 128, 332, 1024)
 N_SEEDS = 12
 BASE_SEED = 20250929
 
+#: The seed of the committed fig09 sidecar. The withdrawn ``920x`` ratio was
+#: computed on *these* vectors, so the density ladder that replaces it has to
+#: use the same draw; ``BASE_SEED`` drives the seed sweep, a different question.
+FIG09_SEED = 1
+
 
 def _log_uniform_grid(n_points: int, lo: int = DELTA_LO, hi: int = DELTA_HI) -> np.ndarray:
     """``n_points`` distinct integer distances, log-spaced and strictly increasing."""
@@ -271,6 +276,81 @@ def ratio_vs_density(seed: int = BASE_SEED, n_features: int = N_FEATURES) -> lis
 # --------------------------------------------------------------------------
 
 
+def withdrawn_ratio_ladder(
+    seed: int = FIG09_SEED, n_features: int = N_FEATURES
+) -> dict:
+    """The per-feature ``max/min`` ratio the paper withdrew, over the ladder.
+
+    The withdrawal is about *the vectors that produced the 920x figure*, so this
+    uses :data:`FIG09_SEED` rather than :data:`BASE_SEED`. An earlier draft
+    quoted the pooled ratio (one max and one min over the whole feature-by-
+    distance matrix) while naming it the worst-feature ratio, and quoted a
+    spread measured on the other draw. Both statistics are reported here so the
+    two can never be conflated again.
+
+    ``spread_worst_feature`` is ``max_i r_i / min_i r_i`` over the ladder, where
+    ``r_i`` is feature ``i``'s own ratio; ``spread_pooled`` is the same
+    comparison for the pooled statistic.
+    """
+    rows = []
+    for n_points in GRID_DENSITIES:
+        deltas, contrib, _ = contribution_grid(seed, n_features, n_points)
+        magnitude = np.abs(contrib)
+        per_feature = []
+        for row in magnitude:
+            nonzero = row[row != 0.0]
+            per_feature.append(
+                float(nonzero.max() / nonzero.min()) if nonzero.size > 1 else float("nan")
+            )
+        pooled = float(magnitude.max() / magnitude.min())
+        rows.append(
+            {
+                "n_deltas": int(deltas.size),
+                "requested_n": int(n_points),
+                "pooled_ratio": pooled,
+                "worst_feature_ratio": float(np.nanmax(per_feature)),
+            }
+        )
+
+    worst = np.array([row["worst_feature_ratio"] for row in rows], dtype=np.float64)
+    pooled = np.array([row["pooled_ratio"] for row in rows], dtype=np.float64)
+
+    # The same statistic redrawn: per-feature at the ladder's middle density,
+    # and pooled for comparison. The paper quotes both as ``sd / mean``.
+    per_seed_worst = []
+    per_seed_pooled = []
+    for s in range(BASE_SEED, BASE_SEED + N_SEEDS):
+        _deltas, contrib, _ = contribution_grid(s, n_features, 54)
+        magnitude = np.abs(contrib)
+        ratios = [
+            float(row[row != 0.0].max() / row[row != 0.0].min())
+            for row in magnitude
+            if np.count_nonzero(row) > 1
+        ]
+        per_seed_worst.append(float(np.max(ratios)))
+        per_seed_pooled.append(float(magnitude.max() / magnitude.min()))
+    per_seed_worst_arr = np.array(per_seed_worst, dtype=np.float64)
+    per_seed_pooled_arr = np.array(per_seed_pooled, dtype=np.float64)
+
+    def _rel_std(values: np.ndarray) -> float:
+        return float(values.std(ddof=1) / abs(values.mean())) if values.size > 1 else 0.0
+
+    return {
+        "seed": int(seed),
+        "rows": rows,
+        "spread_worst_feature": float(worst.max() / worst.min()),
+        "spread_pooled": float(pooled.max() / pooled.min()),
+        "seed_sweep": {
+            "n_seeds": N_SEEDS,
+            "n_points": 54,
+            "worst_feature_mean": float(per_seed_worst_arr.mean()),
+            "worst_feature_relative_std": _rel_std(per_seed_worst_arr),
+            "pooled_mean": float(per_seed_pooled_arr.mean()),
+            "pooled_relative_std": _rel_std(per_seed_pooled_arr),
+        },
+    }
+
+
 def grid_independence(seed: int = BASE_SEED, n_features: int = N_FEATURES) -> dict:
     """Drift of each statistic across grid densities.
 
@@ -309,7 +389,7 @@ def grid_independence(seed: int = BASE_SEED, n_features: int = N_FEATURES) -> di
 
 
 def position_free_error(
-    seed: int = BASE_SEED, n_features: int = N_FEATURES, n_points: int = 54
+    seed: int = BASE_SEED, n_features: int = N_FEATURES
 ) -> dict:
     """Residual of the best position-independent summary of ``c_i(delta)``.
 
@@ -424,6 +504,7 @@ def run_all(
             "base_seed": base_seed,
         },
         "ratio_vs_density": ratio_vs_density(base_seed, n_features),
+        "withdrawn_ratio_ladder": withdrawn_ratio_ladder(n_features=n_features),
         "grid_independence": grid_independence(base_seed, n_features),
         "position_free_error": position_free_error(base_seed, n_features),
         "seed_variance": seed_variance(n_seeds, base_seed, n_features),
@@ -448,6 +529,19 @@ def main(out: Path | None = None) -> None:
     gi = result["grid_independence"]["max_min_ratio_disputed"]
     print(f"   -> relative drift {gi['relative_drift']:.3g}: the statistic is a property of")
     print("      the sampling, not of the function.")
+
+    print()
+    print("1b. The withdrawn ratio on the fig09 vectors (per-feature, then pooled)")
+    ladder = result["withdrawn_ratio_ladder"]
+    print(f"   {'n_deltas':<10} {'per-feature':>14} {'pooled':>14}")
+    for row in ladder["rows"]:
+        print(f"   {row['n_deltas']:<10} {row['worst_feature_ratio']:>14.2f} "
+              f"{row['pooled_ratio']:>14.2f}")
+    print(f"   -> per-feature spread {ladder['spread_worst_feature']:.1f}x, "
+          f"pooled spread {ladder['spread_pooled']:.1f}x")
+    sweep = ladder["seed_sweep"]
+    print(f"   -> seed relative std: per-feature {sweep['worst_feature_relative_std']:.4f}, "
+          f"pooled {sweep['pooled_relative_std']:.4f}")
 
     print()
     print("2. Grid-independent statistics: drift across those same densities")

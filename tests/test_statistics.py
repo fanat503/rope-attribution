@@ -167,6 +167,38 @@ def test_the_disputed_ratio_has_no_usable_seed_precision() -> None:
     )
 
 
+def test_the_withdrawn_ladder_matches_the_figure_it_came_from() -> None:
+    """The 920x and its density ladder are the same vector set.
+
+    An earlier draft quoted the *pooled* spread while naming the per-feature
+    ratio, and the test compared the paper against the pooled number. This pins
+    the per-feature value to the committed fig09 sidecar and keeps the two
+    statistics apart.
+    """
+    import csv
+    from collections import defaultdict
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parent.parent
+        / "figures"
+        / "fig09_position_conditional_attribution.csv"
+    )
+    curves: dict[int, list[float]] = defaultdict(list)
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            curves[int(row["feature_index"])].append(abs(float(row["contribution"])))
+    ratios = [max(values) / min(values) for values in curves.values() if min(values) > 0]
+    assert max(ratios) == pytest.approx(920.044450, rel=1e-6)
+
+    ladder = S.withdrawn_ratio_ladder()
+    assert ladder["seed"] == S.FIG09_SEED
+    assert ladder["rows"][-1]["worst_feature_ratio"] > 10 * ladder["rows"][0]["worst_feature_ratio"]
+    assert ladder["spread_worst_feature"] != pytest.approx(ladder["spread_pooled"])
+    assert ladder["seed_sweep"]["worst_feature_relative_std"] < 1.0
+    assert ladder["seed_sweep"]["pooled_relative_std"] > 1.0
+
+
 def test_a_stable_statistic_really_is_stable_across_seeds() -> None:
     """The replacement statistic must be tight, or it is no better than the ratio."""
     stats = S.seed_variance(n_seeds=8)["statistics"]
@@ -229,6 +261,7 @@ def test_run_all_is_json_serialisable_and_complete() -> None:
     assert set(result) == {
         "configuration",
         "ratio_vs_density",
+        "withdrawn_ratio_ladder",
         "grid_independence",
         "position_free_error",
         "seed_variance",

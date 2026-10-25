@@ -23,9 +23,9 @@
 % method benchmarked against baselines.
 %
 % NOTE: this is the `\documentclass{article}` + `\usepackage{neurips_2026}`
-% form rather than `\documentclass{neurips_2026}`, because the matching
-% `neurips_2026.cls` is not vendored and could not be fetched from the NeurIPS
-% repositories. The two files ship together; see paper/BUILD.md.
+% form, which is what the official package supports: NeurIPS 2026 ships
+% `neurips_2026.sty`, `neurips_2026.tex` and `checklist.tex`, and no `.cls`.
+% The vendored style file is byte-identical to the official one; see BUILD.md.
 \documentclass[twocolumn]{article}
 \usepackage[preprint,position]{neurips_2026}
 \usepackage{amsmath,amssymb,amsthm,bm}
@@ -411,10 +411,11 @@ worth recording why, because the failure mode is general. The ratio is
 $\max/\min$ of a continuous function over a sampled grid: as the grid gets
 denser, $\min_\delta|c_i|$ keeps shrinking toward zero while the numerator
 saturates, so the ratio grows without bound. Measured on the same vectors at
-$5$, $17$, $48$, $104$, $235$ and $599$ distances it takes values spread by a
-factor of $32$, and it is not even monotone in density. Across $12$ independent
-seeds its standard deviation exceeds its own mean. It measures the sampling, not
-the function.
+$5$, $17$, $48$, $104$, $235$ and $599$ distances it spans $571\times$, and it
+is not even monotone in density. Across $12$ independent seeds its standard
+deviation is $0.93\times$ its mean --- the pooled variant, one ratio over every
+feature at once, gives $1.13\times$ --- so the value is not stable under
+redrawing the content either. It measures the sampling, not the function.
 
 The replacements above are chosen for stability rather than for size: the
 coefficient of variation has $3.7\%$ seed variance, and the sign-crossing

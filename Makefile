@@ -57,6 +57,7 @@ postedit:
 checkpoints:
 	$(PYTHON) -m $(PKG).real_model
 	$(PYTHON) -m $(PKG).usefulness
+	$(PYTHON) -m $(PKG).uncertainty
 	$(PYTHON) -m $(PKG).seed_variance
 	$(PYTHON) -m $(PKG).agreement
 

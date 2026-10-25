@@ -259,10 +259,12 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         "withdrawn_ratio_densities",
-        r"\$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ distances it takes",
+        r"\$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ distances it spans",
     ),
-    Claim("withdrawn_ratio_drift", r"values spread by a\s+factor of \$(\d+)\$"),
+    Claim("withdrawn_ratio_drift", r"distances it spans \$(\d+)\\times\$"),
     Claim("withdrawn_ratio_seeds", r"Across \$(\d+)\$ independent seeds its standard deviation"),
+    Claim("withdrawn_seed_ratio", r"deviation is \$(\d+\.\d+)\\times\$ its mean"),
+    Claim("withdrawn_seed_ratio_pooled", r"gives \$(\d+\.\d+)\\times\$"),
     Claim("replacement_seed_variance", r"variation has .(\d\.\d).*?seed variance"),
     # The provenance table's row for the central result.
     Claim(
@@ -1653,6 +1655,8 @@ def test_the_ratio_is_withdrawn_and_the_paper_says_so() -> None:
     import rope_attribution.statistics as STATS
 
     assert int(literal("withdrawn_ratio")) == 920
+    raised = max(fig09_per_feature_ratios(fig09_csv_curves()))
+    assert_paper_number_matches(raised, literal("withdrawn_ratio"), "the withdrawn ratio")
     assert "We withdrew it" in TEX_FLAT
     # The mechanism is named, not just the retraction.
     assert "keeps shrinking toward zero" in TEX_FLAT
@@ -1672,12 +1676,28 @@ def test_the_withdrawal_remark_is_stable_where_the_headline_was_not() -> None:
     import rope_attribution.statistics as STATS
 
     densities = [int(x) for x in groups("withdrawn_ratio_densities")[0]]
-    measured = [row["n_deltas"] for row in STATS.ratio_vs_density()]
+    ladder = STATS.withdrawn_ratio_ladder()
+    measured = [row["n_deltas"] for row in ladder["rows"]]
     assert densities == measured, f"paper says {densities}, module measured {measured}"
-    ratios = [row["max_min_ratio"] for row in STATS.ratio_vs_density()]
-    spread = max(ratios) / min(ratios)
-    assert_paper_number_matches(spread, literal("withdrawn_ratio_drift"), "the ratio's spread")
+    assert_paper_number_matches(
+        ladder["spread_worst_feature"],
+        literal("withdrawn_ratio_drift"),
+        "the per-feature ratio's spread",
+    )
+    # The two statistics the earlier draft conflated must stay separate.
+    assert ladder["spread_worst_feature"] != pytest.approx(ladder["spread_pooled"])
     assert int(literal("withdrawn_ratio_seeds")) == STATS.N_SEEDS
+    sweep = ladder["seed_sweep"]
+    assert_paper_number_matches(
+        sweep["worst_feature_relative_std"],
+        literal("withdrawn_seed_ratio"),
+        "the per-feature seed spread",
+    )
+    assert_paper_number_matches(
+        sweep["pooled_relative_std"],
+        literal("withdrawn_seed_ratio_pooled"),
+        "the pooled seed spread",
+    )
 
 
 def test_the_replacement_statistic_is_what_the_paper_leads_with() -> None:

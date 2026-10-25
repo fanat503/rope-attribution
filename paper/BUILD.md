@@ -41,12 +41,13 @@ repository-level statement that names this exception, and nothing outside
 produces a non-anonymous build for checking the formatting. The submission's
 anonymity requirement is an open decision, not something this file asserts.
 
-The matching `neurips_2026.cls` is **not** vendored. It could not be fetched from
-the NeurIPS repositories during this work (`neurips.cc/Conferences/2026/...`
-returns 404 for the class), so the `\documentclass{neurips_2026}` form is not
-available. NeurIPS ships the two files together; before submitting, download both
-from the conference style-files page and switch line 29 of `main.tex` to
-`\documentclass[preprint,position]{neurips_2026}`, dropping the `\usepackage`.
+The official NeurIPS 2026 package ships `neurips_2026.sty`, `neurips_2026.tex`
+and `checklist.tex`; there is **no** `neurips_2026.cls`, so
+`\documentclass{neurips_2026}` is not a form the conference supports. The
+vendored `neurips_2026.sty` is byte-identical to the official one (SHA-256
+`C3FC2894E83D2517CA18B66741D6C595986D97957DC08EC08BB2125A7EC4555A`), and
+`main.tex` uses `\documentclass{article}` plus `\usepackage{neurips_2026}`,
+which is the supported form.
 
 The style file loads `natbib` and sets the geometry itself, so `main.tex` must
 not load either. It also explicitly forbids `fullpage`.
