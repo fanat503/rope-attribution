@@ -30,7 +30,9 @@ following `pdflatex` runs pick up the citation numbers and the cross-references.
 
 `neurips_2026.sty` is vendored in this directory and is loaded as
 `\usepackage[preprint,position]{neurips_2026}` on top of
-`\documentclass[twocolumn]{article}`.
+`\documentclass{article}`, exactly as the official template does. The style file
+is single-column, so no layout option is passed to the class and the page
+geometry is the one the style itself sets.
 
 It is the only third-party file in the repository, vendored verbatim and
 unmodified so that `paper/` builds without network access. Its own header
