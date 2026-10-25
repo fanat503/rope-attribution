@@ -104,6 +104,7 @@ __all__ = [
     "measure_position_channels",
     "run_all",
     "synthetic_baseline",
+    "unsupported_architecture",
     "validate_config",
     "write_results",
 ]
@@ -365,8 +366,13 @@ def load_model(model_id: str = DEFAULT_MODEL_IDS[0], seed: int = DEFAULT_SEED) -
     torch.set_num_threads(NUM_THREADS)
     torch.manual_seed(seed)
 
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
+    # Refuse on the config alone, before downloading tens of gigabytes of
+    # weights that the adapter would then measure incorrectly.
+    reason = unsupported_architecture(AutoConfig.from_pretrained(model_id))
+    if reason:
+        raise NotImplementedError(f"{model_id}: {reason}")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForCausalLM.from_pretrained(
         model_id, attn_implementation="eager", dtype=torch.float32
@@ -624,6 +630,9 @@ def collect_head_vectors(
     measured.
     """
     torch = _require_torch()
+    reason = unsupported_architecture(getattr(model, "config", None))
+    if reason:
+        raise NotImplementedError(reason)
     attns = attention_modules(model)
     if not attns:
         raise RuntimeError("no attention module with a recognised q/k projection")
@@ -699,6 +708,85 @@ def collect_head_vectors(
 # --------------------------------------------------------------------------
 
 
+def _config_field(config: Any, name: str, default: Any = None) -> Any:
+    """Read a field from either an ``AutoConfig`` object or a plain dict."""
+    if config is None:
+        return default
+    if isinstance(config, dict):
+        return config.get(name, default)
+    return getattr(config, name, default)
+
+
+def unsupported_architecture(config: Any) -> str | None:
+    """Why this checkpoint cannot be measured by this adapter, or ``None``.
+
+    The adapter assumes one rotary geometry for the whole network: one
+    ``head_dim``, one flat ``rope_parameters`` block, one frequency ladder, and
+    one freshly projected key per layer. ``validate_config`` reads a single
+    theta and a single partial-rotation factor; ``collect_head_vectors`` hooks
+    one ``q_proj``/``k_proj`` pair per attention module. A config that violates
+    the assumption does not fail loudly on its own -- it produces finite,
+    plausible numbers about a tensor the model never rotates.
+
+    Gemma 4 is the case that motivated the check. Its text tower nests
+    ``rope_parameters`` under per-layer-type keys (``full_attention``,
+    ``sliding_attention``) with different thetas and partial factors, uses
+    ``head_dim`` 256 for sliding layers and ``global_head_dim`` 512 for full
+    attention, and can tie the key and value projections or share KV state
+    across layers. A flat reader would take ``rope_theta = 10000`` and
+    ``partial_rotary_factor = 1.0`` at ``head_dim = 256`` and describe neither
+    layer type.
+    """
+    text = _config_field(config, "text_config", None)
+    tower = text if text is not None else config
+    model_type = str(_config_field(config, "model_type", "") or "")
+    tower_type = str(_config_field(tower, "model_type", "") or "")
+    rope = _config_field(tower, "rope_parameters", None)
+
+    facts: list[str] = []
+    if text is not None:
+        facts.append(
+            f"the config nests a text tower ({tower_type or 'unknown type'}) "
+            "under text_config instead of exposing the language model at the "
+            "top level"
+        )
+    if isinstance(rope, dict) and any(
+        isinstance(value, dict) for value in rope.values()
+    ):
+        families = ", ".join(sorted(str(name) for name in rope))
+        facts.append(
+            "rope_parameters is keyed per layer type "
+            f"({families}) rather than one flat ladder"
+        )
+    head_dim = _config_field(tower, "head_dim", None)
+    global_head_dim = _config_field(tower, "global_head_dim", None)
+    if (
+        head_dim is not None
+        and global_head_dim is not None
+        and int(global_head_dim) != int(head_dim)
+    ):
+        facts.append(
+            f"head_dim is {int(head_dim)} for sliding layers but "
+            f"global_head_dim is {int(global_head_dim)} for full attention"
+        )
+    if bool(_config_field(tower, "attention_k_eq_v", False)):
+        facts.append("the key and value projections are tied (attention_k_eq_v)")
+    shared = int(_config_field(tower, "num_kv_shared_layers", 0) or 0)
+    if shared:
+        facts.append(f"{shared} layer(s) share key/value state with another layer")
+
+    if not facts:
+        return None
+    return (
+        f"{model_type or tower_type or 'this checkpoint'} cannot be measured "
+        "by this adapter: "
+        + "; ".join(facts)
+        + ". The measurement assumes one head dimension, one flat rotary "
+        "ladder and one freshly projected key per layer, so running it here "
+        "would describe tensors the model does not use."
+    )
+
+
 def validate_config(model: Any) -> dict:
     """Does the checkpoint's declared configuration reproduce our ``inv_freq``?
 
@@ -709,6 +797,9 @@ def validate_config(model: Any) -> dict:
     statement is that the two agree to that dtype's precision, and the residual
     is reported either way.
     """
+    reason = unsupported_architecture(getattr(model, "config", None))
+    if reason:
+        raise NotImplementedError(reason)
     cfg = model.config
     rp = dict(getattr(cfg, "rope_parameters", None) or {})
     theta = float(rp.get("rope_theta", 10000.0))

@@ -585,6 +585,10 @@ CLAIMS += (
     ),
     # ---- Section~\ref{sec:worth}: what a position-free scalar costs ---------
     Claim(
+        "worth_distance_grid",
+        r"on a \$(\d+)\$-point log-spaced grid from \$(\d+)\$ to \$(\d+)\$",
+    ),
+    Claim(
         "worth_pooled_flip",
         r"wrong sign on \$(27\.\d)\\%\$ of per-pair, per-distance\s+cells",
     ),
@@ -595,11 +599,11 @@ CLAIMS += (
     ),
     Claim(
         "worth_head_count",
-        r"all \$(2790)\$ heads the per-head rate never leaves the\s+band \$(20\.\d)\\%\$ to \$(36\.\d)\\%\$",
+        r"all \$(558)\$ layer-heads the per-head rate never\s+leaves the band \$(21\.\d)\\%\$ to \$(33\.\d)\\%\$",
     ),
     Claim(
         "worth_head_range",
-        r"the per-head rate never leaves the\s+band \$(20\.\d)\\%\$ to \$(36\.\d)\\%\$",
+        r"the per-head rate never\s+leaves the band \$(21\.\d)\\%\$ to \$(33\.\d)\\%\$",
     ),
     Claim("worth_rel_err", r"median \$(1\.\d+)\$ against a peak of \$1\$"),
     Claim("worth_materiality", r"at least \$(\d+)\\%\$ of its own peak"),
@@ -633,6 +637,15 @@ CLAIMS += (
         r"each for the other",
     ),
     Claim(
+        "boot_weighting_gap",
+        r"Computed before rounding, the two differ by \$(\d\.\d+)\$ points",
+    ),
+    Claim(
+        "boot_interval_unit",
+        r"over the \$(\d+)\$\s+layer-heads --- over \\emph\{heads\}, not over the "
+        r"\$(\d+)\$\s+head-prompt\s+instances",
+    ),
+    Claim(
         "boot_pooled_interval",
         r"\$(95)\\%\$ percentile interval of \$\[(0\.\d+), (0\.\d+)\]\$ "
         r"around \$(0\.\d+)\$",
@@ -644,8 +657,9 @@ CLAIMS += (
     Claim(
         "boot_pairwise_intervals",
         r"pythia vs llama \$([+-]?\d\.\d+)\$ points \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$, "
-        r"pythia vs SmolLM \$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$, "
-        r"llama vs SmolLM \$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$",
+        r"pythia vs SmolLM\s+\$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$\. "
+        r"The llama--SmolLM gap is \$([+-]?\d\.\d+)\$\s+"
+        r"\$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]",
     ),
     # The seed-variance sentence, added after the pair-draw sweep: the pooled
     # rate and its sample sd across three pre-registered content-pair seeds.
@@ -692,10 +706,10 @@ CLAIMS += (
     # context table's caption restates. The measured appendix numbers carry
     # their own claims above.
     Claim(
-        "app_linearization_bounds",
-        r"bounds the error by \$(1)\$ in units of the pair's own contribution, "
-        r"which is a well-conditioned quantity: it is \$(0)\$ when the pair is "
-        r"exactly linear and \$(1)\$ when",
+        "app_linearization_scale",
+        r"makes the error dimensionless and comparable across pairs: it is \$(\d+)\$ "
+        r"when the pair is exactly linear and \$(\d+)\$ when the error is as large as the "
+        r"term",
     ),
     Claim(
         "app_linearization_replace",
@@ -2283,7 +2297,28 @@ def test_partial_rope_split_fractions_and_dimensions() -> None:
     assert partial["n_rot"] == int(partial["rotated_fraction"] * partial["dim"])
     assert partial["rotated_fraction"] + partial["clean_fraction"] == 1.0
     assert partial["clean_fraction"] == 0.75
+    # p = 0.25 rotates a quarter, so three quarters carry no position. The
+    # paper said "a quarter" here, which inverts the one quantity the section
+    # is about. The artifact's clean_fraction is the detector.
+    assert "three quarters of the channels carry no" in TEX_FLAT
+    assert "a quarter of the channels carry no position" not in TEX_FLAT
     assert {int(row["n_rot"]) for row in csv_rows("fig07_partial_rope")} == {partial["n_rot"]}
+
+
+def test_the_per_pair_normalization_is_a_scale_not_a_bound() -> None:
+    """The old sentence claimed a bound the measurements violate.
+
+    The fastest pair's normalized linearization error is already past 1 at
+    delta = 3 (Section~\\ref{sec:context}) and reaches 1.8e7 at delta = 8192
+    in fig06. A phrase that calls this a bound by 1 is false, and a reviewer
+    can check it in one row of the CSV.
+
+    Mutation verdict: restoring "bounds the error by $1$" fails both asserts.
+    """
+    assert "It is a scale, not a bound" in TEX_FLAT
+    assert "bounds the error by" not in TEX_FLAT
+    rows = csv_rows("fig06_pair_exact_vs_linear")
+    assert max(float(row["normalized_abs_error"]) for row in rows) > 1.0
 
 
 def test_the_unrotated_subscore_spread_is_exactly_zero_on_both_grids() -> None:
@@ -3035,7 +3070,8 @@ def test_the_scope_and_softmax_qualifiers_are_explicit() -> None:
     assert "The conclusions are model-independent" not in TEX_FLAT
     assert "No downstream task, and no learned features" in TEX_FLAT
     assert "No downstream model, and no learned features" not in TEX_FLAT
-    assert "computed before rounding, the two differ by more than twice" in TEX_FLAT
+    assert "Computed before rounding, the two differ by $0.14$ points" in TEX_FLAT
+    assert "more than twice" not in TEX_FLAT
     # The pairwise bootstrap has three gaps; only the pythia-vs-others two
     # are large next to the between-head spread. The llama--SmolLM gap is a
     # tenth of a point and must not be folded into "about two percentage

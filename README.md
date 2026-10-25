@@ -59,7 +59,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1508 tests (excludes tests/test_readme_claims.py)
+pytest -q                                        # 1542 tests (excludes tests/test_readme_claims.py)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -79,6 +79,7 @@ a test dependency:
 pip install -r real_model_requirements.txt
 python -m projects.rope_attribution.real_model    # results/real_model.json
 python -m projects.rope_attribution.usefulness    # results/usefulness.json
+python -m projects.rope_attribution.uncertainty   # results/uncertainty.json
 python -m projects.rope_attribution.seed_variance # + results/usefulness_seeds.json
 python -m projects.rope_attribution.agreement     # results/agreement.json
 ```
@@ -102,8 +103,14 @@ not include its scratch outputs.
 `real_model.py --model google/gemma-2b --no-gpt2-check` is the intended
 open-Gemma path; gated checkpoints need a Hugging Face token. Gemma 2/3 apply QK
 normalization after the query/key projections, so `collect_head_vectors` refuses
-them rather than measuring the wrong tensor. No Gemma checkpoint is part of the
-committed evidence.
+them rather than measuring the wrong tensor. Gemma 4 is refused earlier, on the
+config alone and before any weights are fetched: its text tower nests
+`rope_parameters` under `full_attention`/`sliding_attention`, rotates 128 of 512
+channels in full-attention layers but all 256 in sliding ones, and in the 31B
+variant ties the key and value projections. The adapter reads one theta, one
+partial factor and one head dimension, so a Gemma 4 number from it would
+describe neither layer type. No Gemma checkpoint is part of the committed
+evidence.
 
 ## Training your own models
 
@@ -114,7 +121,12 @@ diagnostics, at each evaluation:
 
 ```bash
 pip install -r train_requirements.txt
-python -m projects.rope_attribution.train --config train_124m --run-name my_124m
+# tokenize once, checksum, and mmap the result in every rank
+python -m projects.rope_attribution.data prepare \
+    --source wikitext-103 --out data/wikitext103
+python -m projects.rope_attribution.data check --out data/wikitext103
+python -m projects.rope_attribution.train --config train_124m \
+    --run-name my_124m --data-dir data/wikitext103
 ```
 
 Named configurations: `train_102m` (102,312,960 parameters), `train_124m`
@@ -141,18 +153,30 @@ The TPU v5e-8 presets (`tpu_v5e8_102m`, `tpu_v5e8_152m`, `tpu_v5e8_253m`,
 has **not** been run on a TPU in this repository.
 
 Each run writes `runs/<name>/metrics.jsonl` -- a leading `run_start` record
-pinning the config, parameter count, device, seed and token budget, then one
-record per evaluation: schedule and gradient norm, current and EMA train loss,
-validation loss and perplexity, throughput, tokens seen, and the attribution
-diagnostics on one fixed probe batch (`closed_form_resid_max`,
-`rope_probe_resid_max`, the position-free `sign_flip_rate` with its
-`n_probe_cells` support count, and `rel_err_median_probe`) -- plus
-`runs/<name>/summary.json` (with the best validation step) and, unless
-`--no-checkpoint` is passed, a CPU-side `runs/<name>/checkpoint.pt` for
-evaluation or fine-tuning. Two runs of the same command with the same seed
-produce identical records except the
-throughput field; `tests/test_train.py` pins that, and the torch-free tests
-pin the parameter arithmetic, the next-token window construction and the
+pinning the config, parameter count, device, seed, world size and token budget,
+then one record per evaluation: schedule and gradient norm, current and EMA
+train loss, validation loss and perplexity over several held-out batches (not
+one), throughput, global tokens seen, and the attribution diagnostics on one
+fixed probe batch (`closed_form_resid_max`, `rope_probe_resid_max`, the
+position-free `sign_flip_rate` with its `n_probe_cells` support count, and
+`rel_err_median_probe`) -- plus `runs/<name>/summary.json` (with the best
+validation step), `runs/<name>/manifest.json` (code commit, torch/numpy
+versions, platform, token counts), and, unless `--no-checkpoint` is passed, a
+CPU-side `runs/<name>/checkpoint.pt` for evaluation or fine-tuning.
+
+`checkpoint_resume.pt` is written every `checkpoint_every` steps and at the
+end. Unlike the weights-only checkpoint it carries the AdamW moments and the
+data-order generator, so `--resume` continues the same run rather than a
+lookalike; the config and token stream are checked against the ones that wrote
+it. On TPU, only rank 0 saves, and resuming a multi-rank run is not wired up:
+that would need rank 0's state broadcast to the other chips, which is not
+implemented. `train.py` also refuses to silently emit bare `NaN` in JSONL
+(non-finite metrics become `null`) and treats a fresh run directory as fresh by
+deleting stale checkpoints from a previous run of the same name.
+
+Two runs of the same command with the same seed produce identical records
+except the throughput field; `tests/test_train.py` pins that, and the torch-free
+tests pin the parameter arithmetic, the next-token window construction and the
 CPU-refusal matrix even where torch is absent.
 
 ## Citation
@@ -187,7 +211,8 @@ projects/rope_attribution/
   sensitivity.py  the cost statistic across rotary bases and head dimensions
                   (synthetic - is it balanced on one configuration?)
   train.py        trains 100M-300M models, logging every metric including the
-                  attribution diagnostics
+                  attribution diagnostics; periodic resumable checkpoints
+  data.py         tokenizes once into checksummed shards and a mmapped stream
   report_run.py   reads runs/<name>/metrics.jsonl into a table or self-contained
                   HTML report
   tpu_configs.py  TPU v5e-8 presets and launch-override validation
@@ -195,12 +220,15 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1508 tests (excludes tests/test_readme_claims.py)
+tests/            1542 tests (excludes tests/test_readme_claims.py)
 figures/          eleven figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
                     real_model.json          (three trained checkpoints)
-                    usefulness.json          (cost of the position-free scalar)
+                    usefulness.json          (cost of the position-free scalar,
+                                              clustered at 558 layer-heads)
+                    uncertainty.json         (head-clustered interval and the
+                                              pairwise checkpoint comparison)
                     usefulness_seeds.json    (the same cost under three
                                               content-pair seeds: mean and sd)
                     usefulness_grid_independence.json (the grid sweep behind
@@ -425,7 +453,11 @@ distance range, not a strawman — and finds that the optimum reports the wrong
 sign on `27.0%` of per-pair, per-distance cells, with a median relative error of
 `1.13` against a peak of `1`. That is the cost of insisting a RoPE feature's
 contribution is a number, and it is the paper's answer to "is this object useful
-or merely correct".
+or merely correct". The artifact records **558 layer-heads**, not the 2790
+head-prompt instances those heads contribute; `results/uncertainty.json` gives
+the head-clustered 95% interval `[0.2676, 0.2704]`, and separates pythia from
+the other two checkpoints while llama and SmolLM are not distinguishable
+(`-0.12` points, `[-0.26, +0.01]`).
 
 ```bash
 python -m projects.rope_attribution.usefulness   # ~4 min, CPU only

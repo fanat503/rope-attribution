@@ -19,3 +19,7 @@
 # and 3.11.
 pytest>=7.0
 ruff
+# The figure generators and tests/test_figures.py import matplotlib. Without it
+# here those tests skip in CI, so a broken figure would ship with a green suite.
+# Floor matches the `plots` extra in pyproject.toml.
+matplotlib>=3.7

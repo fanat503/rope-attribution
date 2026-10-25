@@ -123,6 +123,22 @@ def test_the_launcher_dry_run_needs_no_tpu(capsys) -> None:
     assert data["global_batch_size"] == 64
     assert data["rank_data_seeds"] == [20261010 + rank for rank in range(8)]
     assert data["run_dirs"][0].replace("\\", "/") == "runs/tpu_v5e8_102m/rank-0"
+    assert data["data_dir"] is None
+
+
+def test_the_launcher_dry_run_carries_a_prepared_data_dir(capsys) -> None:
+    """The launcher must show the stream every rank will mmap, not hide it."""
+    L.main(
+        [
+            "--preset",
+            "tpu_v5e8_102m",
+            "--dry-run",
+            "--data-dir",
+            "data/wikitext103",
+        ]
+    )
+    data = json.loads(capsys.readouterr().out)
+    assert data["data_dir"].replace("\\", "/") == "data/wikitext103"
 
 
 def test_the_launcher_refuses_a_process_count_that_is_not_eight() -> None:

@@ -53,11 +53,15 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
 import importlib.util
 import itertools
 import json
 import math
 import os
+import platform
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -128,6 +132,8 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 12,
         "batch_size": 4,
         "eval_every": 4,
+        "checkpoint_every": 4,
+        "val_batches": 2,
         "warmup_steps": 4,
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
@@ -146,6 +152,8 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 80_000,
         "batch_size": 32,
         "eval_every": 500,
+        "checkpoint_every": 2_000,
+        "val_batches": 8,
         "warmup_steps": 2_000,
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
@@ -164,6 +172,8 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 100_000,
         "batch_size": 32,
         "eval_every": 500,
+        "checkpoint_every": 2_000,
+        "val_batches": 8,
         "warmup_steps": 2_000,
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
@@ -182,6 +192,8 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 110_000,
         "batch_size": 32,
         "eval_every": 500,
+        "checkpoint_every": 2_000,
+        "val_batches": 8,
         "warmup_steps": 2_000,
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
@@ -200,6 +212,8 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 120_000,
         "batch_size": 32,
         "eval_every": 500,
+        "checkpoint_every": 2_000,
+        "val_batches": 8,
         "warmup_steps": 2_000,
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
@@ -218,6 +232,8 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 130_000,
         "batch_size": 32,
         "eval_every": 500,
+        "checkpoint_every": 2_000,
+        "val_batches": 8,
         "warmup_steps": 2_000,
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
@@ -236,6 +252,8 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 140_000,
         "batch_size": 32,
         "eval_every": 500,
+        "checkpoint_every": 2_000,
+        "val_batches": 8,
         "warmup_steps": 2_000,
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
@@ -311,11 +329,24 @@ class MetricsWriter:
     except the wall-clock throughput field.
     """
 
-    def __init__(self, run_dir: Path) -> None:
+    def __init__(self, run_dir: Path, *, append: bool = False) -> None:
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.path = self.run_dir / "metrics.jsonl"
         self.summary_path = self.run_dir / "summary.json"
+        if append:
+            # A resumed run continues the same metric series. The previous
+            # summary described a run that had not finished, so it must not
+            # outlive the record it belongs to; it is rewritten at finalize.
+            if self.summary_path.exists():
+                self.summary_path.unlink()
+            lines = (
+                self.path.read_text(encoding="utf-8").splitlines()
+                if self.path.exists()
+                else []
+            )
+            self._lines: list[str] = [line for line in lines if line.strip()]
+            return
         # A run directory is a fresh run: files from a previous run of the
         # same name must not survive next to this run's records -- a stale
         # metrics.jsonl would be appended to, and a stale summary.json from
@@ -327,20 +358,56 @@ class MetricsWriter:
 
     def log(self, record: dict) -> None:
         # Append rather than rewrite: a crash mid-run then costs the tail
-        # line, not the history.
-        line = json.dumps(record)
+        # line, not the history. Non-finite floats become null here, so the
+        # file is strict JSON even when the run diverged.
+        line = json.dumps(_json_safe(record), allow_nan=False)
         self._lines.append(line)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
 
     def finalize(self, summary: dict) -> None:
         self.summary_path.write_text(
-            json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+            json.dumps(_json_safe(summary), indent=2, allow_nan=False) + "\n",
+            encoding="utf-8",
         )
 
     @property
     def records(self) -> list:
         return [json.loads(line) for line in self._lines]
+
+
+def _atomic_torch_save(payload: dict, path: Path) -> None:
+    """Write a torch payload to a sibling temporary file, then replace.
+
+    A crash during a multi-gigabyte write cannot leave the destination
+    truncated. ``os.replace`` is atomic on the same filesystem.
+    """
+    import torch
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    try:
+        torch.save(payload, temporary)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _cpu_tree(value):
+    """Move every tensor in a nested optimizer/RNG structure to CPU."""
+    import torch
+
+    if torch.is_tensor(value):
+        return value.detach().cpu()
+    if isinstance(value, dict):
+        return {key: _cpu_tree(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_cpu_tree(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_cpu_tree(item) for item in value)
+    return value
 
 
 def _save_checkpoint(
@@ -357,20 +424,10 @@ def _save_checkpoint(
     describes: it contains the CPU-side ``state_dict`` plus the config needed
     to rebuild the module. Optimizer and RNG state are deliberately omitted.
     A file that looks resumable but silently restarts AdamW from zero is worse
-    than a file that says what it is.
-
-    Writing to a sibling temporary path and replacing atomically means a crash
-    during a multi-gigabyte write cannot leave ``checkpoint.pt`` truncated.
+    than a file that says what it is; the resumable file is
+    ``checkpoint_resume.pt``, written by :func:`_save_training_state`.
     """
-    import torch
-
-    # XLA tensors cannot be serialised by the CPU checkpoint path directly;
-    # moving every tensor to CPU first is also what makes the same file usable
-    # after a CUDA run.
-    state = {
-        key: value.detach().cpu() if torch.is_tensor(value) else value
-        for key, value in model.state_dict().items()
-    }
+    state = _cpu_tree(model.state_dict())
     payload = {
         "format": "rope_attribution/train-checkpoint/v1",
         "config": dict(config),
@@ -379,15 +436,155 @@ def _save_checkpoint(
         "model": state,
     }
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    try:
-        torch.save(payload, temporary)
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
+    _atomic_torch_save(payload, path)
     return path.name
+
+
+def _save_training_state(
+    model,
+    opt,
+    rng: np.random.Generator,
+    path: Path,
+    *,
+    config: dict,
+    step: int,
+    n_params: int,
+    world_size: int,
+    loss_ema: float | None,
+    best_val_loss: float | None,
+    best_step: int | None,
+    final_val_loss: float | None,
+    tokens_seen: int,
+    elapsed_s: float,
+    data_seed: int | None,
+    tokens_total: int,
+) -> str:
+    """The state a run needs to continue, as against a state to evaluate.
+
+    AdamW's moments and the data-order generator are part of the experiment:
+    resuming without them is a different run wearing the same name. The
+    numpy generator state is stored as the dict its own API returns, so
+    restoring it is exact rather than a reseed.
+    """
+    import torch
+
+    payload = {
+        "format": "rope_attribution/train-state/v1",
+        "config": dict(config),
+        "step": int(step),
+        "n_params": int(n_params),
+        "world_size": int(world_size),
+        "data_seed": None if data_seed is None else int(data_seed),
+        "tokens_total": int(tokens_total),
+        "tokens_seen": int(tokens_seen),
+        "elapsed_s": float(elapsed_s),
+        "loss_ema": loss_ema,
+        "best_val_loss": best_val_loss,
+        "best_step": best_step,
+        "final_val_loss": final_val_loss,
+        "model": _cpu_tree(model.state_dict()),
+        "optimizer": _cpu_tree(opt.state_dict()),
+        "numpy_rng": rng.bit_generator.state,
+        "torch_rng": torch.get_rng_state().cpu(),
+    }
+    path = Path(path)
+    _atomic_torch_save(payload, path)
+    return path.name
+
+
+def _load_training_state(path: Path) -> dict:
+    """Load and validate a ``checkpoint_resume.pt``, refusing other formats."""
+    import torch
+
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"resume requested but {path} does not exist; a fresh run must be "
+            "started without --resume"
+        )
+    payload = torch.load(path, map_location="cpu")
+    if payload.get("format") != "rope_attribution/train-state/v1":
+        raise ValueError(
+            f"{path} is {payload.get('format')!r}, not a resumable training "
+            "state; checkpoint.pt holds weights only and cannot resume a run"
+        )
+    return payload
+
+
+def _git_commit() -> str | None:
+    """The checked-out commit, or ``None`` when git is unavailable.
+
+    A run's numbers depend on the code that produced them. Recording the
+    commit in the manifest is cheap; reconstructing it after the fact is
+    usually impossible.
+    """
+    root = Path(__file__).resolve().parents[2]
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    commit = result.stdout.strip()
+    return commit if result.returncode == 0 and commit else None
+
+
+def _write_manifest(
+    run_dir: Path,
+    *,
+    config_name: str,
+    config: dict,
+    n_params: int,
+    device: str,
+    dtype: str,
+    world_size: int,
+    tokens_total: int,
+    data_seed: int | None,
+    resumed_from_step: int | None = None,
+) -> str:
+    """The provenance a reviewer needs to reproduce or disbelieve a run.
+
+    Separate from ``metrics.jsonl`` on purpose: a wall-clock timestamp there
+    would break the byte-identical promise between two seeded runs, while in
+    the manifest it is the point.
+    """
+    import torch
+
+    payload = {
+        "format": "rope_attribution/train-manifest/v1",
+        "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(
+            timespec="seconds"
+        ),
+        "config_name": config_name,
+        "config": _json_safe(config),
+        "n_params": int(n_params),
+        "device": device,
+        "dtype": dtype,
+        "world_size": int(world_size),
+        "tokens_total": int(tokens_total),
+        "data_seed": None if data_seed is None else int(data_seed),
+        "resumed_from_step": resumed_from_step,
+        "python": sys.version.split()[0],
+        "torch": torch.__version__,
+        "numpy": np.__version__,
+        "platform": platform.platform(),
+        "git_commit": _git_commit(),
+    }
+    name = (
+        "manifest.json"
+        if resumed_from_step is None
+        else f"manifest_resume_{int(resumed_from_step)}.json"
+    )
+    path = Path(run_dir) / name
+    path.write_text(
+        json.dumps(payload, indent=2, allow_nan=False) + "\n", encoding="utf-8"
+    )
+    return name
 
 
 def _set_determinism(seed: int) -> None:
@@ -485,8 +682,43 @@ def _reduce_update(model, opt, xm, grad_clip: float):
 
 
 def _to_numpy_f64(tensor):
-    """Transfer to CPU first, then widen: never double the device transfer."""
-    return tensor.detach().cpu().numpy().astype(np.float64)
+    """Transfer to CPU first, then widen: never double the device transfer.
+
+    bfloat16 has no numpy dtype, so a bf16 tensor is widened to float32 on the
+    CPU before ``.numpy()``. Without that cast the probe raises ``TypeError``
+    on the one device the bf16 presets target, which is exactly where it
+    cannot be caught by a CPU test run.
+    """
+    import torch
+
+    cpu = tensor.detach().cpu()
+    if cpu.dtype == torch.bfloat16:
+        cpu = cpu.float()
+    return cpu.numpy().astype(np.float64)
+
+
+def _json_safe(value):
+    """A JSON value with every non-finite float replaced by ``None``.
+
+    ``json.dumps`` writes bare ``NaN``/``Infinity`` by default. Those are not
+    JSON, so a metrics file containing one is unreadable by any strict parser
+    -- and a validation loss that went non-finite is precisely the run whose
+    records a reader needs. ``None`` says "not a number" in a way every parser
+    accepts; ``allow_nan=False`` then turns any missed case into an exception
+    at write time rather than a corrupt file at read time.
+    """
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, (float, np.floating)):
+        number = float(value)
+        return number if math.isfinite(number) else None
+    return value
 
 
 def _cos_sin_torch(positions: np.ndarray, head_dim: int, base: float, device):
@@ -766,9 +998,11 @@ def _split_windows(tokens: np.ndarray, ctx: int) -> tuple:
     the fixed validation set of the run).
 
     Pure numpy and torch-free so the suite checks the construction without
-    a model.
+    a model. The dtype is preserved: a ``uint16`` memmap of token ids must not
+    be widened to ``int64`` here, because that would materialize the whole
+    corpus -- the training loop casts one batch at a time instead.
     """
-    stream = np.asarray(tokens, dtype=np.int64).reshape(-1)
+    stream = np.asarray(tokens).reshape(-1)
     split = len(stream) - max(1, len(stream) // 10)
 
     def windows(segment: np.ndarray) -> tuple:
@@ -786,6 +1020,18 @@ def _split_windows(tokens: np.ndarray, ctx: int) -> tuple:
     return train_in, train_tg, held_in, held_tg
 
 
+def _id_batch(rows: np.ndarray):
+    """One batch of token ids as a contiguous ``int64`` tensor.
+
+    The windows may be a view into a ``uint16`` memmap; casting the whole
+    stream would defeat the memory map, so the cast happens per batch and
+    nowhere else.
+    """
+    import torch
+
+    return torch.from_numpy(np.ascontiguousarray(rows, dtype=np.int64))
+
+
 def train(
     config_name: str,
     run_dir: Path,
@@ -797,6 +1043,8 @@ def train(
     threads: int | None = None,
     data_seed: int | None = None,
     save_checkpoint: bool = True,
+    world_size: int = 1,
+    resume: bool = False,
 ) -> dict:
     """One training run. Returns the summary record it also writes.
 
@@ -806,12 +1054,26 @@ def train(
     keeps the whole data path out of the network. ``force_cpu`` is the
     deliberate override of the named-config CPU refusal; ``threads``
     overrides the default thread count (4 on CPU, 8 otherwise).
+
+    ``world_size`` is the number of data-parallel ranks. It enters the token
+    accounting, not the model: each rank consumes its own batch, so the run
+    has seen ``batch_size * ctx * world_size`` tokens per step. Logging the
+    per-rank count would under-report an eight-chip run by 8x.
+
+    ``resume`` continues from ``run_dir/checkpoint_resume.pt``, restoring the
+    model, the AdamW moments and the data-order generator. Resuming without
+    those is a different run, so the file carries all three and the config is
+    checked against the one that wrote it.
     """
     if not TORCH_AVAILABLE:
         raise RuntimeError("torch is not installed; see train_requirements.txt")
     import torch
     import torch.nn.functional as F
 
+    if int(world_size) < 1:
+        raise ValueError(f"world_size must be at least 1, not {world_size!r}")
+    world_size = int(world_size)
+    run_dir = Path(run_dir)
     config = dict(CONFIGS[config_name])
     config.update(override or {})
     if max_steps is not None:
@@ -852,16 +1114,108 @@ def train(
             f"{ctx}; not enough for a batch of {config['batch_size']} plus "
             "a validation block"
         )
-    # The writer is created only after every refusal check: a refused run
-    # must not have wiped the previous run's records.
-    writer = MetricsWriter(run_dir)
-    step = 0
-    loss_ema: float | None = None
-    best_val_loss: float | None = None
-    best_step: int | None = None
-    final_val_loss: float | None = None
-    start = time.perf_counter()
-    tokens_seen = 0
+    tokens_total = int(np.asarray(tokens).size)
+    resume_name = "checkpoint_resume.pt"
+    resumed_from: int | None = None
+    if resume:
+        state = _load_training_state(run_dir / resume_name)
+        saved = dict(state["config"])
+        differing = sorted(
+            key
+            for key in (set(saved) | set(config)) - {"n_steps"}
+            if saved.get(key) != config.get(key)
+        )
+        if differing:
+            raise ValueError(
+                "cannot resume: the saved config differs from this call in "
+                f"{differing}; a resumed run must use the configuration that "
+                "wrote the checkpoint"
+            )
+        if int(state["n_params"]) != params:
+            raise ValueError(
+                f"cannot resume: saved n_params {state['n_params']} != {params}"
+            )
+        if int(state["tokens_total"]) != tokens_total:
+            raise ValueError(
+                f"cannot resume: the saved run used {state['tokens_total']} tokens, "
+                f"this call passes {tokens_total}; the data stream must be the "
+                "same one the checkpoint was trained on"
+            )
+        if int(state["world_size"]) != world_size:
+            raise ValueError(
+                f"cannot resume: the saved run used world_size "
+                f"{state['world_size']}, this call passes {world_size}"
+            )
+        saved_data_seed = state.get("data_seed")
+        if data_seed is None:
+            data_seed = saved_data_seed
+        elif saved_data_seed is None or int(data_seed) != int(saved_data_seed):
+            raise ValueError(
+                f"cannot resume with data_seed {data_seed}; the saved run used "
+                f"{saved_data_seed}"
+            )
+        if int(config["n_steps"]) < int(state["step"]):
+            raise ValueError(
+                f"cannot resume: the checkpoint is at step {state['step']}, "
+                f"beyond this call's n_steps={config['n_steps']}"
+            )
+        model.load_state_dict(state["model"])
+        opt.load_state_dict(state["optimizer"])
+        rng.bit_generator.state = state["numpy_rng"]
+        torch.set_rng_state(state["torch_rng"])
+        step = int(state["step"])
+        resumed_from = step
+        loss_ema = state["loss_ema"]
+        best_val_loss = state["best_val_loss"]
+        best_step = state["best_step"]
+        final_val_loss = state["final_val_loss"]
+        tokens_seen = int(state["tokens_seen"])
+        # Throughput is a property of the whole run, not of the segment since
+        # the last restart, so the clock starts where the saved run left it.
+        start = time.perf_counter() - float(state["elapsed_s"])
+        # The writer is created only after every refusal check: a refused run
+        # must not have wiped the previous run's records. A resumed run
+        # continues the series instead of starting a second one.
+        writer = MetricsWriter(run_dir, append=True)
+        manifest = _write_manifest(
+            run_dir,
+            config_name=config_name,
+            config=config,
+            n_params=params,
+            device=device,
+            dtype=dtype,
+            world_size=world_size,
+            tokens_total=tokens_total,
+            data_seed=data_seed,
+            resumed_from_step=resumed_from,
+        )
+    else:
+        writer = MetricsWriter(run_dir)
+        # A fresh run must not inherit a checkpoint from an earlier run of
+        # the same name: a stale file would be mistaken for this run's
+        # weights, and with --no-checkpoint it would be the only file left.
+        for stale in sorted(run_dir.glob("checkpoint*.pt")):
+            stale.unlink()
+        for stale in sorted(run_dir.glob("manifest*.json")):
+            stale.unlink()
+        step = 0
+        loss_ema = None
+        best_val_loss = None
+        best_step = None
+        final_val_loss = None
+        tokens_seen = 0
+        start = time.perf_counter()
+        manifest = _write_manifest(
+            run_dir,
+            config_name=config_name,
+            config=config,
+            n_params=params,
+            device=device,
+            dtype=dtype,
+            world_size=world_size,
+            tokens_total=tokens_total,
+            data_seed=data_seed,
+        )
     writer.log(
         {
             "event": "run_start",
@@ -871,17 +1225,26 @@ def train(
             "n_params": params,
             "device": device,
             "dtype": dtype,
-            "tokens_total": int(len(tokens)),
+            "tokens_total": tokens_total,
+            "world_size": world_size,
+            "token_accounting": "global: batch tokens summed over all ranks",
+            "resumed_from_step": resumed_from,
+            "manifest": manifest,
             "seed": config["seed"],
             "data_seed": None if data_seed is None else int(data_seed),
         }
     )
     deltas = np.array(DISTANCE_GRID, dtype=np.int64)
     probe_seed = config["seed"]
+    checkpoint_every = config.get("checkpoint_every")
+    val_batches = int(config.get("val_batches", 1))
+    if val_batches < 1:
+        raise ValueError(f"val_batches must be at least 1, not {val_batches}")
+    resume_checkpoint_name = None
     while step < config["n_steps"]:
         picks = rng.integers(0, len(train_in), size=config["batch_size"])
-        ids = torch.from_numpy(train_in[picks]).to(device)
-        targets = torch.from_numpy(train_tg[picks]).to(device)
+        ids = _id_batch(train_in[picks]).to(device)
+        targets = _id_batch(train_tg[picks]).to(device)
         # Forward in bf16 when requested; the cross-entropy and the master
         # weights stay fp32. A bf16 label in the metrics therefore describes
         # the arithmetic that actually ran.
@@ -905,25 +1268,46 @@ def train(
         grad_norm = _reduce_update(model, opt, xm, config["grad_clip"])
         loss_value = float(loss.item())
         loss_ema = loss_value if loss_ema is None else 0.9 * loss_ema + 0.1 * loss_value
-        tokens_seen += int(ids.numel())
+        # Global tokens: every rank consumed its own batch this step.
+        tokens_seen += int(ids.numel()) * world_size
         step += 1
         if step % config["eval_every"] == 0 or step == config["n_steps"]:
-            val_ids = torch.from_numpy(held_in[: config["batch_size"]]).to(device)
-            val_targets = torch.from_numpy(held_tg[: config["batch_size"]]).to(device)
+            # Several consecutive validation batches, not one: a single batch
+            # of 32 sequences is a noisy estimate and the noise does not
+            # shrink with training. The average below is target-weighted, so
+            # a shorter final batch cannot tilt it.
+            n_val = min(len(held_in), config["batch_size"] * val_batches)
+            val_loss_sum = 0.0
+            val_target_count = 0
+            val_batch_count = 0
             with torch.no_grad(), _autocast_context(device, dtype):
-                val_logits = model(val_ids)
-            val_loss = F.cross_entropy(
-                val_logits.float().reshape(-1, val_logits.shape[-1]),
-                val_targets.reshape(-1),
-            ).item()
+                for offset in range(0, n_val, config["batch_size"]):
+                    batch = slice(offset, offset + config["batch_size"])
+                    val_ids = _id_batch(held_in[batch]).to(device)
+                    val_targets = _id_batch(held_tg[batch]).to(device)
+                    val_logits = model(val_ids)
+                    val_loss_sum += float(
+                        F.cross_entropy(
+                            val_logits.float().reshape(-1, val_logits.shape[-1]),
+                            val_targets.reshape(-1),
+                            reduction="sum",
+                        ).item()
+                    )
+                    val_target_count += int(val_targets.numel())
+                    val_batch_count += 1
+            val_loss = val_loss_sum / max(1, val_target_count)
             final_val_loss = float(val_loss)
             if best_val_loss is None or val_loss < best_val_loss:
                 best_val_loss = float(val_loss)
                 best_step = step
             probe = train_in[0][None, :]
-            diagnostics = _probe_diagnostics(
-                model, probe, deltas, n_pairs=12, seed=probe_seed
-            )
+            # The probe inherits the run's arithmetic. Measuring a bf16 run's
+            # rotation in fp32 would report a fidelity floor the trained model
+            # does not have; the probe is supposed to describe the run.
+            with _autocast_context(device, dtype):
+                diagnostics = _probe_diagnostics(
+                    model, probe, deltas, n_pairs=12, seed=probe_seed
+                )
             writer.log(
                 {
                     "event": "eval",
@@ -933,6 +1317,8 @@ def train(
                     "train_loss": loss_value,
                     "train_loss_ema": loss_ema,
                     "val_loss": val_loss,
+                    "val_batches": val_batch_count,
+                    "val_targets": val_target_count,
                     # Kept as a convenience field for a reader who thinks in
                     # perplexity; it is exp(val_loss), not a separate model.
                     "val_perplexity": (
@@ -942,8 +1328,36 @@ def train(
                     ),
                     "tokens_seen": tokens_seen,
                     "tok_per_s": tokens_seen / max(1e-9, time.perf_counter() - start),
+                    "probe_dtype": dtype,
                     **diagnostics,
                 }
+            )
+        if (
+            save_checkpoint
+            and checkpoint_every
+            and step % int(checkpoint_every) == 0
+            and step < config["n_steps"]
+        ):
+            # One rolling resume file, replaced atomically: a crash costs the
+            # steps since the last save, never the whole run, and the disk
+            # does not grow with the number of saves.
+            resume_checkpoint_name = _save_training_state(
+                model,
+                opt,
+                rng,
+                run_dir / resume_name,
+                config=config,
+                step=step,
+                n_params=params,
+                world_size=world_size,
+                loss_ema=loss_ema,
+                best_val_loss=best_val_loss,
+                best_step=best_step,
+                final_val_loss=final_val_loss,
+                tokens_seen=tokens_seen,
+                elapsed_s=time.perf_counter() - start,
+                data_seed=data_seed,
+                tokens_total=tokens_total,
             )
     checkpoint_name = None
     if save_checkpoint:
@@ -954,17 +1368,43 @@ def train(
             step=step,
             n_params=params,
         )
+        # The final state is resumable too: continuing a finished run with a
+        # larger n_steps is a legitimate way to extend a budget.
+        resume_checkpoint_name = _save_training_state(
+            model,
+            opt,
+            rng,
+            run_dir / resume_name,
+            config=config,
+            step=step,
+            n_params=params,
+            world_size=world_size,
+            loss_ema=loss_ema,
+            best_val_loss=best_val_loss,
+            best_step=best_step,
+            final_val_loss=final_val_loss,
+            tokens_seen=tokens_seen,
+            elapsed_s=time.perf_counter() - start,
+            data_seed=data_seed,
+            tokens_total=tokens_total,
+        )
     summary = {
         "event": "summary",
         "config_name": config_name,
         "n_params": params,
         "steps": step,
+        "resumed_from_step": resumed_from,
         "final_train_loss_ema": loss_ema,
         "final_val_loss": final_val_loss,
         "best_val_loss": best_val_loss,
         "best_step": best_step,
         "checkpoint": checkpoint_name,
+        "resume_checkpoint": resume_checkpoint_name,
+        "tokens_seen": tokens_seen,
+        "tokens_total": tokens_total,
+        "world_size": world_size,
         "device": device,
+        "manifest": manifest,
     }
     writer.log(summary)
     writer.finalize(summary)
@@ -980,9 +1420,20 @@ def main() -> None:
     parser.add_argument("--force-cpu", action="store_true")
     parser.add_argument("--threads", type=int, default=None)
     parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="tokenized stream from `python -m ...data prepare`; mmapped once per rank",
+    )
+    parser.add_argument(
         "--no-checkpoint",
         action="store_true",
         help="do not write run_dir/checkpoint.pt at the end of the run",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue run_dir/checkpoint_resume.pt instead of starting fresh",
     )
     args = parser.parse_args()
     if not TORCH_AVAILABLE:
@@ -998,7 +1449,11 @@ def main() -> None:
         if refusal:
             raise SystemExit(refusal)
     run_dir = Path("runs") / (args.run_name or args.config)
-    if args.config == "smoke":
+    if args.data_dir is not None:
+        from rope_attribution.data import load_tokens
+
+        tokens = load_tokens(args.data_dir)
+    elif args.config == "smoke":
         tokens = np.random.default_rng(7).integers(0, 512, size=4096)
     else:
         if not TRANSFORMERS_AVAILABLE:
@@ -1016,13 +1471,18 @@ def main() -> None:
         force_cpu=args.force_cpu,
         threads=args.threads,
         save_checkpoint=not args.no_checkpoint,
+        resume=args.resume,
     )
     print("wrote", run_dir, json.dumps(summary))
 
 
 def _load_wikitext_tokens() -> np.ndarray:
-    """The default corpus: wikitext-103 raw, GPT-2 tokenized, deterministic.
+    """The convenience corpus: wikitext-103 raw, GPT-2 tokenized, deterministic.
 
+    This path exists for a single-process CPU run. It tokenizes the whole
+    corpus in memory, so eight TPU ranks calling it would each pay that cost;
+    a real multi-chip run should prepare the stream once with
+    ``python -m projects.rope_attribution.data`` and pass ``--data-dir``.
     Requires train_requirements.txt; the smoke config needs no network at
     all. Streamed through ``np.fromiter`` so the ~10^8-token corpus is never
     materialized as a Python int list, which would cost gigabytes before

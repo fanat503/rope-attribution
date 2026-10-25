@@ -63,11 +63,16 @@ jobs:
         # promise is checked here rather than asserted in prose, because the
         # machine this was written on has no make and the claim would otherwise be
         # unfalsifiable. `results` is the cheapest target that proves the Makefile
-        # works and that the committed JSON is still what the code produces; the
-        # diff is allowed to be empty and is reported either way, since a non-empty
-        # diff on a seeded run would mean the seeds moved, which the tests catch
-        # more precisely.
+        # works and that the committed JSON is still what the code produces.
+        # A non-empty diff is a failure: on a seeded, CPU-only, float64 run the
+        # three artifacts are byte-identical, and a drift means either the code
+        # changed without its artifact or a dependency changed a reduction order.
+        # Either way it must be looked at, not printed and ignored.
         run: |
           make help
           make results
-          git diff --stat -- results/ | tail -n 5
+          if ! git diff --quiet -- results/; then
+            echo "::error::make results changed a committed artifact"
+            git diff --stat -- results/
+            exit 1
+          fi

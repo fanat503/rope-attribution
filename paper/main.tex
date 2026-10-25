@@ -504,40 +504,43 @@ the number below is the cost of the \emph{best} position-free attribution, not
 the cost of a careless one.
 
 Across the three trained checkpoints of Section~\ref{sec:trained}, over every
-rotary layer and head, that optimum reports the wrong sign on $27.0\%$ of
-per-pair, per-distance cells. Per model the rate is $28.4\%$ on
+rotary layer and head and on a $13$-point log-spaced grid from $1$ to $4096$,
+that optimum reports the wrong sign on $27.0\%$ of per-pair, per-distance cells. Per model the rate is $28.4\%$ on
 \texttt{pythia-160m}, $26.3\%$ on \texttt{llama-160m} and $26.4\%$ on
-\texttt{SmolLM-135M}. Across all $2790$ heads the per-head rate never leaves the
-band $20.2\%$ to $36.3\%$, so this is not one bad head but the ordinary case. For
-a pair, relative error is the largest absolute deviation from the exact
-per-distance value over the grid, divided by that pair's own peak absolute
-contribution; the median is over pairs. The relative error is larger than the
-signal itself: median $1.13$ against a peak of $1$.
+\texttt{SmolLM-135M}. Across all $558$ layer-heads the per-head rate never
+leaves the band $21.3\%$ to $33.9\%$, so this is not one bad head but the
+ordinary case. For a pair, relative error is the largest absolute deviation from
+the exact per-distance value over the grid, divided by that pair's own peak
+absolute contribution; the median is over pairs. The relative error is larger
+than the signal itself: median $1.13$ against a peak of $1$.
 
 The headline deserves four qualifications.
 \emph{First}, $27.0\%$ is the equal-weight mean of the three per-checkpoint
-rates; the mean over all $2790$ heads is $26.90\%$, lower because
-\texttt{SmolLM-135M} contributes $1350$ heads against $720$ each for the other
+rates; the mean over all $558$ heads is $26.90\%$, lower because
+\texttt{SmolLM-135M} contributes $270$ heads against $144$ each for the other
 two. These are different estimators: the headline is the equal-weight $27.0\%$,
-while the interval below belongs to the head-pooled $26.90\%$; computed before
-rounding, the two differ by more than twice that interval's half-width.
-\emph{Second}, the interval. Resampling with replacement over heads --- over
-\emph{heads} and not over the cells inside them, because cells within a head
-share a query and a key and so are not independent --- gives a $95\%$ percentile
-interval of $[0.2683, 0.2697]$ around $0.2690$; the between-head standard
-deviation of the per-head rates is $0.0182$.
-An interval for the pooled mean does not cover the equal-weight headline; and it
-says nothing about variation across prompts or across the distance grid, which
-is a real limitation of the estimate and is stated as one.
-\emph{Third}, and most substantively, the three checkpoints do \emph{not}
-agree. A bootstrap over the per-head rates rejects equality for every pair:
-pythia vs llama $+2.13$ points $[+1.92, +2.34]$, pythia vs SmolLM
-$+2.01$ $[+1.79, +2.21]$, llama vs SmolLM $-0.12$ $[-0.18, -0.05]$. The
-pythia-vs-others gap is about two percentage points, small next to the
-$27.0\%$ itself but larger than the head-level noise floor, so that gap is
-model dependence, not sampling; the llama--SmolLM gap is a tenth of a point
-and not material. We report the per-model figures rather than average them
-away; a reader who needs the number should quote them.
+while the interval below belongs to the head-pooled $26.90\%$. Computed before
+rounding, the two differ by $0.14$ points, about one pooled interval
+half-width, so the interval includes the equal-weight headline: the
+summaries are not distinguishable at this resolution.
+\emph{Second}, the interval. Resampling with replacement over the $558$
+layer-heads --- over \emph{heads}, not over the $2790$ head-prompt instances
+and not over the cells inside them, because prompts repeat the same weights and
+cells within a head share a query and key --- gives a
+$95\%$ percentile interval of $[0.2676, 0.2704]$ around $0.2690$; the
+between-head standard deviation of the per-head rates is $0.0170$. The interval
+is conditional on these three checkpoints: it says nothing about checkpoint
+selection, prompt variation or the distance grid, a real limitation of the
+estimate.
+\emph{Third}, and most substantively, the three checkpoints do \emph{not} all
+agree. A bootstrap over the per-head rates separates pythia from both others:
+pythia vs llama $+2.12$ points $[+1.69, +2.55]$, pythia vs SmolLM
+$+2.01$ $[+1.58, +2.43]$. The llama--SmolLM gap is $-0.12$
+$[-0.26, +0.01]$, whose interval includes zero. The pythia-vs-others gap is
+about two points, small next to the $27.0\%$ itself but larger than the
+head-level noise floor, so it is model dependence, not sampling; the
+llama--SmolLM gap is a tenth of a point and not material. We quote the
+per-model figures rather than average them away.
 
 \emph{Fourth}, the draw of content pairs is itself a source of variation.
 Repeating the sweep under three pre-registered seeds --- the default and its
@@ -813,7 +816,7 @@ The measurements are structural; the algebra is model-independent by design:
 no downstream task, no learned features, no retrieval benchmark, no accuracy
 figure. The checkpoints of Section~\ref{sec:trained} confirm the identities and
 provide descriptive statistics but are not evaluated on a task;
-Appendix~\ref{app:note} records two corrections to informal statements.
+Appendix~\ref{app:note} corrects two informal statements.
 
 % =====================================================================
 % Force the appendix onto a fresh page, so the page-limit check measures the
@@ -1007,9 +1010,11 @@ drawn from different grids are never compared as though they were the same.
     reasons that have nothing to do with the quality of the approximation. Any
     scheme that reports a total-score relative error under a linearization is,
     at the least, reporting something dominated by cancellation. Normalizing by
-    $\Rk$ bounds the error by $1$ in units of the pair's own contribution,
-    which is a well-conditioned quantity: it is $0$ when the pair is exactly
-    linear and $1$ when the error is as large as the term being approximated.
+    $\Rk$ makes the error dimensionless and comparable across pairs: it is $0$
+    when the pair is exactly linear and $1$ when the error is as large as the
+    term being approximated. It is a scale, not a bound: Section~\ref{sec:context}
+    shows the fastest pair's normalized error passing the size of its own
+    contribution within a few tokens.
   \item \textbf{A ``linearizable'' channel} is one with $|\D| \le 0.1\rad$
     throughout the grid. This is a definition, a dimensionful threshold, not a
     measurement.
@@ -1055,8 +1060,8 @@ position-free bilinear term, though a smaller part of the score than the
 rotated one at these distances.
 
 This is the one setting in which a position-free additive attribution is exactly
-correct, and it is correct because a quarter of the channels carry no position
-at all. That makes \pip\ the natural recommendation for feature-level
+correct, and it is correct because three quarters of the channels carry no
+position at all. That makes \pip\ the natural recommendation for feature-level
 attribution in a model that has it.
 
 \begin{remark}[$\pip$ preserves the norm too]

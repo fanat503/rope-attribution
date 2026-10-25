@@ -27,11 +27,14 @@ rather than certifying a stale build.
 
 Everything here skips cleanly when the paper has not been built, so a fresh
 clone with no LaTeX toolchain still has a green suite that is honest about
-having checked nothing.
+having checked nothing. The paper workflow sets ``ROPE_PAPER_STRICT=1``, which
+turns those same skips into failures: CI must not report a green format gate
+when it checked no format.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -46,15 +49,33 @@ _MAIN_TEX = _PAPER_DIR / "main.tex"
 _BUILD_DIR = _PAPER_DIR / "build"
 _PDF = _BUILD_DIR / "main.pdf"
 
-# NeurIPS 2026: nine pages of main text, unlimited references and appendix.
+#: NeurIPS 2026: nine pages of main text, unlimited references and appendix.
 MAIN_TEXT_LIMIT = 9
+
+#: Treat an absent input as a failure instead of a skip. The paper workflow sets
+#: this: a job whose only format checks all skipped still reports success, and
+#: the green badge then claims a verification that did not happen. Locally the
+#: default stays permissive so a clone with no LaTeX toolchain has a green suite.
+_STRICT = os.environ.get("ROPE_PAPER_STRICT", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+
+def _skip_or_fail(message: str) -> None:
+    if _STRICT:
+        pytest.fail(f"{message} (ROPE_PAPER_STRICT is set, so this cannot skip)")
+    pytest.skip(message)
 
 
 def _pdf_or_skip() -> Path:
     if not _PDF.exists():
-        pytest.skip("paper/build/main.pdf is absent; run the paper workflow first")
+        _skip_or_fail("paper/build/main.pdf is absent; run the paper workflow first")
     if _PDF.stat().st_mtime < _MAIN_TEX.stat().st_mtime:
-        pytest.skip("paper/build/main.pdf predates main.tex; rebuild before checking pages")
+        _skip_or_fail(
+            "paper/build/main.pdf predates main.tex; rebuild before checking pages"
+        )
     return _PDF
 
 
@@ -251,7 +272,7 @@ def test_tectonic_can_compile_the_paper(tmp_path: Path) -> None:
     if binary is None:
         local = _REPO / ".tmp" / "tectonic" / "tectonic.exe"
         if not local.exists():
-            pytest.skip("no tectonic binary available")
+            _skip_or_fail("no tectonic binary available")
         binary = str(local)
 
     proc = subprocess.run(

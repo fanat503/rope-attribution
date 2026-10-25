@@ -48,19 +48,19 @@ assert the project's own Apache line; `SPDX-License`, `MIT License` and `BSD`
 return zero. None of the six is a third-party claim.
 
 That statement is auditable rather than asserted. It is backed by a provenance
-audit run on 2026-09-29, reproducible with the exact commands in
-`projects/ATTRIBUTION.md`. Observed result, over all `*.py`, `*.md`, `*.json`
-and `*.txt` files, excluding `.git/`, `__pycache__/`, and the three provenance
-documents themselves (`NOTICE.md`, `CITATION.cff`, `projects/ATTRIBUTION.md` —
-which necessarily name these patterns in order to report on them), matched
-case-insensitively:
+audit first run on 2026-09-29 and re-measured since, reproducible with the exact
+commands in `projects/ATTRIBUTION.md`. Observed result, over all `*.py`, `*.md`,
+`*.json` and `*.txt` files, excluding `.git/`, `__pycache__/`, and the three
+provenance documents themselves (`NOTICE.md`, `CITATION.cff`,
+`projects/ATTRIBUTION.md` — which necessarily name these patterns in order to
+report on them), matched case-insensitively:
 
 | Pattern | Hits | Reading |
 | --- | ---: | --- |
 | `inv_freq` | 240 | This project's own code, tests and measured artifacts. |
-| `rotary` | 234 | This project's own code, tests and measured artifacts. |
+| `rotary` | 256 | This project's own code, tests and measured artifacts. |
 | `mscale` | 290 | This project's own code, tests and measured artifacts. |
-| `rotary_emb` | 2 | The upstream config keyword `rotary_emb_base` in two synthetic test models; not an implementation. |
+| `rotary_emb` | 4 | Two are the upstream config keyword `rotary_emb_base` in synthetic test models; two are this project's own fallback lookup for that keyword in `downstream.py`. Not an implementation. |
 | `apply_rotary` | 3 | A test monkeypatches `transformers`' `apply_rotary_pos_emb` to a no-op to compare against a no-RoPE model; no upstream code is shipped. |
 | `attention_scaling` | 0 | — |
 | `ntk` | 0 | — |
@@ -68,9 +68,9 @@ case-insensitively:
 | `ported from` | 0 | — |
 | `taken from` | 0 | — |
 
-The table is a re-measurement on 2026-10-21, after the exploratory archive was
-removed and after the downstream, TPU and usefulness tests were added. Earlier
-figures attributed 13 `inv_freq` and 3 `mscale` hits to `verify_rope*.py`
+The table is a re-measurement on 2026-10-23, after the dataset-preparation
+module and the Gemma 4 / partial-rotation architecture guards were added.
+Earlier figures attributed 13 `inv_freq` and 3 `mscale` hits to `verify_rope*.py`
 scripts that do not exist in this repository. Patterns are matched
 case-insensitively over `.py`, `.md`, `.json` and `.txt` files, with `.git/`,
 `paper/build/`, cache directories and the untracked `.tmp/` scratch tree
@@ -82,9 +82,11 @@ Every non-zero hit above is either this project's own code, a test of that code,
 an emitted measurement artifact, or an upstream API name used as a test seam.
 None is a fragment of an upstream implementation. The four identifier rows
 `attention_scaling`, `ntk`, `ported from` and `taken from` remain at zero. The
-two `rotary_emb` and three `apply_rotary` hits are the names of public
-Hugging Face configuration/function symbols used to build synthetic test
-models; they are not copied bodies or vendored files.
+four `rotary_emb` hits are one public Hugging Face configuration keyword: two
+occurrences in synthetic test models that set it, and two in this project's own
+fallback read of that keyword. The three `apply_rotary` hits are the name of a
+public Hugging Face function used as a monkeypatch seam. Neither is a copied
+body or a vendored file.
 
 Scope of that audit, stated so the claim is not read as broader than it is: it
 covers the text sources `.py`, `.md`, `.json`, `.txt`. The LaTeX sources under

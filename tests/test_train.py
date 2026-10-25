@@ -110,7 +110,8 @@ def test_every_config_is_a_complete_call() -> None:
     required = {
         "n_layers", "n_heads", "head_dim", "dim", "ffn", "vocab", "ctx",
         "lr", "n_steps", "batch_size", "eval_every", "warmup_steps",
-        "lr_floor_fraction", "grad_clip", "seed",
+        "lr_floor_fraction", "grad_clip", "seed", "checkpoint_every",
+        "val_batches",
     }
     for name, config in T.CONFIGS.items():
         missing = required - set(config)
@@ -211,10 +212,15 @@ def test_smoke_run_logs_every_metric_and_finishes(tmp_path: Path) -> None:
         "step", "lr", "grad_norm", "train_loss", "train_loss_ema", "val_loss",
         "val_perplexity", "tokens_seen", "tok_per_s", "closed_form_resid_max",
         "rope_probe_resid_max", "sign_flip_rate", "rel_err_median_probe",
-        "n_probe_cells",
+        "n_probe_cells", "val_batches", "val_targets", "probe_dtype",
     }
     for record in evals:
         assert keys <= set(record), sorted(keys - set(record))
+        assert record["probe_dtype"] == "fp32", (
+            "the eval record must name the arithmetic the probe ran in"
+        )
+        assert record["val_batches"] >= 1
+        assert record["val_targets"] > 0
         assert np.isfinite(record["train_loss"])
         assert np.isfinite(record["train_loss_ema"])
         assert np.isfinite(record["val_loss"])
@@ -259,6 +265,358 @@ def test_the_run_writes_a_loadable_checkpoint(tmp_path: Path) -> None:
         save_checkpoint=False,
     )
     assert not (tmp_path / "no_checkpoint" / "checkpoint.pt").exists()
+
+
+def test_token_accounting_is_global_across_data_parallel_ranks(tmp_path: Path) -> None:
+    """Eight chips consume eight batches per step, and the log must say so.
+
+    Mutation verdict: reverting ``tokens_seen += ids.numel() * world_size``
+    to the per-rank ``ids.numel()`` makes the expected count eight times
+    larger than the logged one.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    config = dict(T.CONFIGS["smoke"])
+    config.update({"n_steps": 1, "eval_every": 1})
+    tokens = np.random.default_rng(13).integers(0, 512, size=4096)
+    summary = T.train(
+        "smoke", tmp_path / "run", tokens, device="cpu",
+        max_steps=1, override={"eval_every": 1}, world_size=8,
+    )
+    expected = config["batch_size"] * config["ctx"] * 8
+    assert summary["tokens_seen"] == expected
+    assert summary["world_size"] == 8
+
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "metrics.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+    start = records[0]
+    evaluation = next(record for record in records if record["event"] == "eval")
+    assert start["world_size"] == 8
+    assert start["token_accounting"].startswith("global")
+    assert evaluation["tokens_seen"] == expected
+
+
+def test_a_fresh_run_removes_a_stale_checkpoint(tmp_path: Path) -> None:
+    """A checkpoint from an earlier run of the same name is not this run's.
+
+    Mutation verdict: deleting the ``checkpoint*.pt`` cleanup leaves both
+    stale files in place, and with ``save_checkpoint=False`` they would be
+    the only weights in the directory.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "checkpoint.pt").write_bytes(b"stale")
+    (run / "checkpoint_resume.pt").write_bytes(b"stale")
+    tokens = np.random.default_rng(15).integers(0, 512, size=4096)
+    T.train(
+        "smoke", run, tokens, device="cpu", max_steps=1, save_checkpoint=False,
+    )
+    assert not (run / "checkpoint.pt").exists(), "stale weights survived"
+    assert not (run / "checkpoint_resume.pt").exists(), "stale resume state survived"
+
+
+def test_resume_restores_the_optimizer_and_the_data_order(tmp_path: Path) -> None:
+    """A resumed run must be the same run, not a lookalike.
+
+    The test trains straight to eight steps, then trains to four and resumes
+    to eight. The step-8 evaluation must match the straight run field for
+    field. AdamW's moments and the numpy generator are the two things that
+    would silently differ if the checkpoint held weights only.
+
+    Mutation verdict: dropping ``opt.load_state_dict`` or the
+    ``rng.bit_generator.state`` restore changes the step-8 losses; dropping
+    both changes them further. The exact comparison is the detector.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
+    tokens = np.random.default_rng(19).integers(0, 512, size=8192)
+    straight = T.train(
+        "smoke", tmp_path / "straight", tokens, device="cpu", max_steps=8
+    )
+    assert straight["steps"] == 8
+    T.train("smoke", tmp_path / "part", tokens, device="cpu", max_steps=4)
+    resumed = T.train(
+        "smoke", tmp_path / "part", tokens, device="cpu", max_steps=8, resume=True
+    )
+    assert resumed["resumed_from_step"] == 4
+    assert resumed["steps"] == 8
+
+    def eval_at(run: str, step: int) -> dict:
+        records = [
+            json.loads(line)
+            for line in (tmp_path / run / "metrics.jsonl").read_text(
+                encoding="utf-8"
+            ).splitlines()
+        ]
+        matches = [
+            record
+            for record in records
+            if record["event"] == "eval" and record["step"] == step
+        ]
+        assert len(matches) == 1, (run, step, [r["step"] for r in records])
+        return matches[0]
+
+    reference = eval_at("straight", 8)
+    actual = eval_at("part", 8)
+    for key in (
+        "lr",
+        "grad_norm",
+        "train_loss",
+        "train_loss_ema",
+        "val_loss",
+        "tokens_seen",
+        "closed_form_resid_max",
+        "rope_probe_resid_max",
+        "sign_flip_rate",
+        "rel_err_median_probe",
+        "n_probe_cells",
+    ):
+        assert actual[key] == reference[key], (key, actual[key], reference[key])
+
+    payload = torch.load(
+        tmp_path / "part" / "checkpoint_resume.pt", map_location="cpu"
+    )
+    assert payload["format"] == "rope_attribution/train-state/v1"
+    assert payload["step"] == 8
+    assert payload["optimizer"]["state"], "the resume file carries no optimizer state"
+    assert "numpy_rng" in payload and "torch_rng" in payload
+
+
+def test_validation_averages_several_batches(tmp_path: Path) -> None:
+    """A single validation batch is noise, and the average must be real.
+
+    The expected value is recomputed here from the saved checkpoint over the
+    same three batches. Mutation verdict: using ``held_in[:batch_size]``
+    alone both drops the ``val_batches`` field and changes ``val_loss`` away
+    from the target-weighted mean checked below.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+    import torch.nn.functional as F
+
+    tokens = np.random.default_rng(21).integers(0, 512, size=8192)
+    summary = T.train(
+        "smoke", tmp_path / "run", tokens, device="cpu", max_steps=1,
+        override={"eval_every": 1, "val_batches": 3},
+    )
+    record = next(
+        json.loads(line)
+        for line in (tmp_path / "run" / "metrics.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        if json.loads(line)["event"] == "eval"
+    )
+    assert record["val_batches"] == 3
+    assert summary["final_val_loss"] == record["val_loss"]
+
+    config = dict(T.CONFIGS["smoke"])
+    config.update({"n_steps": 1, "eval_every": 1, "val_batches": 3})
+    payload = torch.load(tmp_path / "run" / "checkpoint.pt", map_location="cpu")
+    model = T.build_model(config)
+    model.load_state_dict(payload["model"])
+    _, _, held_in, held_tg = T._split_windows(tokens, config["ctx"])
+    n_val = min(len(held_in), config["batch_size"] * 3)
+    total, count = 0.0, 0
+    with torch.no_grad():
+        for offset in range(0, n_val, config["batch_size"]):
+            batch = slice(offset, offset + config["batch_size"])
+            ids = torch.from_numpy(held_in[batch])
+            targets = torch.from_numpy(held_tg[batch])
+            logits = model(ids)
+            total += float(
+                F.cross_entropy(
+                    logits.reshape(-1, logits.shape[-1]),
+                    targets.reshape(-1),
+                    reduction="sum",
+                )
+            )
+            count += int(targets.numel())
+    assert record["val_targets"] == count
+    assert record["val_loss"] == pytest.approx(total / count, rel=1e-12)
+
+
+def test_non_finite_metrics_are_written_as_null(tmp_path: Path) -> None:
+    """A diverged run's record must still be readable by a strict parser.
+
+    Mutation verdict: without ``_json_safe`` the file contains bare ``NaN``
+    and ``Infinity``, and the ``parse_constant`` hook below raises on them.
+    """
+    run = tmp_path / "run"
+    writer = T.MetricsWriter(run)
+    writer.log(
+        {
+            "event": "eval",
+            "loss": float("nan"),
+            "positive": float("inf"),
+            "negative": float("-inf"),
+            "finite": 1.5,
+        }
+    )
+    writer.finalize({"event": "summary", "loss": float("nan")})
+
+    def reject(token: str):
+        raise ValueError(f"non-finite literal {token!r} reached the file")
+
+    record = json.loads(
+        (run / "metrics.jsonl").read_text(encoding="utf-8"),
+        parse_constant=reject,
+    )
+    assert record["loss"] is None
+    assert record["positive"] is None
+    assert record["negative"] is None
+    assert record["finite"] == 1.5
+    summary = json.loads(
+        (run / "summary.json").read_text(encoding="utf-8"),
+        parse_constant=reject,
+    )
+    assert summary["loss"] is None
+
+
+def test_a_run_writes_a_manifest_with_its_provenance(tmp_path: Path) -> None:
+    """The metrics answer what happened; the manifest answers where from.
+
+    Mutation verdict: removing the ``_write_manifest`` call leaves no file
+    and no ``manifest`` field in the summary or the run_start record.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    tokens = np.random.default_rng(23).integers(0, 512, size=4096)
+    summary = T.train("smoke", tmp_path / "run", tokens, device="cpu", max_steps=1)
+    path = tmp_path / "run" / "manifest.json"
+    assert path.exists()
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    assert manifest["format"] == "rope_attribution/train-manifest/v1"
+    assert manifest["config_name"] == "smoke"
+    assert manifest["n_params"] == T.count_params(T.CONFIGS["smoke"])
+    assert manifest["world_size"] == 1
+    assert manifest["tokens_total"] == int(tokens.size)
+    for key in ("python", "torch", "numpy", "platform", "created_utc"):
+        assert manifest[key], key
+    assert "git_commit" in manifest
+    assert summary["manifest"] == "manifest.json"
+    start = json.loads(
+        (tmp_path / "run" / "metrics.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert start["manifest"] == "manifest.json"
+
+
+def test_the_probe_can_read_bfloat16_tensors() -> None:
+    """bfloat16 has no numpy dtype; the probe must widen before ``.numpy()``.
+
+    This is the one failure a CPU-only suite cannot reach through a training
+    run, because CPU bf16 is refused by policy. Mutation verdict: removing
+    the ``.float()`` cast raises ``TypeError`` on the line below.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
+    tensor = torch.tensor([1.5, -2.25], dtype=torch.bfloat16)
+    out = T._to_numpy_f64(tensor)
+    assert out.dtype == np.float64
+    assert np.allclose(out, [1.5, -2.25])
+
+
+def test_the_probe_runs_inside_the_runs_autocast_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The diagnostic must describe the arithmetic the training used.
+
+    Mutation verdict: moving the ``_probe_diagnostics`` call outside the
+    ``with _autocast_context(...)`` block makes ``probe_saw`` false.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import contextlib
+
+    state: dict = {"inside": False, "probe_saw": None}
+
+    @contextlib.contextmanager
+    def spy(device: str, dtype: str):
+        previous = state["inside"]
+        state["inside"] = True
+        try:
+            yield
+        finally:
+            state["inside"] = previous
+
+    def fake_probe(*args, **kwargs):
+        state["probe_saw"] = state["inside"]
+        return {
+            "closed_form_resid_max": 0.0,
+            "rope_probe_resid_max": 0.0,
+            "sign_flip_rate": 0.0,
+            "rel_err_median_probe": 0.0,
+            "n_probe_cells": 0,
+        }
+
+    monkeypatch.setattr(T, "_autocast_context", spy)
+    monkeypatch.setattr(T, "_probe_diagnostics", fake_probe)
+    tokens = np.random.default_rng(29).integers(0, 512, size=4096)
+    T.train(
+        "smoke", tmp_path / "run", tokens, device="cpu", max_steps=1,
+        override={"eval_every": 1},
+    )
+    assert state["probe_saw"] is True
+
+
+def test_the_cli_passes_a_prepared_memmap_to_train(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Training must read the prepared stream, not tokenize it again.
+
+    Mutation verdict: deleting the ``args.data_dir`` branch falls back to the
+    synthetic smoke ids, so the captured array is not a memmap and does not
+    start with the prepared byte.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    from rope_attribution import data as D
+
+    out = tmp_path / "tokens"
+    D.prepare(
+        lambda text: [ord(char) for char in text],
+        iter(["abcdefgh"] * 100),
+        out,
+        name="toy",
+        source="unit-test",
+        tokenizer="ord",
+        shard_tokens=64,
+    )
+    captured: dict = {}
+
+    def fake_train(*args, **kwargs):
+        captured["tokens"] = args[2]
+        captured.update(kwargs)
+        return {"event": "summary", "steps": 0}
+
+    monkeypatch.setattr(T, "train", fake_train)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train",
+            "--config",
+            "smoke",
+            "--run-name",
+            "stub_data",
+            "--data-dir",
+            str(out),
+        ],
+    )
+    T.main()
+    assert isinstance(captured["tokens"], np.memmap)
+    assert int(captured["tokens"][0]) == ord("a")
+    assert int(captured["tokens"][-1]) == ord("h")
 
 
 def test_two_smoke_runs_log_identical_series(tmp_path: Path) -> None:

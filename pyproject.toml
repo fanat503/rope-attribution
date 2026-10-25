@@ -29,10 +29,11 @@ readme = "README.md"
 dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
-# Used by the figure-producing exploration scripts, never by the library or the
-# test suite.
+# matplotlib is used by the figure generators and by tests/test_figures.py, which
+# imports it with importorskip. It is therefore part of `dev`: leaving it out
+# would make the figure tests skip in CI and a broken plot ship green.
 plots = ["matplotlib>=3.7"]
-dev = ["pytest>=7.0", "ruff"]
+dev = ["pytest>=7.0", "ruff", "matplotlib>=3.7"]
 
 [tool.setuptools]
 # The only real package in this repository lives at projects/rope_attribution,

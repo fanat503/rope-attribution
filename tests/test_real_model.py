@@ -57,6 +57,36 @@ _TEST_MODEL_ID = RM.DEFAULT_MODEL_IDS[0]
 
 _JSON_PATH = _REPO / "results" / "real_model.json"
 
+#: The Gemma 4 text-tower fields that break this adapter's assumptions,
+#: transcribed from the public ``config.json`` of ``google/gemma-4-E4B-it``
+#: (fetched 2026-10-23). Kept as a literal so the refusal is tested without a
+#: network call or a 4B-parameter download.
+_GEMMA4_E4B_TEXT = {
+    "model_type": "gemma4_text",
+    "head_dim": 256,
+    "global_head_dim": 512,
+    "attention_k_eq_v": False,
+    "num_kv_shared_layers": 18,
+    "rope_parameters": {
+        "full_attention": {
+            "partial_rotary_factor": 0.25,
+            "rope_theta": 1_000_000.0,
+            "rope_type": "proportional",
+        },
+        "sliding_attention": {"rope_theta": 10_000.0, "rope_type": "default"},
+    },
+    "layer_types": ["sliding_attention"] * 5 + ["full_attention"],
+}
+
+#: The 31B variant differs in exactly two of those fields: it ties k and v and
+#: shares no KV state. Both are recorded because a guard that only recognises
+#: one checkpoint's numbers is a lookup, not a check.
+_GEMMA4_31B_TEXT = {
+    **_GEMMA4_E4B_TEXT,
+    "attention_k_eq_v": True,
+    "num_kv_shared_layers": 0,
+}
+
 
 # --------------------------------------------------------------------------
 # Independent references: no rope.py inside
@@ -1052,6 +1082,123 @@ def test_fused_qkv_is_split_per_head_not_in_contiguous_thirds() -> None:
     q_hat, k_hat = RM._qkv_projector(attn)(x)
     torch.testing.assert_close(q_hat, q)
     torch.testing.assert_close(k_hat, k)
+
+
+def test_gemma4_is_refused_from_its_config_alone() -> None:
+    """The flat reader would quietly measure the wrong tensor.
+
+    ``validate_config`` reads one ``rope_theta`` and one partial factor and
+    rebuilds a single ladder. Gemma 4 has two ladders, two head dimensions and
+    no top-level text model, so every one of those readings would be wrong --
+    without an exception, the result would look like a measurement.
+
+    Mutation verdict: deleting the guard from ``validate_config`` makes the
+    stub fail with ``AttributeError`` from ``attention_modules`` rather than
+    the named refusal; deleting only the nested-``rope_parameters`` check makes
+    the ``full_attention`` assertion fail, and deleting only the head-dimension
+    check makes the ``global_head_dim`` assertion fail.
+    """
+    gemma_config = {"model_type": "gemma4", "text_config": _GEMMA4_E4B_TEXT}
+    reason = RM.unsupported_architecture(gemma_config)
+    assert reason is not None
+    assert reason.startswith("gemma4 cannot be measured")
+    for phrase in (
+        "text_config",
+        "gemma4_text",
+        "full_attention",
+        "sliding_attention",
+        "head_dim is 256",
+        "global_head_dim is 512",
+        "18 layer(s) share key/value state",
+    ):
+        assert phrase in reason, phrase
+    assert "attention_k_eq_v" not in reason, (
+        "E4B does not tie k and v; reporting that it does would be a false fact"
+    )
+
+    class _Stub:
+        config = gemma_config
+
+    with pytest.raises(NotImplementedError, match="cannot be measured"):
+        RM.validate_config(_Stub())
+    with pytest.raises(NotImplementedError, match="cannot be measured"):
+        RM.collect_head_vectors(_Stub(), object(), "ignored")
+
+
+def test_the_31b_gemma4_variant_ties_key_and_value() -> None:
+    """The two public variants differ; the guard names what this one does.
+
+    Mutation verdict: dropping the ``attention_k_eq_v`` clause leaves the
+    string absent while every other assertion in the sibling test still
+    passes, so this test is the only detector for that clause.
+    """
+    reason = RM.unsupported_architecture(
+        {"model_type": "gemma4", "text_config": _GEMMA4_31B_TEXT}
+    )
+    assert reason is not None
+    assert "key and value projections are tied" in reason
+    assert "share key/value state" not in reason
+
+
+def test_a_flat_rope_config_is_not_refused() -> None:
+    """The guard must not fire on the checkpoints the paper measures.
+
+    Mutation verdict: replacing the structural checks with a broad
+    ``text_config``/``rope_parameters`` presence test would refuse every
+    ordinary RoPE model, and this test would fail.
+    """
+    transformers = pytest.importorskip("transformers")
+    llama = transformers.LlamaConfig(
+        vocab_size=64,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=1,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        max_position_embeddings=64,
+    )
+    assert RM.unsupported_architecture(llama) is None
+    pythia_like = {
+        "model_type": "gpt_neox",
+        "head_dim": 64,
+        "rope_parameters": {
+            "partial_rotary_factor": 0.25,
+            "rope_theta": 10_000.0,
+        },
+    }
+    assert RM.unsupported_architecture(pythia_like) is None
+
+
+def test_load_model_refuses_gemma4_before_fetching_weights(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 60 GB download must not be the price of learning the adapter refuses.
+
+    Mutation verdict: removing the pre-flight ``AutoConfig`` check calls
+    ``AutoTokenizer.from_pretrained``, whose stub raises ``AssertionError``
+    instead of the expected ``NotImplementedError``.
+    """
+    pytest.importorskip("torch")
+    transformers = pytest.importorskip("transformers")
+    calls: list[str] = []
+
+    def fake_config(model_id, *args, **kwargs):
+        calls.append(str(model_id))
+        return {"model_type": "gemma4", "text_config": _GEMMA4_E4B_TEXT}
+
+    def refuse_weights(*args, **kwargs):
+        raise AssertionError("weights or tokenizer were fetched before the refusal")
+
+    monkeypatch.setattr(transformers.AutoConfig, "from_pretrained", fake_config)
+    monkeypatch.setattr(
+        transformers.AutoModelForCausalLM, "from_pretrained", refuse_weights
+    )
+    monkeypatch.setattr(
+        transformers.AutoTokenizer, "from_pretrained", refuse_weights
+    )
+    with pytest.raises(NotImplementedError, match="gemma4 cannot be measured"):
+        RM.load_model("google/gemma-4-31B-it")
+    assert calls == ["google/gemma-4-31B-it"]
 
 
 def test_qk_normalised_checkpoints_are_refused_before_the_forward_pass() -> None:

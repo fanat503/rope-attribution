@@ -64,10 +64,37 @@ from rope_attribution.real_model import (
     load_model,
     n_heads_of,
     split_fused_qkv,
+    unsupported_architecture,
 )
 from rope_attribution.rope import inv_freq
 
 SCHEMA = "rope_attribution/downstream/v1"
+
+
+def _rope_parameters(cfg: Any) -> dict:
+    """The checkpoint's flat rotary-parameter block, or an empty dict.
+
+    Current ``transformers`` configs store ``rope_theta`` and
+    ``partial_rotary_factor`` inside this block rather than at the top level;
+    older GPT-NeoX configs use top-level ``rotary_pct`` and ``rotary_emb_base``.
+    Reading only the top-level names is how a partial-rotation checkpoint slips
+    through a guard meant to refuse it.
+    """
+    params = getattr(cfg, "rope_parameters", None)
+    return dict(params) if isinstance(params, dict) else {}
+
+
+def _partial_rotary_factor(cfg: Any) -> float:
+    """The rotated fraction, from wherever this config family declares it."""
+    params = _rope_parameters(cfg)
+    for name in ("partial_rotary_factor", "rotary_pct"):
+        if name in params:
+            return float(params[name])
+        value = getattr(cfg, name, None)
+        if value is not None:
+            return float(value)
+    return 1.0
+
 
 
 # --------------------------------------------------------------------------
@@ -200,6 +227,9 @@ class SurrogateAttention(AbstractContextManager):
         self.kernel = kernel
         self.model = model
         self.cfg = getattr(model, "config", None)
+        reason = unsupported_architecture(self.cfg)
+        if reason:
+            raise NotImplementedError(reason)
         self.attns = attention_modules(model)
         if not self.attns:
             raise RuntimeError("no attention module with a recognised q/k projection")
@@ -208,7 +238,7 @@ class SurrogateAttention(AbstractContextManager):
         if self.head_dim % 2:
             raise ValueError("RoPE needs an even head dimension")
         self.theta = float(theta if theta is not None else _rope_theta(self.cfg))
-        factor = float(getattr(self.cfg, "partial_rotary_factor", 1.0) or 1.0)
+        factor = _partial_rotary_factor(self.cfg)
         if factor != 1.0:
             raise NotImplementedError(
                 "partial rotation is not supported by the downstream surrogate; "
@@ -329,14 +359,16 @@ class SurrogateAttention(AbstractContextManager):
 
 
 def _rope_theta(cfg: Any) -> float:
+    """The rotary base, from the block or the legacy top-level field."""
     if cfg is None:
         return 10_000.0
-    theta = getattr(cfg, "rope_theta", None)
-    if theta is not None:
-        return float(theta)
-    params = getattr(cfg, "rope_parameters", None)
-    if isinstance(params, dict) and "rope_theta" in params:
-        return float(params["rope_theta"])
+    params = _rope_parameters(cfg)
+    for name in ("rope_theta", "rotary_emb_base"):
+        if name in params:
+            return float(params[name])
+        value = getattr(cfg, name, None)
+        if value is not None:
+            return float(value)
     return 10_000.0
 
 

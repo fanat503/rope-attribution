@@ -239,12 +239,52 @@ def committed() -> dict:
 
 
 def test_the_committed_json_has_the_expected_shape(committed: dict) -> None:
-    assert committed["schema"] == "rope_attribution/usefulness/v1"
+    assert committed["schema"] == "rope_attribution/usefulness/v2"
     assert committed["distance_grid"] == list(U.DISTANCE_GRID)
     assert len(committed["models"]) >= 3, committed["models"]
     for model in committed["models"]:
-        assert model["n_heads"] > 0
+        assert model["n_heads"] == len(model["head_rates"]) > 0
+        assert model["n_prompts"] == len(model["per_prompt"])
+        assert (
+            model["n_head_prompt_instances"] == model["n_heads"] * model["n_prompts"]
+        ), model["model_id"]
         assert model["n_deltas"] == len(U.DISTANCE_GRID)
+
+
+def test_the_summary_counts_heads_not_prompt_instances() -> None:
+    """The unit fix, on an input whose answer is countable by hand.
+
+    Two heads observed under two prompts are two heads, not four. Mutation
+    verdict: reverting ``_cluster_heads`` to a flat loop over ``per_prompt``
+    makes ``n_heads`` 4 and the pooled rate the unweighted cell mean; both
+    assertions below fail.
+    """
+    def head(layer: int, idx: int, rate: float) -> dict:
+        return {
+            "layer": layer,
+            "head": idx,
+            "n_content_pairs": 1,
+            "n_sign_pairs": 1,
+            "sign_flip_fraction_pooled": rate,
+            "sign_flip_fraction_per_pair_median": rate,
+            "rel_err_median_of_medians": 1.0,
+        }
+
+    per_prompt = [
+        {
+            "prompt_index": i,
+            "n_tokens": 2,
+            "heads": [head(0, 0, 0.2 + 0.1 * i), head(0, 1, 0.4 + 0.1 * i)],
+        }
+        for i in range(2)
+    ]
+    rec = U._summarise("toy", 64, np.array([1, 2], dtype=np.int64), per_prompt)
+    assert rec["n_heads"] == 2
+    assert rec["n_head_prompt_instances"] == 4
+    assert rec["head_rates"][0]["n_prompts"] == 2
+    assert rec["head_rates"][0]["sign_flip_fraction"] == pytest.approx(0.25)
+    assert rec["head_rates"][1]["sign_flip_fraction"] == pytest.approx(0.45)
+    assert rec["sign_flip_fraction_pooled"] == pytest.approx(0.35)
 
 
 def test_the_committed_rate_is_substantial_and_bounded(committed: dict) -> None:

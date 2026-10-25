@@ -5,8 +5,8 @@ Why this module exists
 The paper's central empirical finding is that the best position-free scalar gets
 the sign wrong on a fraction of per-pair, per-distance cells. Every number
 supporting it is reported as a point estimate: 27.0% pooled, 1.13 median
-relative error, 20.2%-36.3% across heads. A point estimate without an interval
-is an assertion that the estimate is exact, which on 2790 heads and three
+relative error, 21.3%-33.9% across heads. A point estimate without an interval
+is an assertion that the estimate is exact, which on 558 heads and three
 checkpoints it is not.
 
 This is the gap Fan et al. (arXiv:2609.20804) closed for agent harnesses and
@@ -27,16 +27,28 @@ What is computed
 * the number of resamples is fixed in advance, and the seed is pinned, so the
   interval is reproducible rather than a function of the RNG.
 
+Replication unit
+----------------
+A *layer-head* is the unit. The five prompts are five observations of the same
+weights, not five independent heads; the earlier artifact counted all 2790
+head-prompt instances as heads, which made ``n`` five times too large and every
+interval about ``sqrt(5)`` too narrow. ``head_rates_from_artifact`` reads the
+v2 artifact, where each head already carries its mean over prompts, and refuses
+an older schema rather than silently re-creating the error.
+
 Scope
 -----
-This quantifies sampling variation across heads and checkpoints. It does not
-quantify variation across prompts, across the distance grid, or across the
-synthetic construction - the first is a real omission and is stated as one.
+This quantifies sampling variation across heads, conditional on the three
+checkpoints. It does not quantify variation across checkpoints (three is too few
+for a useful interval), across prompts, across the distance grid, or across the
+synthetic construction - those are real omissions and are stated as ones.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
 
@@ -44,7 +56,10 @@ __all__ = [
     "N_RESAMPLES",
     "bootstrap_ci",
     "checkpoint_agreement",
+    "head_rates_from_artifact",
+    "summarise_artifact",
     "summarise_with_intervals",
+    "main",
 ]
 
 # Fixed in advance. 2000 is the smallest round number at which the 2.5/97.5
@@ -150,3 +165,85 @@ def summarise_with_intervals(model_ids: Sequence[str], per_head_rates: Sequence[
         "pooled": bootstrap_ci(pooled),
         "agreement": checkpoint_agreement(per_head_rates, list(model_ids)),
     }
+
+
+def head_rates_from_artifact(data: dict) -> tuple[list[str], list[list[float]]]:
+    """Per-checkpoint layer-head rates from a v2 usefulness artifact.
+
+    Refuses a v1 artifact by name. In v1 ``n_heads`` counted head-prompt
+    instances, so reading ``per_prompt`` here would silently reproduce the
+    five-fold over-count this module exists to remove.
+    """
+    schema = data.get("schema")
+    if schema != "rope_attribution/usefulness/v2":
+        raise ValueError(
+            f"need schema rope_attribution/usefulness/v2, got {schema!r}; "
+            "regenerate results/usefulness.json with the current usefulness.py"
+        )
+    ids: list[str] = []
+    rates: list[list[float]] = []
+    for model in data["models"]:
+        if "head_rates" not in model:
+            raise ValueError(f"{model.get('model_id')}: missing head_rates")
+        ids.append(str(model["model_id"]))
+        rates.append(
+            [
+                float(h["sign_flip_fraction"])
+                for h in model["head_rates"]
+                if h["sign_flip_fraction"] is not None
+            ]
+        )
+    if sum(len(r) for r in rates) != int(data["pooled"]["n_heads"]):
+        raise ValueError(
+            "head_rates do not sum to pooled.n_heads; the artifact is inconsistent"
+        )
+    return ids, rates
+
+
+def summarise_artifact(data: dict) -> dict:
+    """Everything the paper quotes about uncertainty, from one artifact."""
+    ids, rates = head_rates_from_artifact(data)
+    summary = summarise_with_intervals(ids, rates)
+    equal_weight = float(np.mean([np.mean(r) for r in rates]))
+    pooled_mean = float(np.mean([r for row in rates for r in row]))
+    delta = equal_weight - pooled_mean
+    return {
+        "schema": "rope_attribution/uncertainty/v1",
+        "source": "results/usefulness.json",
+        "unit": "layer-head, each averaged over its prompts",
+        "n_heads": sum(len(r) for r in rates),
+        "n_head_prompt_instances": int(data["pooled"]["n_head_prompt_instances"]),
+        "equal_weight_fraction": equal_weight,
+        "head_pooled_fraction": pooled_mean,
+        "equal_weight_minus_pooled": delta,
+        "difference_in_pooled_half_widths": (
+            delta / summary["pooled"]["half_width"]
+        ),
+        "pooled": summary["pooled"],
+        "agreement": summary["agreement"],
+    }
+
+
+def main() -> None:
+    root = Path(__file__).resolve().parents[2]
+    src = root / "results" / "usefulness.json"
+    out = summarise_artifact(json.loads(src.read_text(encoding="utf-8")))
+    dst = root / "results" / "uncertainty.json"
+    dst.write_text(json.dumps(out, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    p = out["pooled"]
+    print(
+        f"{out['n_heads']} heads ({out['n_head_prompt_instances']} head-prompt "
+        f"instances): mean {p['mean']:.6f}, sd {p['sd']:.6f}, "
+        f"95% CI [{p['ci_low']:.6f}, {p['ci_high']:.6f}]"
+    )
+    for pair in out["agreement"]["pairs"]:
+        print(
+            f"  {pair['pair']}: {100 * pair['mean_difference']:+.2f} pp "
+            f"[{100 * pair['ci_low']:+.2f}, {100 * pair['ci_high']:+.2f}] "
+            f"agrees={pair['agrees_at_95']}"
+        )
+    print(f"wrote {dst}")
+
+
+if __name__ == "__main__":
+    main()

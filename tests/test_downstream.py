@@ -150,11 +150,81 @@ def test_qk_normalised_attention_is_refused() -> None:
         D.SurrogateAttention(model)
 
 
-def test_partial_rotation_is_refused() -> None:
+@pytest.mark.parametrize(
+    "setter",
+    [
+        lambda cfg: setattr(
+            cfg,
+            "rope_parameters",
+            {
+                "rope_theta": 10_000.0,
+                "partial_rotary_factor": 0.25,
+                "rope_type": "default",
+            },
+        ),
+        lambda cfg: setattr(cfg, "rotary_pct", 0.25),
+        lambda cfg: setattr(cfg, "partial_rotary_factor", 0.25),
+    ],
+    ids=["rope_parameters", "rotary_pct", "top_level"],
+)
+def test_partial_rotation_is_refused_wherever_the_config_declares_it(setter) -> None:
+    """pythia-160m keeps its 0.25 inside ``rope_parameters``.
+
+    Reading only the top-level field let exactly the checkpoint the paper
+    measures through the guard, where the hook would have rotated all 64
+    channels instead of the 16 the model rotates.
+
+    Mutation verdict: reverting ``_partial_rotary_factor`` to
+    ``getattr(cfg, "partial_rotary_factor", 1.0)`` makes the first case
+    construct the surrogate without raising; the other two cases still pass,
+    so the parametrisation is what pins the real config shape.
+    """
     model, cfg = _tiny_llama()
-    cfg.partial_rotary_factor = 0.5
+    setter(cfg)
     with pytest.raises(NotImplementedError, match="partial rotation"):
         D.SurrogateAttention(model)
+
+
+def test_the_rotary_base_is_read_from_the_parameter_block() -> None:
+    """The same block that carries the partial factor carries the base.
+
+    Mutation verdict: a top-level-only lookup returns the 10,000 default and
+    the assertion fails.
+    """
+
+    class _Config:
+        rope_parameters = {"rope_theta": 123_456.0}
+
+    assert D._rope_theta(_Config()) == 123_456.0
+
+
+def test_gemma4_is_refused_by_the_downstream_probe() -> None:
+    """The surrogate builds one ladder; Gemma 4 has two layer families.
+
+    Mutation verdict: deleting the ``unsupported_architecture`` call lets the
+    stub reach ``attention_modules``, which raises ``AttributeError`` instead
+    of the named refusal.
+    """
+
+    class _Stub:
+        config = {
+            "model_type": "gemma4",
+            "text_config": {
+                "model_type": "gemma4_text",
+                "head_dim": 256,
+                "global_head_dim": 512,
+                "rope_parameters": {
+                    "full_attention": {
+                        "partial_rotary_factor": 0.25,
+                        "rope_theta": 1_000_000.0,
+                    },
+                    "sliding_attention": {"rope_theta": 10_000.0},
+                },
+            },
+        }
+
+    with pytest.raises(NotImplementedError, match="cannot be measured"):
+        D.SurrogateAttention(_Stub())
 
 
 def test_a_bad_head_width_is_refused_before_any_hook_runs() -> None:

@@ -34,13 +34,21 @@ def run_dir_for(root: Path, rank: int) -> Path:
     return Path(root) / f"rank-{int(rank)}"
 
 
-def _mp_fn(index: int, preset_name: str, run_name: str) -> None:
+def _mp_fn(index: int, preset_name: str, run_name: str, data_dir: str | None) -> None:
     import torch_xla.core.xla_model as xm
 
     from rope_attribution.train import _load_wikitext_tokens, train
 
     preset = TPU_PRESETS[preset_name]
     override = launch_overrides(preset_name)
+    if data_dir is None:
+        # Every rank tokenizes the corpus in this fallback. Correct, but the
+        # cost is paid eight times; ``--data-dir`` maps one prepared stream.
+        tokens = _load_wikitext_tokens()
+    else:
+        from rope_attribution.data import load_tokens
+
+        tokens = load_tokens(Path(data_dir))
     # The model seed is shared, so the replicas start identical; the data seed
     # is per rank, so they see different batches. Gradients are all-reduced in
     # train.py, which keeps the replicas synchronised.
@@ -48,10 +56,13 @@ def _mp_fn(index: int, preset_name: str, run_name: str) -> None:
     summary = train(
         str(preset["train_config"]),
         run_dir_for(Path("runs") / run_name, index),
-        _load_wikitext_tokens(),
+        tokens,
         device="xla",
         override=override,
         data_seed=data_seed,
+        # Each chip consumes its own batch; the logged token count is the
+        # global one, so eight chips report eight batches per step.
+        world_size=int(preset["chips"]),
         # Rank 0 is the canonical metric series and the synchronized model is
         # identical on every rank after the all-reduce, so one checkpoint is
         # enough. Writing eight copies of a multi-gigabyte file is wasteful.
@@ -65,6 +76,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--preset", choices=sorted(TPU_PRESETS), required=True)
     parser.add_argument("--run-name", default=None)
     parser.add_argument("--nprocs", type=int, default=int(TPU_V5E8["chips"]))
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="prepared token stream; without it every rank tokenizes the corpus",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -92,6 +109,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "tokens_per_step": preset["tokens_per_step"],
                 "n_steps": preset["n_steps"],
                 "total_tokens": preset["total_tokens"],
+                "data_dir": None if args.data_dir is None else str(args.data_dir),
                 "rank_data_seeds": [
                     int(preset["seed"]) + rank for rank in range(args.nprocs)
                 ],
@@ -111,7 +129,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
     import torch_xla.distributed.xla_multiprocessing as xmp
 
-    xmp.spawn(_mp_fn, args=(args.preset, run_name), nprocs=args.nprocs, start_method="spawn")
+    xmp.spawn(
+        _mp_fn,
+        args=(args.preset, run_name, None if args.data_dir is None else str(args.data_dir)),
+        nprocs=args.nprocs,
+        start_method="spawn",
+    )
 
 
 if __name__ == "__main__":

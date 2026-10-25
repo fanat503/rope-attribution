@@ -27,6 +27,7 @@ re-expressed in this project's own code.
 | `projects/rope_attribution/sensitivity.py` | Sensitivity of the position-free cost statistic to configuration; writes `results/sensitivity.json`. | **Original to this project.** NumPy only. | `tests/test_sensitivity.py` re-runs the sweep and diffs it against the committed artifact. |
 | `projects/rope_attribution/agreement.py` | What a position-free scalar gets wrong that a reader would act on. | **Original to this project.** NumPy only. | Computed from the package's own functions; `tests/test_agreement.py`. |
 | `projects/rope_attribution/train.py` | Training harness for the model family the paper's claims are about; logs every metric per evaluation and refuses CPU runs above the smoke scale. | **Original to this project.** `torch`, `transformers` and `datasets` as install-time dependencies. | Parameter counts are re-derived from the configs in `tests/test_train.py`, which also pins the CPU guard. |
+| `projects/rope_attribution/data.py` | Streaming dataset preparation: tokenises a text corpus into checksummed `uint16` shards plus a manifest, and memory-maps them for training. | **Original to this project.** `datasets` and `transformers` tokenizers as install-time dependencies. | Shard layout, checksums and the merged token stream are exercised by `tests/test_data.py` on a temporary corpus; no dataset is tracked in this repository. |
 | `projects/rope_attribution/report_run.py` | Turns a training run's JSONL log into a self-contained report. | **Original to this project.** Standard library only. | Log parsing and HTML rendering are exercised by `tests/test_report_run.py`. |
 | `projects/rope_attribution/tpu_configs.py`, `tpu_launch.py` | TPU v5e-8 presets and single-host launcher. | **Original to this project.** The launcher imports `torch_xla` only at run time. | Arithmetic and dry-run behaviour are pinned by `tests/test_tpu_configs.py`; no real XLA run is claimed. |
 | `projects/rope_attribution/downstream.py` | Optional NLL kernel-replacement probe; not used by the paper. | **Original to this project.** `torch`, `transformers` as install-time dependencies. | `tests/test_downstream.py` covers its pure logic; its scratch outputs are not committed and are not paper evidence. |
@@ -88,9 +89,11 @@ done
 
 The counts this method returns over the current tree are recorded in
 `../NOTICE.md`, which is where they are maintained — this file keeps only the
-method, so the two documents cannot drift apart. Two properties of the output
-are worth stating so it is not misread: `inv_freq` and `mscale` legitimately
-appear in this project's own code and tests, and the zero rows (`rotary_emb`,
-`apply_rotary`, `attention_scaling`, `ntk`, `copied from`, `ported from`,
-`taken from`) are the part that matters. A non-zero row for any of them would
-be a provenance failure, not a counting difference.
+method, so the two documents cannot drift apart. Three properties of the output
+are worth stating so it is not misread: `inv_freq`, `rotary` and `mscale`
+legitimately appear in this project's own code, tests and measured artifacts;
+`rotary_emb` and `apply_rotary` are public Hugging Face symbol names used as
+configuration keys and as a test seam, not copied bodies; and the zero rows
+(`attention_scaling`, `ntk`, `ported from`, `taken from`) are the part that
+matters. A non-zero row for any of those four would be a provenance failure, not
+a counting difference.

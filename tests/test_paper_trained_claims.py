@@ -325,7 +325,7 @@ def test_the_position_blind_cutoff_matches_the_code(trained: dict) -> None:
 
 
 def test_the_seed_sd_is_not_overstated_as_three_orders(trained: dict) -> None:
-    """0.0182 / 4.58e-5 is about 400x, i.e. 2.6 orders, not three.
+    """0.0170 / 4.58e-5 is about 370x, i.e. 2.6 orders, not three.
 
     Mutation verdict: restoring "three orders of magnitude" fails here. The
     numerical ratio is already checked by the seed-variance tests; this keeps
@@ -334,7 +334,7 @@ def test_the_seed_sd_is_not_overstated_as_three_orders(trained: dict) -> None:
     assert "three orders of magnitude" not in TEX_FLAT
     assert "more than two orders of magnitude" in TEX_FLAT
     # The ratio the sentence is describing, recomputed from the two artifacts.
-    head_sd = 0.0182
+    head_sd = 0.0170
     seed_sd = 4.5835751380061324e-05
     ratio = head_sd / seed_sd
     assert 300.0 < ratio < 500.0, ratio
@@ -354,6 +354,21 @@ def test_the_limitations_scope_the_configuration_claim() -> None:
         "Section~\\ref{sec:trained} uses the three checkpoints and their content-pair"
         in TEX_FLAT
     )
+
+
+def test_the_worth_section_discloses_the_grid_it_measured(usefulness: dict) -> None:
+    """The section used to say "pre-registered grid" without its size.
+
+    A reader coming from the 54-point synthetic grid would assume 54. The
+    measured grid is 13 points; the paper must say so.
+
+    Mutation verdict: deleting the disclosure makes ``groups`` find nothing.
+    """
+    n, lo, hi = (int(x) for x in groups("worth_distance_grid")[0])
+    grid = usefulness["distance_grid"]
+    assert n == len(grid) == 13
+    assert lo == min(grid) == 1
+    assert hi == max(grid) == 4096
 
 
 def test_the_worth_section_prices_the_best_surrogate_not_a_strawman(
@@ -451,8 +466,8 @@ def test_the_head_range_is_not_one_outlier(usefulness: dict) -> None:
     """If a single head failed, the honest claim would be about that head.
 
     The band's two ends are pinned at the paper's own precision instead
-    of a +-1.0-point slack: the extremes over all 2790 heads are 20.166%
-    and 36.305%, which round to the printed 20.2% and 36.3%. A one-point
+    of a +-1.0-point slack: the extremes over all 558 layer-heads are 21.268%
+    and 33.913%, which round to the printed 21.3% and 33.9%. A one-point
     slack would have passed a band that is nearly a point off the data.
     """
     total = sum(m["n_heads"] for m in usefulness["models"])

@@ -32,6 +32,15 @@ following `pdflatex` runs pick up the citation numbers and the cross-references.
 `\usepackage[preprint,position]{neurips_2026}` on top of
 `\documentclass[twocolumn]{article}`.
 
+It is the only third-party file in the repository, vendored verbatim and
+unmodified so that `paper/` builds without network access. Its own header
+records that it is a partial rewrite of `nips15submit_e.sty`; it carries no
+copyright line or license header of its own. `../NOTICE.md` is the
+repository-level statement that names this exception, and nothing outside
+`paper/` imports or derives from it. The `preprint` option is deliberate: it
+produces a non-anonymous build for checking the formatting. The submission's
+anonymity requirement is an open decision, not something this file asserts.
+
 The matching `neurips_2026.cls` is **not** vendored. It could not be fetched from
 the NeurIPS repositories during this work (`neurips.cc/Conferences/2026/...`
 returns 404 for the class), so the `\documentclass{neurips_2026}` form is not
@@ -72,7 +81,9 @@ appendix names the artifact for each row).
   heading, because a float queued behind the Conclusion can otherwise occupy the
   first uncounted page while the heading still lands on page 10. The appendix is
   forced onto a fresh page, so this is a real measure of where the main text ends.
-  A PDF older than the source is skipped rather than used as evidence.
+  A PDF older than the source is skipped locally rather than used as evidence;
+  the paper workflow sets `ROPE_PAPER_STRICT=1`, which makes a missing or stale
+  PDF a failure, so CI cannot pass this gate by skipping it.
 
 ## Page limit accounting
 

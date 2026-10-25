@@ -17,35 +17,35 @@
       "seed": 20260906,
       "pooled": {
         "sign_flip_fraction": 0.27042014920964974,
-        "sign_flip_fraction_min_head": 0.20166028581175846,
-        "sign_flip_fraction_max_head": 0.36304557124518616,
-        "rel_err_median": 1.1271909646727432,
-        "rel_err_p90": 1.1571620678460923
+        "sign_flip_fraction_min_head": 0.21267741661101486,
+        "sign_flip_fraction_max_head": 0.33913075389159475,
+        "rel_err_median": 1.1255347340474668,
+        "rel_err_p90": 1.149530086391523
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.28420779580359473,
-          "sign_flip_fraction_min_head": 0.20166028581175846,
-          "sign_flip_fraction_max_head": 0.36304557124518616,
-          "rel_err_median": 1.110079867406656,
-          "rel_err_p90": 1.1788640898546598
+          "sign_flip_fraction_pooled": 0.2842077958035947,
+          "sign_flip_fraction_min_head": 0.21267741661101486,
+          "sign_flip_fraction_max_head": 0.33913075389159475,
+          "rel_err_median": 1.1138721580598727,
+          "rel_err_p90": 1.1669587054174808
         },
         {
           "model_id": "JackFram/llama-160m",
           "sign_flip_fraction_pooled": 0.2629400766160485,
-          "sign_flip_fraction_min_head": 0.24290107522054366,
-          "sign_flip_fraction_max_head": 0.28649583985245203,
-          "rel_err_median": 1.127202629434862,
-          "rel_err_p90": 1.1571620678460923
+          "sign_flip_fraction_min_head": 0.24752832616290252,
+          "sign_flip_fraction_max_head": 0.28150238426070945,
+          "rel_err_median": 1.126941457802174,
+          "rel_err_p90": 1.1527627257581805
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
           "sign_flip_fraction_pooled": 0.264112575209306,
-          "sign_flip_fraction_min_head": 0.24236287896320297,
-          "sign_flip_fraction_max_head": 0.29271979093533035,
-          "rel_err_median": 1.1271909646727432,
-          "rel_err_p90": 1.1518396492756615
+          "sign_flip_fraction_min_head": 0.24634177374549965,
+          "sign_flip_fraction_max_head": 0.2812598449184604,
+          "rel_err_median": 1.1272077623044194,
+          "rel_err_p90": 1.144358220658449
         }
       ]
     },
@@ -53,87 +53,87 @@
       "seed": 20260907,
       "pooled": {
         "sign_flip_fraction": 0.2704666247061382,
-        "sign_flip_fraction_min_head": 0.2011289589331717,
-        "sign_flip_fraction_max_head": 0.36277463148170463,
-        "rel_err_median": 1.1272984611948416,
-        "rel_err_p90": 1.1572184626154864
+        "sign_flip_fraction_min_head": 0.21211616119195797,
+        "sign_flip_fraction_max_head": 0.3386817409069035,
+        "rel_err_median": 1.1256349344893677,
+        "rel_err_p90": 1.148299646802725
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.28433604060320467,
-          "sign_flip_fraction_min_head": 0.2011289589331717,
-          "sign_flip_fraction_max_head": 0.36277463148170463,
-          "rel_err_median": 1.109373282701073,
-          "rel_err_p90": 1.1762345796913762
+          "sign_flip_fraction_pooled": 0.2843360406032047,
+          "sign_flip_fraction_min_head": 0.21211616119195797,
+          "sign_flip_fraction_max_head": 0.3386817409069035,
+          "rel_err_median": 1.1124621402999286,
+          "rel_err_p90": 1.164827873772129
         },
         {
           "model_id": "JackFram/llama-160m",
-          "sign_flip_fraction_pooled": 0.2629971402996172,
-          "sign_flip_fraction_min_head": 0.2437975796011924,
-          "sign_flip_fraction_max_head": 0.28722923441547704,
-          "rel_err_median": 1.128009420589615,
-          "rel_err_p90": 1.1572184626154864
+          "sign_flip_fraction_pooled": 0.2629971402996171,
+          "sign_flip_fraction_min_head": 0.2477441845532904,
+          "sign_flip_fraction_max_head": 0.2824449994849584,
+          "rel_err_median": 1.1265302223388756,
+          "rel_err_p90": 1.1502252350898623
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
           "sign_flip_fraction_pooled": 0.26406669321559256,
-          "sign_flip_fraction_min_head": 0.24164360845714064,
-          "sign_flip_fraction_max_head": 0.29286619237891043,
-          "rel_err_median": 1.1272984611948416,
-          "rel_err_p90": 1.1515373632816213
+          "sign_flip_fraction_min_head": 0.24615994055029353,
+          "sign_flip_fraction_max_head": 0.2810728875621914,
+          "rel_err_median": 1.1278162444790465,
+          "rel_err_p90": 1.1444335487931934
         }
       ]
     },
     {
       "seed": 20260908,
       "pooled": {
-        "sign_flip_fraction": 0.2703749561937353,
-        "sign_flip_fraction_min_head": 0.20043911117840785,
-        "sign_flip_fraction_max_head": 0.36078541599743014,
-        "rel_err_median": 1.1268769834772496,
-        "rel_err_p90": 1.1569137067795712
+        "sign_flip_fraction": 0.27037495619373525,
+        "sign_flip_fraction_min_head": 0.21047248247596523,
+        "sign_flip_fraction_max_head": 0.33935616430329285,
+        "rel_err_median": 1.1255079891545856,
+        "rel_err_p90": 1.1490185384867941
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.2841150072975921,
-          "sign_flip_fraction_min_head": 0.20043911117840785,
-          "sign_flip_fraction_max_head": 0.36078541599743014,
-          "rel_err_median": 1.110271029754101,
-          "rel_err_p90": 1.1782692583381378
+          "sign_flip_fraction_pooled": 0.28411500729759204,
+          "sign_flip_fraction_min_head": 0.21047248247596523,
+          "sign_flip_fraction_max_head": 0.33935616430329285,
+          "rel_err_median": 1.1134371101023,
+          "rel_err_p90": 1.165424419328155
         },
         {
           "model_id": "JackFram/llama-160m",
           "sign_flip_fraction_pooled": 0.26293419616820457,
-          "sign_flip_fraction_min_head": 0.24343030838271085,
-          "sign_flip_fraction_max_head": 0.2864370700204642,
-          "rel_err_median": 1.1268769834772496,
-          "rel_err_p90": 1.1569137067795712
+          "sign_flip_fraction_min_head": 0.24769583235049403,
+          "sign_flip_fraction_max_head": 0.2829774723528062,
+          "rel_err_median": 1.1271314288785053,
+          "rel_err_p90": 1.151071745994628
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
           "sign_flip_fraction_pooled": 0.26407566511540925,
-          "sign_flip_fraction_min_head": 0.24194078311623052,
-          "sign_flip_fraction_max_head": 0.29120049854428964,
-          "rel_err_median": 1.1270316601911503,
-          "rel_err_p90": 1.1510159214227762
+          "sign_flip_fraction_min_head": 0.24597515546559875,
+          "sign_flip_fraction_max_head": 0.28195550144085957,
+          "rel_err_median": 1.1279901396276735,
+          "rel_err_p90": 1.1437047289058617
         }
       ]
     }
   ],
   "mean": {
     "sign_flip_fraction": 0.2704205767031744,
-    "sign_flip_fraction_min_head": 0.20107611864111266,
-    "sign_flip_fraction_max_head": 0.36220187290810696,
-    "rel_err_median": 1.1271221364482782,
-    "rel_err_p90": 1.1570980790803833
+    "sign_flip_fraction_min_head": 0.2117553534263127,
+    "sign_flip_fraction_max_head": 0.3390562197005971,
+    "rel_err_median": 1.1255592192304735,
+    "rel_err_p90": 1.1489494238936806
   },
   "sd": {
-    "sign_flip_fraction": 4.5835751380061324e-05,
-    "sign_flip_fraction_min_head": 0.0006122997171593452,
-    "sign_flip_fraction_max_head": 0.0012341453414051323,
-    "rel_err_median": 0.00021900652951198523,
-    "rel_err_p90": 0.00016214176353989115
+    "sign_flip_fraction": 4.583575138008895e-05,
+    "sign_flip_fraction_min_head": 0.001145892803795025,
+    "sign_flip_fraction_max_head": 0.00034333400446226963,
+    "rel_err_median": 6.692101796805904e-05,
+    "rel_err_p90": 0.0006181245955762764
   }
 }

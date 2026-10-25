@@ -299,22 +299,59 @@ def measure_model(
     return _summarise(model_id, rope_dim, deltas, per_prompt)
 
 
+def _cluster_heads(per_prompt: list[dict]) -> list[dict]:
+    """Collapse the five prompt-level records of a head into one head record.
+
+    The measurement unit that varies independently is the **layer-head**, not
+    the head-prompt instance: the five prompts are five looks at the same
+    weights. The earlier schema counted all 2790 instances as heads, which
+    inflated ``n`` five-fold and made every interval on the headline about
+    ``sqrt(5)`` too narrow. A head's rate here is the unweighted mean of its
+    per-prompt rates; ``n_prompts`` records how many contributed, so a missing
+    prompt is visible rather than silently averaged away.
+    """
+    grouped: dict[tuple[int, int], dict[str, list[float]]] = {}
+    for entry in per_prompt:
+        for h in entry["heads"]:
+            key = (int(h["layer"]), int(h["head"]))
+            rec = grouped.setdefault(key, {"sign": [], "rel": []})
+            if h["sign_flip_fraction_pooled"] is not None:
+                rec["sign"].append(float(h["sign_flip_fraction_pooled"]))
+            if h["rel_err_median_of_medians"] is not None:
+                rec["rel"].append(float(h["rel_err_median_of_medians"]))
+
+    heads = []
+    for (layer, head), rec in sorted(grouped.items()):
+        sign = np.asarray(rec["sign"], dtype=np.float64)
+        rel = np.asarray(rec["rel"], dtype=np.float64)
+        heads.append(
+            {
+                "layer": layer,
+                "head": head,
+                "n_prompts": int(sign.size),
+                "sign_flip_fraction": float(sign.mean()) if sign.size else None,
+                "sign_flip_fraction_sd": (
+                    float(sign.std(ddof=1)) if sign.size > 1 else 0.0
+                ),
+                "rel_err_median": float(rel.mean()) if rel.size else None,
+            }
+        )
+    return heads
+
+
 def _summarise(
     model_id: str, rope_dim: int, deltas: np.ndarray, per_prompt: list[dict]
 ) -> dict:
-    pooled_flip = []
-    pooled_rel = []
-    n_heads = 0
-    for entry in per_prompt:
-        for h in entry["heads"]:
-            n_heads += 1
-            if h["sign_flip_fraction_pooled"] is not None:
-                pooled_flip.append(h["sign_flip_fraction_pooled"])
-            if h["rel_err_median_of_medians"] is not None:
-                pooled_rel.append(h["rel_err_median_of_medians"])
-    arr = np.array(pooled_flip, dtype=np.float64)
-    rel = np.array(pooled_rel, dtype=np.float64)
-    if not arr.size or not rel.size:
+    heads = _cluster_heads(per_prompt)
+    sign = np.array(
+        [h["sign_flip_fraction"] for h in heads if h["sign_flip_fraction"] is not None],
+        dtype=np.float64,
+    )
+    rel = np.array(
+        [h["rel_err_median"] for h in heads if h["rel_err_median"] is not None],
+        dtype=np.float64,
+    )
+    if not sign.size or not rel.size:
         # Do not publish a model-level zero when no head produced a defined
         # measurement. The absence is the result, and it must be visible.
         raise ValueError(
@@ -327,21 +364,63 @@ def _summarise(
         "n_rotary_pairs": rope_dim // 2,
         "n_deltas": int(deltas.size),
         "deltas": [int(d) for d in deltas],
-        "n_heads": n_heads,
-        "n_heads_with_sign": int(arr.size),
+        "n_heads": len(heads),
+        "n_head_prompt_instances": int(
+            sum(len(entry["heads"]) for entry in per_prompt)
+        ),
+        "n_prompts": len(per_prompt),
+        "n_heads_with_sign": int(sign.size),
         "n_heads_with_rel_err": int(rel.size),
-        "sign_flip_fraction_pooled": float(arr.mean()),
-        "sign_flip_fraction_min_head": float(arr.min()),
-        "sign_flip_fraction_max_head": float(arr.max()),
+        "sign_flip_fraction_pooled": float(sign.mean()),
+        "sign_flip_fraction_min_head": float(sign.min()),
+        "sign_flip_fraction_max_head": float(sign.max()),
+        "sign_flip_fraction_sd_head": float(sign.std(ddof=1)),
         # Undefined when any head has a zero rate: a max/min ratio with a zero
         # denominator is not a large number, it is not a number. JSON ``null``
         # is honest and keeps the artifact strict-JSON serialisable.
         "sign_flip_across_head_ratio": (
-            float(arr.max() / arr.min()) if arr.min() > 0 else None
+            float(sign.max() / sign.min()) if sign.min() > 0 else None
         ),
         "rel_err_median": float(np.median(rel)),
         "rel_err_p90": float(np.quantile(rel, 0.90)),
+        "head_rates": heads,
         "per_prompt": per_prompt,
+    }
+
+
+def _pool(models: Sequence[dict]) -> dict:
+    """Top-level summaries, with the unit of replication stated explicitly.
+
+    ``sign_flip_fraction`` remains the **equal-weight mean of the per-model
+    means**: that is the paper's headline, and it does not change when the
+    clustering does. ``sign_flip_fraction_head_pooled`` is the mean over all
+    unique heads; it differs only because SmolLM contributes 270 heads against
+    144 each for the other two checkpoints. Both are reported so a reader can
+    never mistake one for the other.
+    """
+    heads = [h for m in models for h in m["head_rates"]]
+    sign = np.array(
+        [h["sign_flip_fraction"] for h in heads if h["sign_flip_fraction"] is not None],
+        dtype=np.float64,
+    )
+    rel = np.array(
+        [h["rel_err_median"] for h in heads if h["rel_err_median"] is not None],
+        dtype=np.float64,
+    )
+    return {
+        "n_heads": len(heads),
+        "n_head_prompt_instances": int(
+            sum(m["n_head_prompt_instances"] for m in models)
+        ),
+        "sign_flip_fraction": float(
+            np.mean([m["sign_flip_fraction_pooled"] for m in models])
+        ),
+        "sign_flip_fraction_head_pooled": float(sign.mean()),
+        "sign_flip_fraction_min_head": float(sign.min()),
+        "sign_flip_fraction_max_head": float(sign.max()),
+        "sign_flip_fraction_sd_head": float(sign.std(ddof=1)),
+        "rel_err_median": float(np.median(rel)),
+        "rel_err_p90": float(np.quantile(rel, 0.90)),
     }
 
 
@@ -404,24 +483,12 @@ def run_all(model_ids: Sequence[str] = DEFAULT_MODEL_IDS, seed: int = DEFAULT_SE
     """
     models = [measure_model(m, seed=seed) for m in model_ids]
     return {
-        "schema": "rope_attribution/usefulness/v1",
+        "schema": "rope_attribution/usefulness/v2",
         "distance_grid": list(DISTANCE_GRID),
         "grid_densities": list(GRID_DENSITIES),
         "seed": seed,
         "models": models,
-        "pooled": {
-            "sign_flip_fraction": float(
-                np.mean([m["sign_flip_fraction_pooled"] for m in models])
-            ),
-            "sign_flip_fraction_min_head": float(
-                np.min([m["sign_flip_fraction_min_head"] for m in models])
-            ),
-            "sign_flip_fraction_max_head": float(
-                np.max([m["sign_flip_fraction_max_head"] for m in models])
-            ),
-            "rel_err_median": float(np.median([m["rel_err_median"] for m in models])),
-            "rel_err_p90": float(np.median([m["rel_err_p90"] for m in models])),
-        },
+        "pooled": _pool(models),
     }
 
 

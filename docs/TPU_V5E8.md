@@ -26,13 +26,26 @@ on one. The numbers below are a configuration, not a result.
 The trainer in `train.py` is single-device PyTorch. The launcher starts eight
 processes; every process builds the model from the **same** seed, draws batches
 with its own `data_seed = preset_seed + rank`, and calls
-`train.train(..., device="xla")`. The XLA update is ordered explicitly:
+`train.train(..., device="xla", world_size=8)`. The XLA update is ordered explicitly:
 `xm.reduce_gradients` once, clip the reduced gradient once, `opt.step()` once,
 then `xm.mark_step()`. It deliberately does not call `xm.optimizer_step`, which
 would all-reduce a second time and make the effective clip threshold depend on
 that hidden reduction. The eight chips therefore train one synchronised model.
 Rank 0's directory is the canonical metric series; the other ranks record their
-local loss and throughput, which differ by construction.
+local loss, which differ by construction.
+
+`world_size=8` enters the token accounting, not the model. Each chip consumes
+its own per-chip batch, so a step sees `8 * per_chip_batch_size * seq_len =
+131,072` tokens globally, and every rank logs that global count. Logging the
+per-rank count would under-report the run by 8x and make the published
+tokens-per-parameter ratio wrong.
+
+**Unverified:** whether `xm.reduce_gradients` sums or averages the eight
+gradients. The order of the operations is tested with a fake `xm` on CPU, but
+the reduction semantics need the TPU host (or a pin of the `torch_xla` source).
+If it averages, the effective learning rate is the preset's; if it sums, it is
+eight times larger. A first TPU run should log `grad_norm` and compare it
+against a one-chip run before trusting the loss curve.
 
 ## Presets
 
@@ -60,6 +73,21 @@ python -m projects.rope_attribution.tpu_launch \
 
 ## Running
 
+Prepare the token stream **once**, on the TPU VM or on a machine that shares
+its filesystem. This step tokenizes, shards, checksums, and writes the single
+`tokens.u16` every rank will mmap:
+
+```sh
+python -m projects.rope_attribution.data prepare \
+    --source wikitext-103 --out data/wikitext103
+python -m projects.rope_attribution.data check --out data/wikitext103
+```
+
+The check re-hashes every shard and the merged stream. Skipping the prepare
+step is supported --- the launcher then calls the in-memory tokenizer in every
+rank --- but that pays the tokenization cost eight times and leaves no
+checksummed artefact.
+
 On the TPU VM, install a `torch_xla` build that matches the installed `torch`
 and the TPU VM image; this repository does not pin a wheel, because the correct
 pair depends on the image. Check the import before launching:
@@ -68,7 +96,8 @@ pair depends on the image. Check the import before launching:
 python -c "import torch_xla; print(torch_xla.__version__)"
 export PJRT_DEVICE=TPU
 python -m projects.rope_attribution.tpu_launch \
-    --preset tpu_v5e8_102m --run-name v5e8_102m
+    --preset tpu_v5e8_102m --run-name v5e8_102m \
+    --data-dir data/wikitext103
 ```
 
 The launcher uses `torch_xla.distributed.xla_multiprocessing.spawn` with
@@ -79,10 +108,30 @@ Read a run with the same viewer as a CPU run:
 python -m projects.rope_attribution.report_run runs/v5e8_102m/rank-0
 ```
 
-The first run downloads WikiText-103 through `datasets`; each process uses the
-same Hugging Face cache, and the cache's file locks make the concurrent first
-download safe. Later runs read the cache. `train.py` refuses a CPU run at this
-scale; the refusal is why the smoke config exists.
+The first `data prepare` downloads WikiText-103 through `datasets` and writes
+the staged stream; later launches only mmap it. `train.py` refuses a CPU run at
+this scale; the refusal is why the smoke config exists.
+
+## Checkpoints and resuming
+
+Rank 0 writes two files into `runs/<name>/rank-0/`:
+
+| File | Contents | Purpose |
+| --- | --- | --- |
+| `checkpoint.pt` | model weights, config, step | evaluation and fine-tuning |
+| `checkpoint_resume.pt` | weights + AdamW moments + numpy/torch RNG states + counters | continuing the run |
+
+`checkpoint_resume.pt` is replaced atomically every `checkpoint_every` steps
+(2,000 in the presets) and at the end. A crash therefore costs the steps since
+the last save, not the run. The file is written only by rank 0 because every
+rank holds the same synchronised weights after the all-reduce.
+
+Single-process resume is wired: `python -m ...train --resume` reads
+`runs/<name>/checkpoint_resume.pt` and checks the config, parameter count,
+token count, world size and data seed against the run that wrote it. **Multi-rank
+resume is not wired:** it would need rank 0's state broadcast to the other
+chips before the first step, and this repository does not pretend that path is
+tested. Restart from scratch, or add the broadcast and test it on a TPU host.
 
 ## If a preset does not fit
 
@@ -101,5 +150,9 @@ the learning rate for the new batch; the validator cannot do that for you.
 | Parameter counts match `train.CONFIGS` | `tests/test_tpu_configs.py` |
 | Launcher CLI, dry run, process-count refusal | `tests/test_tpu_configs.py` |
 | XLA import refusal when `torch_xla` is absent | `tests/test_train.py` |
+| Token accounting is global over ranks | `tests/test_train.py` |
+| Resume restores optimizer and data order | `tests/test_train.py` (single process, CPU) |
+| `xm.reduce_gradients` sums or averages | **Not verified here**; needs the TPU host |
+| Multi-rank resume | **Not implemented** |
 | An actual 8-chip XLA training step | **Not verified here** |
 | Any model quality or loss from these presets | **No such claim** |
