@@ -473,6 +473,86 @@ def test_the_sweep_reaches_the_distance_range_the_paper_reports() -> None:
     assert len(Q.SWEEP_DELTAS) >= 40
 
 
+def test_the_attention_layer_follows_the_sae_layer_and_must_exist() -> None:
+    """A dictionary at block ``L`` explains block ``L + 1``, and no further.
+
+    The SAE encodes ``hidden_states[L + 1]``, the residual that block
+    ``L + 1``'s attention consumes, so the two indices differ by exactly one.
+    A dictionary on the last block has nothing after it: asking for its
+    attention layer must raise rather than wrap, clamp, or fall back to the
+    default layer and silently attribute a different block.
+    """
+    assert Q._attention_index(6, 0) == 1
+    assert Q._attention_index(6, 3) == 4
+    assert Q._attention_index(6, 4) == 5
+    with pytest.raises(ValueError, match="sae_layer"):
+        Q._attention_index(6, 5)
+    with pytest.raises(ValueError, match="sae_layer"):
+        Q._attention_index(6, -1)
+
+
+def test_the_forward_hook_follows_the_requested_attention_layer() -> None:
+    """``_forward`` must hook the block it is asked for, not the default one.
+
+    ``measure_model`` checks the hook's input against the hidden state at
+    ``sae_layer``; if the hook stayed on the default layer those are different
+    vectors and ``ln_residual`` becomes order one. This test pins the hook
+    itself, so that regression is reported here instead of as a mysterious
+    residual in a real run.
+    """
+    torch = pytest.importorskip("torch")
+
+    class _Attention(torch.nn.Module):
+        def forward(self, x):
+            return x
+
+    class _Layer(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attention = _Attention()
+
+    class _Inner(torch.nn.Module):
+        def __init__(self, n_layers: int) -> None:
+            super().__init__()
+            self.layers = torch.nn.ModuleList([_Layer() for _ in range(n_layers)])
+
+    class _Output:
+        def __init__(self, hidden: list) -> None:
+            self.hidden_states = hidden
+            self.attentions = None
+
+    class _Model(torch.nn.Module):
+        def __init__(self, n_layers: int) -> None:
+            super().__init__()
+            self.gpt_neox = _Inner(n_layers)
+
+        def forward(self, input_ids, **kwargs):
+            hidden = [input_ids]
+            for index, layer in enumerate(self.gpt_neox.layers):
+                hidden.append(layer.attention(torch.full_like(input_ids, float(index))))
+            return _Output(hidden)
+
+    def tokenizer(text: str, return_tensors: str = "pt") -> dict:
+        return {"input_ids": torch.zeros((1, 2), dtype=torch.long)}
+
+    model = _Model(6)
+    for layer in (1, 3, 5):
+        captured = Q._forward(model, tokenizer, "ignored", attention_layer=layer)
+        assert float(captured["attn_in"][0, 0]) == float(layer)
+
+
+def test_the_cli_keeps_layer_three_as_the_default() -> None:
+    """The headline artifact is layer 3; the new flag must not move it.
+
+    A depth profile needs ``--sae-layer``, but the committed evidence and every
+    number in the paper were produced without it. Changing the default would
+    regenerate a different artifact under the same filename.
+    """
+    args = Q._parse_args(["--sae", "dictionary.safetensors"])
+    assert Q.DEFAULT_SAE_LAYER == 3
+    assert args.sae_layer == 3
+
+
 # --------------------------------------------------------------------------
 # The committed artifact
 # --------------------------------------------------------------------------

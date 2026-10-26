@@ -805,7 +805,31 @@ def top_profiles(
 # --------------------------------------------------------------------------
 
 
-def _forward(model: Any, tokenizer: Any, text: str) -> dict[str, Any]:
+def _attention_index(n_blocks: int, sae_layer: int) -> int:
+    """The attention block a dictionary at ``sae_layer`` explains.
+
+    The SAE encodes the output of block ``sae_layer``, i.e.
+    ``hidden_states[sae_layer + 1]``, which is exactly the input of block
+    ``sae_layer + 1``'s attention. The two indices therefore differ by one. A
+    dictionary on the last block has no block after it; that is an error, not
+    a reason to fall back to the default layer.
+    """
+    index = int(sae_layer) + 1
+    if int(sae_layer) < 0 or index >= int(n_blocks):
+        raise ValueError(
+            f"sae_layer must be in [0, {int(n_blocks) - 2}] for a model with "
+            f"{int(n_blocks)} blocks (block sae_layer + 1 is attributed), "
+            f"not {sae_layer!r}"
+        )
+    return index
+
+
+def _forward(
+    model: Any,
+    tokenizer: Any,
+    text: str,
+    attention_layer: int = DEFAULT_SAE_LAYER + 1,
+) -> dict[str, Any]:
     """One forward pass, capturing the residual, the attention input and probs."""
     torch = RM._require_torch()
     if not hasattr(model, "gpt_neox"):
@@ -816,7 +840,7 @@ def _forward(model: Any, tokenizer: Any, text: str) -> dict[str, Any]:
     ids = tokenizer(text, return_tensors="pt")["input_ids"]
     captured: dict[str, Any] = {}
     handles = [
-        model.gpt_neox.layers[DEFAULT_SAE_LAYER + 1].attention.register_forward_hook(
+        model.gpt_neox.layers[attention_layer].attention.register_forward_hook(
             lambda module, args, out: captured.__setitem__("attn_in", args[0])
         )
     ]
@@ -847,8 +871,13 @@ def measure_model(
     n_pairs: int = DEFAULT_PAIRS_PER_DELTA,
     deltas: Sequence[int] = DEFAULT_DELTAS,
     seed: int = 0,
+    sae_layer: int = DEFAULT_SAE_LAYER,
 ) -> dict[str, Any]:
-    """Full attribution sweep on one checkpoint and one passage."""
+    """Full attribution sweep on one checkpoint and one passage.
+
+    ``sae_layer`` selects which public dictionary is applied; the attention
+    block attributed is the one after it (see ``_attention_index``).
+    """
     if sae_path is None:
         raise ValueError(
             "measure_model needs a sparse dictionary; pass the safetensors path "
@@ -857,21 +886,22 @@ def measure_model(
     dictionary = SparseDictionary.load_safetensors(sae_path)
     loaded = RM.load_model(model_id, seed=seed)
     model, tokenizer = loaded.model, loaded.tokenizer
+    attn_index = _attention_index(len(model.gpt_neox.layers), sae_layer)
 
-    run = _forward(model, tokenizer, text)
+    run = _forward(model, tokenizer, text, attn_index)
     n_tokens = int(run["ids"].shape[1])
     if n_tokens < 8:
         raise ValueError(f"the passage tokenized to {n_tokens} tokens, too few to bin")
 
-    # The SAE hook is the output of block ``layer``, i.e. hidden_states[layer+1].
-    x = run["hidden_states"][DEFAULT_SAE_LAYER + 1][0].numpy().astype(np.float64)
+    # The SAE hook is the output of block ``sae_layer``, i.e.
+    # hidden_states[sae_layer + 1].
+    x = run["hidden_states"][int(sae_layer) + 1][0].numpy().astype(np.float64)
     if x.shape[1] != dictionary.d_model:
         raise ValueError(
             f"the checkpoint has width {x.shape[1]} but the dictionary was trained "
             f"on width {dictionary.d_model}"
         )
 
-    attn_index = DEFAULT_SAE_LAYER + 1
     attn = RM.attention_modules(model)[attn_index]
     ln = model.gpt_neox.layers[attn_index].input_layernorm
     ln_weight = ln.weight.detach().numpy().astype(np.float64)
@@ -971,7 +1001,7 @@ def measure_model(
 
     return {
         "model_id": model_id,
-        "sae_layer": DEFAULT_SAE_LAYER,
+        "sae_layer": int(sae_layer),
         "attention_layer": attn_index,
         "n_tokens": n_tokens,
         "deltas": [int(d) for d in grid],
@@ -1037,13 +1067,14 @@ def run_all(
     sae_path: str | Path | None = None,
     text: str = DEFAULT_TEXT,
     seed: int = 0,
+    sae_layer: int = DEFAULT_SAE_LAYER,
 ) -> dict[str, Any]:
-    measured = measure_model(model_id, sae_path, text, seed=seed)
+    measured = measure_model(model_id, sae_path, text, seed=seed, sae_layer=sae_layer)
     measured["aggregate"] = aggregate_heads(measured["heads"])
     measured["schema"] = "qk-attribution/v1"
     measured["dictionary"] = (
-        "ctigges/pythia-70m-deduped__res-sm_processed, 3-res-sm "
-        "(d_sae=32768, ReLU, apply_b_dec_to_input=true)"
+        f"ctigges/pythia-70m-deduped__res-sm_processed, {int(sae_layer)}-res-sm "
+        f"(d_sae=32768, ReLU, apply_b_dec_to_input=true)"
         if sae_path is not None
         else None
     )
@@ -1076,12 +1107,21 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--sae-layer",
+        type=int,
+        default=DEFAULT_SAE_LAYER,
+        help=(
+            "block the dictionary was trained on; attention of block "
+            "sae_layer + 1 is attributed. Default 3, the layer used in the paper."
+        ),
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = _parse_args(argv)
-    data = run_all(args.model, args.sae)
+    data = run_all(args.model, args.sae, sae_layer=args.sae_layer)
     path = write_results(data, args.out)
     aggregate = data["aggregate"]
     print(
