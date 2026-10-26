@@ -20,10 +20,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 from rope_attribution import qk_attribution as Q
+from rope_attribution import qk_depth as QD
 from rope_attribution import rope as R
 
 REPO = Path(__file__).resolve().parent.parent
 ARTIFACT = REPO / "results" / "qk_attribution.json"
+DEPTH = REPO / "results" / "qk_depth.json"
 
 TOL = 1e-12
 
@@ -639,3 +641,91 @@ def test_every_head_carries_a_nonzero_share_in_the_base_bucket(artifact: dict) -
     for head in artifact["heads"]:
         assert 0.0 < head["base_share_mean"] < 20.0
         assert 0.0 < head["top_k_share_mean"] < 50.0
+
+
+# --------------------------------------------------------------------------
+# The depth profile
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def depth() -> dict:
+    if not DEPTH.is_file():
+        pytest.fail(
+            "results/qk_depth.json is absent; it is committed evidence, not an "
+            "optional input"
+        )
+    return json.loads(DEPTH.read_text(encoding="utf-8"))
+
+
+def test_the_depth_profile_covers_every_block_with_a_successor(depth: dict) -> None:
+    """Five dictionaries for six blocks: the last block has no block after it.
+
+    The rows must be the five attributable layers, and the attention index must
+    stay one ahead of the dictionary index; an off-by-one here would attribute
+    the wrong block while keeping every shape valid.
+    """
+    rows = depth["layers"]
+    assert [row["sae_layer"] for row in rows] == [0, 1, 2, 3, 4]
+    assert [row["attention_layer"] for row in rows] == [1, 2, 3, 4, 5]
+    assert depth["schema"] == "qk-depth/v1"
+    assert depth["seed"] == 0
+    assert depth["deltas"] == list(Q.DEFAULT_DELTAS)
+    assert depth["sweep_deltas"] == list(Q.SWEEP_DELTAS)
+
+
+def test_the_layer_three_row_is_the_headline_artifact(depth: dict, artifact: dict) -> None:
+    """The depth run must not be a second, slightly different measurement.
+
+    Same passage, seed, pair count and dictionary file; only the layer loop
+    differs. If the two disagree on any aggregate, one of them is not the
+    artifact the paper describes.
+    """
+    row = next(r for r in depth["layers"] if r["sae_layer"] == 3)
+    aggregate = artifact["aggregate"]
+    assert (
+        row["sweep_rotary_sign_flip_fraction"]
+        == aggregate["sweep_rotary"]["sign_flip_fraction"]
+    )
+    assert (
+        row["sweep_feature_sign_flip_fraction"]
+        == aggregate["sweep_feature"]["sign_flip_fraction"]
+    )
+    assert (
+        row["sweep_pair_sign_flip_fraction"]
+        == aggregate["sweep_pair"]["sign_flip_fraction"]
+    )
+    assert row["base_share_mean"] == aggregate["base_share_mean"]
+    assert row["top_k_share_mean"] == aggregate["top_k_share_mean"]
+    assert (
+        row["max_relative_exactness_error"]
+        == aggregate["max_relative_exactness_error"]
+    )
+    assert row["ln_residual"] == artifact["ln_residual"]
+
+
+def test_every_depth_row_is_a_real_forward_pass(depth: dict) -> None:
+    for row in depth["layers"]:
+        assert row["ln_residual"] < 1e-4, row
+        assert row["max_relative_exactness_error"] < 1e-9, row
+        assert row["sweep_rotary_n_material_cells"] > 0, row
+
+
+def test_the_rotary_rate_is_not_a_property_of_one_layer(depth: dict) -> None:
+    """Layer 3's 22.4% must not be the maximum, or a lucky block.
+
+    Every attributable layer is in the same 21--28% band, and at every layer
+    the rotary sub-score flips sign more often than the total profile does.
+    That is the paper's depth sentence as a bound: the total view understates
+    the cost everywhere, and the rotary view costs one cell in five everywhere.
+    """
+    for row in depth["layers"]:
+        rotary = row["sweep_rotary_sign_flip_fraction"]
+        total = row["sweep_feature_sign_flip_fraction"]
+        assert 0.20 <= rotary <= 0.30, row
+        assert rotary > total, row
+
+
+def test_the_depth_cli_defaults_to_every_attributable_layer() -> None:
+    args = QD._parse_args(["--sae-dir", "dictionaries"])
+    assert args.layers == "0,1,2,3,4"

@@ -73,6 +73,15 @@ qk:
 	@test -n "$(SAE)" || { echo "usage: make qk SAE=path/to/sae.safetensors"; exit 2; }
 	$(PYTHON) -m $(PKG).qk_attribution --sae "$(SAE)"
 
+## qk-depth: re-run the depth profile; pass SAE_DIR=<tree like the HF repo>
+# SAE_DIR must contain {layer}-res-sm/sae_weights.safetensors for layers 0-4,
+# the layout `hf download` produces for
+# ctigges/pythia-70m-deduped__res-sm_processed. The dictionaries are ~134 MB
+# each and are not vendored.
+qk-depth:
+	@test -n "$(SAE_DIR)" || { echo "usage: make qk-depth SAE_DIR=path/to/sae/tree"; exit 2; }
+	$(PYTHON) -m $(PKG).qk_depth --sae-dir "$(SAE_DIR)"
+
 ## clean: remove generated build output (never touches committed artefacts)
 clean:
 	rm -rf paper/build .pytest_cache .ruff_cache

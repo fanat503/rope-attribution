@@ -59,7 +59,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1625 tests (CPU-only install)
+pytest -q                                        # 1633 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -226,6 +226,8 @@ projects/rope_attribution/
                   attention level: top-1 flips, top-5 overlap, KL
   qk_attribution.py exact per-distance QK attribution on a public sparse
                   dictionary (pythia-70m, layer 3)
+  qk_depth.py     the same measurement at every layer of that checkpoint that
+                  has an attention block after it (five dictionaries)
   train.py        trains 100M-300M models, logging every metric including the
                   attribution diagnostics; periodic resumable checkpoints
   data.py         tokenizes once into checksummed shards and a mmapped stream
@@ -236,7 +238,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1625 tests (CPU-only install)
+tests/            1633 tests (CPU-only install)
 figures/          twelve figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
@@ -259,6 +261,9 @@ results/          measurements.json  (structural facts)
                     qk_attribution.json      (per-distance QK attribution on a
                                               public 32k SAE over pythia-70m,
                                               layer 3)
+                    qk_depth.json            (the same sweep with one dictionary
+                                              per attributable layer, layers 0-4
+                                              of the same checkpoint)
 ```
 
 The early exploratory material that used to live under
@@ -502,14 +507,17 @@ python -m projects.rope_attribution.usefulness   # ~4 min, CPU only
   they remain only in git history and must not be cited.
 - **The sign reversal appears to be unreported**, but that is a search result,
   not a proof of absence.
-- **One trained sparse dictionary is measured, on one model and one layer.**
+- **Trained sparse dictionaries are measured on one model, one passage.**
   `qk_attribution.py` runs the per-distance decomposition on a public
   32,768-unit ReLU dictionary for `pythia-70m` layer 3, and that is the
-  evidence behind the trained-dictionary result. It is not a survey of trained
-  SAEs across models, layers or training recipes. Still absent and not measured
-  anywhere here: retrieval or passkey benchmarks, and any accuracy number. Claims
-  of the form "the model retrieves the needle with accuracy 0.7" should not be
-  attributed to this repository.
+  evidence behind the trained-dictionary result. `qk_depth.py` repeats it with
+  the matching dictionary at every layer of the same checkpoint that still has
+  an attention block after it (five dictionaries, layers 0--4, one passage and
+  one seed). That is a depth check, not a survey of trained SAEs across models,
+  layers or training recipes. Still absent and not measured anywhere here:
+  retrieval or passkey benchmarks, and any accuracy number. Claims of the form
+  "the model retrieves the needle with accuracy 0.7" should not be attributed
+  to this repository.
 
 ## Removed exploratory material
 
