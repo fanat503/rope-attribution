@@ -16,6 +16,21 @@ import pytest
 from rope_attribution import statistics as S
 
 EXACT_TOL = 1e-12
+#: Absolute ceiling for a value that *is* the float64 roundoff of subtracting
+#: two analytically equal expressions. Its digits are whatever order the host's
+#: summation picked, so a relative test on it is meaningless; the claim the
+#: paper makes is "below the noise floor", not "equal to the digits I got".
+#: The ceiling is five orders above the observed residuals (3.5e-14 to
+#: 7.1e-14) and five below a real conservation failure (1e-9).
+NOISE_FLOOR = 1e-12
+#: Relative tolerance for a quotient whose divisor is a cancellation residue.
+#: ``max_min_ratio`` divides the largest contribution by the smallest cell of
+#: that same cancellation-accumulated sum, so BLAS order moves it by ~2e-11
+#: relative -- far above the results window, far below any convention change
+#: (the paper quotes the ratio to four digits).  This is the same three-class
+#: policy as ``tests/test_paper_claims.py::_leaves``, applied to the statistics
+#: artifact rather than to measurements.json.
+AMPLIFIED_TOL = 1e-9
 
 
 # --------------------------------------------------------------------------
@@ -339,12 +354,28 @@ def test_the_position_free_residual_is_what_the_mean_summary_actually_incurs() -
     assert np.sqrt(baseline / contrib.size) / residual > 1e13
 
 
+def _tolerances(where: str) -> tuple[float, float]:
+    """``(relative, absolute)`` for the leaf at ``where``; three classes.
+
+    Ordinary results keep the strict window. Error floors and amplified
+    quotients get the tolerances the module docstring of ``_leaves`` in
+    ``tests/test_paper_claims.py`` explains; both are properties of float64
+    summation order, not of the measurement.
+    """
+    if where.endswith(".additivity_residual_max"):
+        return 0.0, NOISE_FLOOR
+    if "max_min_ratio" in where:
+        return AMPLIFIED_TOL, 1e-15
+    return EXACT_TOL, 1e-15
+
+
 def _assert_json_close(computed, committed, where: str = "root") -> None:
     """Recursively compare a computed result with the committed JSON.
 
-    Floats must agree to ``EXACT_TOL`` relative; a changed committed value, a
-    renamed field, or an extra row is a failure. That is the point: the test
-    exists to detect drift, not to re-write the artifact and agree with itself.
+    Floats must agree to the leaf's tolerance (see ``_tolerances``); a changed
+    committed value, a renamed field, or an extra row is a failure. That is the
+    point: the test exists to detect drift, not to re-write the artifact and
+    agree with itself.
     """
     if isinstance(committed, dict):
         assert isinstance(computed, dict), where
@@ -359,7 +390,8 @@ def _assert_json_close(computed, committed, where: str = "root") -> None:
     elif isinstance(committed, bool) or not isinstance(committed, (int, float)):
         assert computed == committed, where
     else:
-        assert computed == pytest.approx(committed, rel=EXACT_TOL, abs=1e-15), where
+        rel, abs_ = _tolerances(where)
+        assert computed == pytest.approx(committed, rel=rel, abs=abs_), where
 
 
 def test_the_committed_statistics_json_is_current(tmp_path: Path) -> None:
@@ -379,3 +411,46 @@ def test_the_committed_statistics_json_is_current(tmp_path: Path) -> None:
     S.main(out=out)
     _assert_json_close(json.loads(out.read_text(encoding="utf-8")), committed)
     assert committed_path.read_bytes() == before, "the test must not rewrite the artifact"
+
+
+def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> None:
+    """The three classes are not a blanket exemption for the whole file.
+
+    The pair on the left is the one CI actually produced: the same seeded
+    Windows and Linux runs returned ``...5544146`` and ``...579107`` for the
+    amplified quotient, and residuals of 3.55e-14 and 6.22e-14 for the same
+    analytically-zero cancellation. Both must pass; a 1% change in the
+    quotient, or a residual that stopped cancelling at 1e-9, must not.
+
+    Mutation verdict: dropping the ``max_min_ratio`` clause fails the first
+    assertion; widening the residual ceiling to 1e-8 fails the third.
+    """
+    committed = {
+        "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
+        "position_free_error": {
+            "by_density": [{"additivity_residual_max": 3.552713678800501e-14}]
+        },
+    }
+    runner = {
+        "ratio_vs_density": [{"max_min_ratio": 1111.729886579107}],
+        "position_free_error": {
+            "by_density": [{"additivity_residual_max": 6.217248937900877e-14}]
+        },
+    }
+    _assert_json_close(runner, committed)
+
+    stale_ratio = {
+        "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146 * 1.01}],
+        "position_free_error": committed["position_free_error"],
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_ratio, committed)
+
+    stale_residual = {
+        "ratio_vs_density": committed["ratio_vs_density"],
+        "position_free_error": {
+            "by_density": [{"additivity_residual_max": 1e-9}]
+        },
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_residual, committed)

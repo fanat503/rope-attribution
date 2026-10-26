@@ -122,6 +122,7 @@ def test_a_dictionary_with_inconsistent_shapes_is_rejected() -> None:
 
 
 def test_the_safetensors_loader_records_the_tensors_it_read(tmp_path: Path) -> None:
+    pytest.importorskip("safetensors.numpy")
     from safetensors.numpy import save_file
 
     dictionary = Q.SparseDictionary.random(8, 5, seed=2)
@@ -142,6 +143,7 @@ def test_the_safetensors_loader_records_the_tensors_it_read(tmp_path: Path) -> N
 
 
 def test_a_safetensors_file_missing_a_tensor_is_rejected(tmp_path: Path) -> None:
+    pytest.importorskip("safetensors.numpy")
     from safetensors.numpy import save_file
 
     path = tmp_path / "broken.safetensors"
@@ -153,12 +155,17 @@ def test_a_safetensors_file_missing_a_tensor_is_rejected(tmp_path: Path) -> None
 # --------------------------------------------------------------------------
 # Per-head projection layout
 # --------------------------------------------------------------------------
+#
+# torch is an optional stack (real_model_requirements.txt), so the two layout
+# tests skip on the numpy-only CI install instead of erroring. Everything else
+# in this file is plain numpy and runs everywhere.
 
 
 class _Fused:
     """A stand-in for a GPT-NeoX attention whose QKV rows are identifiable."""
 
     def __init__(self, hidden: int = 8, n_heads: int = 2) -> None:
+        pytest.importorskip("torch")
         import torch
 
         self.query_key_value = torch.nn.Linear(hidden, 3 * hidden, bias=True)
@@ -197,6 +204,7 @@ def test_the_fused_layout_is_read_per_head_not_in_thirds() -> None:
 
 class _Split:
     def __init__(self, hidden: int = 8, n_heads: int = 2) -> None:
+        pytest.importorskip("torch")
         import torch
 
         self.q_proj = torch.nn.Linear(hidden, hidden, bias=True)

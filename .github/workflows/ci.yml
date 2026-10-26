@@ -64,15 +64,26 @@ jobs:
         # machine this was written on has no make and the claim would otherwise be
         # unfalsifiable. `results` is the cheapest target that proves the Makefile
         # works and that the committed JSON is still what the code produces.
-        # A non-empty diff is a failure: on a seeded, CPU-only, float64 run the
-        # three artifacts are byte-identical, and a drift means either the code
-        # changed without its artifact or a dependency changed a reduction order.
-        # Either way it must be looked at, not printed and ignored.
+        #
+        # `measurements.json` and `sensitivity.json` are required byte-identical:
+        # on a seeded, CPU-only, float64 run their values have reproduced on every
+        # runner so far, and a drift means either the code changed without its
+        # artifact or a dependency changed a reduction order.
+        #
+        # `statistics.json` is exempt from the *byte* comparison, not from the
+        # freshness check. Two of its diagnostics divide by a cancellation
+        # residue (`max_min_ratio`) or *are* one (`additivity_residual_max`), so
+        # the same seeded values differ between runners at the 1e-11 level; the
+        # per-leaf tolerance classes in tests/test_statistics.py encode that, and
+        # `test_the_committed_statistics_json_is_current` is the value-level gate.
+        # It runs in the suite above, so exempting the bytes here does not exempt
+        # the artifact from verification.
         run: |
           make help
           make results
-          if ! git diff --quiet -- results/; then
+          git diff --stat -- results/
+          if ! git diff --quiet -- results/ ':!results/statistics.json'; then
             echo "::error::make results changed a committed artifact"
-            git diff --stat -- results/
+            git diff --stat -- results/ ':!results/statistics.json'
             exit 1
           fi

@@ -1385,6 +1385,14 @@ def test_readme_trained_statistics_match_the_artifact() -> None:
 # ==========================================================================
 
 
+#: The one module whose tests are skipped as a whole on the documented install:
+#: it calls ``pytest.importorskip("torch")`` at import time, and
+#: ``requirements-dev.txt`` is deliberately torch-free. The README quotes the
+#: count a fresh CPU-only install collects, so those nodes are subtracted when
+#: they are present (they are absent on CI).
+_TORCH_ONLY_MODULE = "tests/test_downstream.py"
+
+
 @functools.lru_cache(maxsize=1)
 def collected_node_ids() -> tuple[str, ...]:
     """Ask pytest what it would collect, in a subprocess rooted at the repository.
@@ -1431,6 +1439,11 @@ def test_quoted_test_count_matches_what_pytest_collects() -> None:
     the documentation verifier and is deliberately excluded from the comparison,
     so that *adding verification tests* cannot invalidate the README. Any other
     module gaining or losing a test still fails this.
+
+    ``tests/test_downstream.py`` is excluded as well: it skips at module level on
+    the documented install, so counting its nodes would make the README's number
+    depend on whether the reader has torch (1601 locally, 1581 on CI for the same
+    commit). The README states the CPU-only count; see ``_TORCH_ONLY_MODULE``.
     """
     literals = readme_literals(r"\b(\d+) tests\b")
     assert len(literals) == 2, (
@@ -1441,9 +1454,11 @@ def test_quoted_test_count_matches_what_pytest_collects() -> None:
     node_ids = collected_node_ids()
     mine = [nid for nid in node_ids if nid.startswith("tests/test_readme_claims.py::")]
     assert mine, "this file contributed no tests to the collection; the count is not comparable"
-    others = len(node_ids) - len(mine)
+    torch_only = [nid for nid in node_ids if nid.startswith(_TORCH_ONLY_MODULE + "::")]
+    others = len(node_ids) - len(mine) - len(torch_only)
     assert others == int(literals[0]), (
         f"README says {literals[0]} tests; pytest collects {others} outside this "
-        f"file ({len(node_ids)} in total, {len(mine)} of them this file). If a "
-        f"test was added or removed, update the README."
+        f"file and {_TORCH_ONLY_MODULE} ({len(node_ids)} in total, {len(mine)} of "
+        f"them this file, {len(torch_only)} torch-only). If a test was added or "
+        f"removed, update the README."
     )

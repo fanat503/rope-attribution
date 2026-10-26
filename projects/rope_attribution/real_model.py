@@ -628,11 +628,15 @@ def collect_head_vectors(
     A single sequence with no padding: a pad token would push a synthetic
     activation through the projection and pollute exactly the distribution being
     measured.
+
+    The architecture guard runs before ``_require_torch``: refusing a config the
+    adapter cannot measure must not depend on the optional stack being
+    installed, and the refusal is more informative than the missing-torch error.
     """
-    torch = _require_torch()
     reason = unsupported_architecture(getattr(model, "config", None))
     if reason:
         raise NotImplementedError(reason)
+    torch = _require_torch()
     attns = attention_modules(model)
     if not attns:
         raise RuntimeError("no attention module with a recognised q/k projection")

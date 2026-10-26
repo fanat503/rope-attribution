@@ -510,7 +510,7 @@ The headline deserves three qualifications.
 three per-checkpoint rates; the mean over all $558$ heads is $26.90\%$
 (\texttt{SmolLM-135M} contributes $270$ heads against $144$ each for the other
 two). Computed before rounding, the two differ by $0.14$ points, about one
-interval half-width, and are not distinguishable at this resolution. In what
+pooled interval half-width, and are not distinguishable at this resolution. In what
 follows the headline is the equal-weight $27.0\%$, while the interval below
 belongs to the head-pooled $26.90\%$.
 \emph{Second}, the interval: resampling over the $558$ layer-heads --- over
@@ -730,7 +730,9 @@ obstruction: a feature's contribution reverses sign across distance while the
 total stays additive to $5.0\times10^{-14}$. Context extension changes which
 channels can be linearized without touching the worst one: \yarn\ buys a
 larger linearizable majority at an amplitude-weighted error ratio of only
-$0.996840$, not a safe global linearization.
+$0.996840$, not a safe global linearization. Partial RoPE is the clean
+exception: its unrotated sub-score is exactly position-free, and the rotated
+block remains orthogonal and preserves the norm exactly.
 On a trained dictionary the rotary subspace reproduces the synthetic
 sign-reversal rate while the total profile hides it. There is no downstream
 task, no retrieval benchmark, no accuracy figure; one dictionary at one layer is
