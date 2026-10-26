@@ -34,10 +34,11 @@ AMPLIFIED_TOL = 1e-9
 #: Absolute tolerance for a base-10 logarithm of a ratio whose denominator is a
 #: cancellation residue.  ``position_free_error_min`` can be ~3e-3 while the
 #: numerator is O(1), so a 1e-15 change in the denominator moves the logarithm
-#: by O(1e-13); the observed Windows/Linux gap on the same seeded run is 0.079
-#: (15.068 vs 15.147).  The logarithm is a diagnostic, not a quoted quantity.
-#: A 0.1 window admits that gap and still rejects a 26% change in the ratio.
-LOG_RATIO_ABS = 0.1
+#: by O(1e-13); the observed Windows/Linux gap on the same seeded run was 0.079
+#: (15.068 vs 15.147), and py3.11 on e4f9c37 moved it to 15.033, a 0.114 gap.
+#: The logarithm is a diagnostic, not a quoted quantity.  A 0.2 window admits
+#: both and still rejects a 0.3 change (a 2x change in the ratio).
+LOG_RATIO_ABS = 0.2
 
 
 # --------------------------------------------------------------------------
@@ -409,13 +410,13 @@ def _tolerances(where: str) -> tuple[float, float]:
             # rejects a doubling.
             return 2e-1, 1e-15
         return 0.0, LOG_RATIO_ABS
-    if where.endswith(".worst_feature_relative_std") or where.endswith(
-        ".pooled_relative_std"
-    ):
+    if where.endswith("relative_std"):
         # Std of per-seed ratios (paper: 0.93x and 1.13x their means). The
         # ratios are quotients of near-zero sums, so their second moment moves
         # by ~3e-12 between BLAS builds. Quoted to two digits; a real change is
-        # orders above this window.
+        # orders above this window. Every relative std in the artifact is this
+        # object, including the four in ``seed_variance.statistics`` (the
+        # endpoint mean crosses zero, so its relative std is 2.8).
         return AMPLIFIED_TOL, 1e-15
     if "max_min_ratio" in where:
         return AMPLIFIED_TOL, 1e-15
@@ -484,7 +485,9 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     seventh; dropping the drift window fails the eighth; dropping the
     withdrawn-ladder block clause fails the ninth (its 1.43e-12 CI pair no
     longer passes); dropping the log-dynamic-range clause fails the tenth (its
-    1.18e-12 py3.11 pair no longer passes).
+    1.18e-12 py3.11 pair no longer passes); restricting the relative-std clause
+    to the two ladder leaf names fails the eleventh (a ``seed_variance``
+    relative std falls through to the exact window).
     """
     committed = {
         "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
@@ -518,9 +521,9 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
 
     # The two leaves CI actually moved on the same seeded run: log10 of a
     # quotient (3.045999280925157 vs 3.045999280934803) and log10 of a ratio
-    # whose denominator is a cancellation residue (15.147 vs 15.068). Both are
-    # diagnostics, not quoted claims; the windows are chosen from the observed
-    # platform gap, and a 1% / 0.2 change must still be rejected.
+    # whose denominator is a cancellation residue (15.147 vs 15.033 on py3.11).
+    # Both are diagnostics, not quoted claims; the windows are chosen from the
+    # observed platform gap, and a 1% / 0.3 change must still be rejected.
     ci_logs = {
         "ratio_vs_density": [{"log10_ratio": 3.045999280925157}],
         "position_free_error": {
@@ -530,7 +533,7 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     runner_logs = {
         "ratio_vs_density": [{"log10_ratio": 3.045999280934803}],
         "position_free_error": {
-            "by_density": [{"log10_ratio_max": 15.067997297789441}]
+            "by_density": [{"log10_ratio_max": 15.033235191530233}]
         },
     }
     _assert_json_close(runner_logs, ci_logs)
@@ -545,7 +548,7 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     stale_log_ratio_max = {
         "ratio_vs_density": ci_logs["ratio_vs_density"],
         "position_free_error": {
-            "by_density": [{"log10_ratio_max": 15.147178543837066 + 0.2}]
+            "by_density": [{"log10_ratio_max": 15.147178543837066 + 0.3}]
         },
     }
     with pytest.raises(AssertionError):
@@ -555,7 +558,7 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     # summary dict of ``min``/``max``/``relative_drift``. CI on 7f436ca moved
     # ``position_free_error.log10_ratio_max.min`` from the committed 15.019034
     # to 15.006799, a 1.2e-2 gap that the exact window rejected. It must pass,
-    # and a 0.2 change must not.
+    # and a 0.3 change must not.
     ci_summary = {
         "position_free_error": {
             "log10_ratio_max": {
@@ -577,7 +580,7 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     _assert_json_close(runner_summary, ci_summary)
 
     for stale in (
-        {"min": 15.019034227272984 + 0.2},
+        {"min": 15.019034227272984 + 0.3},
         {"relative_drift": 0.014393474837535034 * 2.0},
     ):
         block = dict(ci_summary["position_free_error"]["log10_ratio_max"])
@@ -668,3 +671,36 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     }
     with pytest.raises(AssertionError):
         _assert_json_close(stale_grid, grid)
+
+    # The relative-std class is not just the two ladder leaves. This one lives
+    # in ``seed_variance.statistics`` and is 2.8 because the endpoint mean
+    # changes sign across seeds; a 3e-12 relative gap must pass, 1e-4 must not.
+    seed_block = {
+        "seed_variance": {
+            "statistics": {
+                "endpoint_log_ratio_mean": {"relative_std": 2.8372034570410545}
+            }
+        }
+    }
+    runner_seed_block = {
+        "seed_variance": {
+            "statistics": {
+                "endpoint_log_ratio_mean": {
+                    "relative_std": 2.8372034570410545 * (1.0 + 3e-12)
+                }
+            }
+        }
+    }
+    _assert_json_close(runner_seed_block, seed_block)
+
+    stale_seed_block = {
+        "seed_variance": {
+            "statistics": {
+                "endpoint_log_ratio_mean": {
+                    "relative_std": 2.8372034570410545 * 1.0001
+                }
+            }
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_seed_block, seed_block)
