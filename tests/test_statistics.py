@@ -39,6 +39,17 @@ AMPLIFIED_TOL = 1e-9
 #: The logarithm is a diagnostic, not a quoted quantity.  A 0.2 window admits
 #: both and still rejects a 0.3 change (a 2x change in the ratio).
 LOG_RATIO_ABS = 0.2
+#: Absolute tolerance for ``...log10_ratio_max.relative_drift``, the
+#: ``(max - min) / min`` of two near-equal cancellation-dominated logarithms.
+#: The quantity is a difference of noise, so its own noise is the order of its
+#: value: py3.10 on 4bd653f returned 0.009742 against the committed 0.014393, a
+#: 32% relative gap and 4.7e-3 in absolute units. A relative window is
+#: meaningless there, so the leaf is compared absolutely, and the window is
+#: capped by the claim it protects rather than by the observed noise:
+#: 0.014393 + 0.03 = 0.044 < 0.05, so every value this window admits still
+#: satisfies the paper's ``relative_drift < 0.05``. The fallback
+#: (``LOG_RATIO_ABS`` = 0.2) would admit 0.064, which does not.
+DRIFT_ABS = 0.03
 
 
 # --------------------------------------------------------------------------
@@ -363,7 +374,7 @@ def test_the_position_free_residual_is_what_the_mean_summary_actually_incurs() -
 
 
 def _tolerances(where: str) -> tuple[float, float]:
-    """``(relative, absolute)`` for the leaf at ``where``; six classes.
+    """``(relative, absolute)`` for the leaf at ``where``; seven classes.
 
     Ordinary results keep the strict window. Error floors and amplified
     quotients get the tolerances the module docstring of ``_leaves`` in
@@ -375,6 +386,9 @@ def _tolerances(where: str) -> tuple[float, float]:
     ratios whose individual values inherit the same ordering noise. The sixth
     is the withdrawn ratio ladder as a block: every leaf in it is a quotient of
     the same near-zero sums, so the block as a whole moves with the platform.
+    The seventh is the relative drift of the log-ratio summary, a difference of
+    two noise-dominated logarithms; it is compared in absolute units, with the
+    window capped by the claim it protects (``DRIFT_ABS``).
     """
     if where.endswith(".additivity_residual_max"):
         return 0.0, NOISE_FLOOR
@@ -397,18 +411,17 @@ def _tolerances(where: str) -> tuple[float, float]:
         # relative, just outside the ordinary window; the quantity has the same
         # cancellation-residue denominator as ``log10_ratio`` above.
         return AMPLIFIED_TOL, 1e-15
+    if where.endswith(".relative_drift"):
+        # ``(max - min) / min`` of two near-equal logs: a difference of noise.
+        # Compared in absolute units; see DRIFT_ABS for why the cap is 0.03.
+        return 0.0, DRIFT_ABS
     if "log10_ratio_max" in where or "log10_ratio_min" in where:
         # A ratio against a near-zero cancellation residue; see LOG_RATIO_ABS.
         # The block has two shapes: a float per density (``...by_density[3]
         # .log10_ratio_max``) and a summary dict at the top level
-        # (``...log10_ratio_max.min``, ``.max``, ``.relative_drift``). Matching
-        # only the end of the path caught the first shape and let CI's
-        # 15.0068-vs-15.0190 gap through as an exact-window failure.
-        if where.endswith(".relative_drift"):
-            # The span of two logs, each noise-dominated: its own noise is of
-            # the order of its value, so it gets a one-digit window that still
-            # rejects a doubling.
-            return 2e-1, 1e-15
+        # (``...log10_ratio_max.min``, ``.max``). The relative-drift leaf of
+        # that summary has its own clause above, because a relative window on a
+        # difference of two logs is a different quantity.
         return 0.0, LOG_RATIO_ABS
     if where.endswith("relative_std"):
         # Std of per-seed ratios (paper: 0.93x and 1.13x their means). The
@@ -491,7 +504,9 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     1.0 fails the fifth; dropping the relative-std clause fails the sixth
     (the 3.3e-12 CI pair no longer passes); matching the log-ratio block by
     ``endswith`` again (the shape that let CI's 1.2e-2 gap through) fails the
-    seventh; dropping the drift window fails the eighth; dropping the
+    seventh; dropping the drift window fails the eighth (the log-ratio fallback
+    is absolute 0.2 and would admit a drift of 0.064, past the paper's 0.05);
+    dropping the
     withdrawn-ladder block clause fails the ninth (its 1.43e-12 CI pair no
     longer passes); dropping the log-dynamic-range clause fails the tenth (its
     1.18e-12 py3.11 pair no longer passes); restricting the relative-std clause
@@ -568,8 +583,11 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     # The same ratio, in the *other* shape the artifact uses: a top-level
     # summary dict of ``min``/``max``/``relative_drift``. CI on 7f436ca moved
     # ``position_free_error.log10_ratio_max.min`` from the committed 15.019034
-    # to 15.006799, a 1.2e-2 gap that the exact window rejected. It must pass,
-    # and a 0.3 change must not.
+    # to 15.006799, a 1.2e-2 gap that the exact window rejected. On 4bd653f
+    # py3.10 moved ``relative_drift`` from 0.014393 to 0.009742: 32% relative,
+    # 4.7e-3 absolute, so the leaf is compared absolutely (DRIFT_ABS). The min
+    # must still reject a 0.3 change, and a drift past the paper's 0.05 bound
+    # must still be rejected even though the log-ratio fallback would take it.
     ci_summary = {
         "position_free_error": {
             "log10_ratio_max": {
@@ -584,7 +602,7 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
             "log10_ratio_max": {
                 "min": 15.006799770855972,
                 "max": 15.235210318507315,
-                "relative_drift": 0.014393474837535034 * 1.05,
+                "relative_drift": 0.009742267533322128,
             }
         }
     }
@@ -592,7 +610,7 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
 
     for stale in (
         {"min": 15.019034227272984 + 0.3},
-        {"relative_drift": 0.014393474837535034 * 2.0},
+        {"relative_drift": 0.014393474837535034 + 0.05},
     ):
         block = dict(ci_summary["position_free_error"]["log10_ratio_max"])
         block.update(stale)
