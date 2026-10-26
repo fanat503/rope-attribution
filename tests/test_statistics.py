@@ -389,6 +389,13 @@ def _tolerances(where: str) -> tuple[float, float]:
     if where.endswith(".log10_ratio"):
         # ``log10(max_min_ratio)``: the same amplified quotient, compressed.
         return AMPLIFIED_TOL, 1e-15
+    if "log_dynamic_range" in where or "endpoint_log_ratio" in where:
+        # Two more base-10 logarithms of min-sensitive ratios (``log10(max/min)``
+        # and ``log10(|c(hi)|/|c(lo)|)``). CI py3.11 moved one per-density
+        # window from 0.9692215094603904 to 0.9692215094615737, 1.18e-12
+        # relative, just outside the ordinary window; the quantity has the same
+        # cancellation-residue denominator as ``log10_ratio`` above.
+        return AMPLIFIED_TOL, 1e-15
     if "log10_ratio_max" in where or "log10_ratio_min" in where:
         # A ratio against a near-zero cancellation residue; see LOG_RATIO_ABS.
         # The block has two shapes: a float per density (``...by_density[3]
@@ -476,7 +483,8 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     ``endswith`` again (the shape that let CI's 1.2e-2 gap through) fails the
     seventh; dropping the drift window fails the eighth; dropping the
     withdrawn-ladder block clause fails the ninth (its 1.43e-12 CI pair no
-    longer passes).
+    longer passes); dropping the log-dynamic-range clause fails the tenth (its
+    1.18e-12 py3.11 pair no longer passes).
     """
     committed = {
         "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
@@ -633,3 +641,30 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     }
     with pytest.raises(AssertionError):
         _assert_json_close(stale_ladder, ladder)
+
+    # py3.11 moved a per-density log dynamic range: 0.9692215094615737 against
+    # the committed 0.9692215094603904, 1.18e-12 relative. It is another log10
+    # of a min-sensitive ratio, so it gets the same window; a 1e-4 change must
+    # still fail.
+    grid = {
+        "grid_independence": {
+            "log_dynamic_range": {"values_by_density": [0.9692215094603904]},
+            "endpoint_log_ratio": {"values_by_density": [-0.6182788131496617]},
+        }
+    }
+    runner_grid = {
+        "grid_independence": {
+            "log_dynamic_range": {"values_by_density": [0.9692215094615737]},
+            "endpoint_log_ratio": {"values_by_density": [-0.6182788131496617]},
+        }
+    }
+    _assert_json_close(runner_grid, grid)
+
+    stale_grid = {
+        "grid_independence": {
+            "log_dynamic_range": {"values_by_density": [0.9692215094603904 * 1.0001]},
+            "endpoint_log_ratio": {"values_by_density": [-0.6182788131496617]},
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_grid, grid)
