@@ -119,7 +119,19 @@ public checkpoints (the first run downloads them):
 PYTHONPATH=../projects python -m rope_attribution.real_model    # real_model.json
 PYTHONPATH=../projects python -m rope_attribution.usefulness    # usefulness*.json
 PYTHONPATH=../projects python -m rope_attribution.uncertainty   # uncertainty values
+PYTHONPATH=../projects python -m rope_attribution.seed_variance # usefulness_seeds.json
 PYTHONPATH=../projects python -m rope_attribution.agreement     # agreement.json
+PYTHONPATH=../projects python -m rope_attribution.attention_cost # attention_cost.json
+```
+
+The trained-dictionary artifact additionally needs the public
+`ctigges/pythia-70m-deduped__res-sm_processed` SAE
+(`3-res-sm`, `d_sae=32768`), which is not vendored. The artifact records the
+exact dictionary it used; pass the downloaded file explicitly:
+
+```sh
+PYTHONPATH=../projects python -m rope_attribution.qk_attribution \
+    --sae /path/to/sae_ctigges_l3.safetensors                   # qk_attribution.json
 ```
 
 All generators are seeded. The structural artifacts are re-run by the suite and

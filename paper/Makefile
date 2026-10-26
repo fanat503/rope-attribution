@@ -3,12 +3,11 @@
 # Figures are resolved by relative path ../figures/ and guarded with
 # \IfFileExists inside main.tex, so this also succeeds with figures/ absent.
 #
-# NOTE: this target requires a LaTeX installation (pdflatex + bibtex).
-# No LaTeX toolchain was present on the machine where this paper was
-# written, so it has NOT been executed there. The source was instead
-# validated statically (balanced environments/braces, label/ref
-# consistency, citation keys vs references.bib, and \includegraphics
-# path resolution).
+# NOTE: the maintained build path is in BUILD.md and uses tectonic; the CI
+# workflow .github/workflows/paper.yml compiles the paper with it. This
+# convenience Makefile drives pdflatex + bibtex when that toolchain is
+# installed. It is not exercised by CI, so prefer the BUILD.md command if the
+# two ever disagree.
 
 PDF := main.pdf
 AUX := main.aux main.bbl main.blg main.log main.out

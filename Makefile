@@ -6,11 +6,13 @@
 # and compares them with the committed copies value by value (floats to
 # a relative 1e-12).
 #
-# The checkpoint measurements (real_model.py, usefulness.py, agreement.py) are
-# deliberately not part of `all`: they need CPU torch, which is not a test
-# dependency, and they take about four minutes each. The seed-variance sweep
-# (seed_variance.py) re-runs the cost sweep three times, so about ten minutes.
-# Run `make checkpoints` when you want them.
+# The checkpoint measurements (real_model.py, usefulness.py, agreement.py,
+# attention_cost.py) are deliberately not part of `all`: they need CPU torch,
+# which is not a test dependency, and they take minutes each. The seed-variance
+# sweep (seed_variance.py) re-runs the cost sweep three times, so about ten
+# minutes. The trained-dictionary QK attribution (qk_attribution.py) also needs
+# a public SAE file supplied with SAE=<path>. Run `make checkpoints` and
+# `make qk SAE=...` when you want them.
 
 # `-m` takes a DOTTED module path, not a filesystem path. This Makefile shipped
 # `projects/rope_attribution.experiments` with slashes and CI rejected it with a
@@ -22,7 +24,7 @@
 PYTHON  ?= python
 PKG      = projects.rope_attribution
 
-.PHONY: all test results figures paper checkpoints postedit clean help
+.PHONY: all test results figures paper checkpoints qk postedit clean help
 
 ## all: test + results + figures + paper
 all: test results figures paper
@@ -60,6 +62,16 @@ checkpoints:
 	$(PYTHON) -m $(PKG).uncertainty
 	$(PYTHON) -m $(PKG).seed_variance
 	$(PYTHON) -m $(PKG).agreement
+	$(PYTHON) -m $(PKG).attention_cost
+
+## qk: re-run the trained-dictionary QK attribution; pass SAE=<public SAE file>
+# The dictionary is not vendored. It is the public
+# ctigges/pythia-70m-deduped__res-sm_processed, 3-res-sm (d_sae=32768), named in
+# results/qk_attribution.json. Download it from the SAE Lens release and point
+# SAE at the safetensors file.
+qk:
+	@test -n "$(SAE)" || { echo "usage: make qk SAE=path/to/sae.safetensors"; exit 2; }
+	$(PYTHON) -m $(PKG).qk_attribution --sae "$(SAE)"
 
 ## clean: remove generated build output (never touches committed artefacts)
 clean:

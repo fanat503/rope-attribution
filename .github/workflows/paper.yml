@@ -85,10 +85,11 @@ jobs:
 
           # One raster image per figure; allow slack for any logo or rule.
           # The figure count is read from the LaTeX rather than typed in, so
-          # adding fig11 cannot leave these gates silently under-counting the
-          # way they did when fig10 was added.
+          # adding a figure cannot leave these gates silently under-counting.
+          # The optional width argument is matched too: fig09/fig10 use
+          # \paperfigure[<width>]{...}, which a `\{`-only pattern missed.
           tex = pathlib.Path("paper/main.tex").read_text(encoding="utf-8")
-          figures = len(re.findall(r"(?m)^\\paperfigure\{", tex))
+          figures = len(re.findall(r"(?m)^\\paperfigure(?:\[|\{)", tex))
           assert figures > 0, "no paperfigure calls found in paper/main.tex"
 
           # One raster image per figure; allow slack for any logo or rule.

@@ -57,8 +57,8 @@ report on them), matched case-insensitively:
 
 | Pattern | Hits | Reading |
 | --- | ---: | --- |
-| `inv_freq` | 240 | This project's own code, tests and measured artifacts. |
-| `rotary` | 256 | This project's own code, tests and measured artifacts. |
+| `inv_freq` | 254 | This project's own code, tests and measured artifacts. |
+| `rotary` | 435 | This project's own code, tests and measured artifacts. |
 | `mscale` | 290 | This project's own code, tests and measured artifacts. |
 | `rotary_emb` | 4 | Two are the upstream config keyword `rotary_emb_base` in synthetic test models; two are this project's own fallback lookup for that keyword in `downstream.py`. Not an implementation. |
 | `apply_rotary` | 3 | A test monkeypatches `transformers`' `apply_rotary_pos_emb` to a no-op to compare against a no-RoPE model; no upstream code is shipped. |
@@ -103,7 +103,7 @@ from, not a code-provenance marker), and no file among them carries a
 `projects/rope_attribution/rope.py` is original to this project. It is ordinary
 NumPy code that re-implements published algorithms, written against the papers
 and against the canonical public reference implementations, which were consulted
-as **reading** references while transcribing formulas:
+as **reading** references while re-deriving the formulas:
 
 - Su et al., arXiv:2104.09864 — the RoPE definition and the inverse-frequency
   schedule.

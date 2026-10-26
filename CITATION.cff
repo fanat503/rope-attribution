@@ -13,6 +13,7 @@ license: Apache-2.0
 preferred-citation:
   type: article
   title: "Attributing Rotary Position Embeddings: Exact Score Attribution, and What Actually Limits It"
+  year: 2026
   authors:
     - family-names: "Slyatski"
       given-names: "Ilya"

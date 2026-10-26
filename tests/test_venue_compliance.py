@@ -192,16 +192,17 @@ def test_every_numbered_figure_reaches_the_document(pages: list[str]) -> None:
 def test_the_figures_are_all_embedded(pages: list[str]) -> None:
     """One raster image per figure, counted from the LaTeX rather than typed in.
 
-    The assertion used to be a hard-coded floor of nine, which eleven figures
-    clear even if two images silently vanish. The count is therefore read from
-    the ``\\paperfigure`` calls in ``main.tex``, the same way the paper CI gate
-    does it, so adding a figure tightens the check automatically.
+    The assertion used to be a hard-coded floor of nine, which twelve figures
+    clear even if three images silently vanish. The count is therefore read from
+    the ``\\paperfigure`` calls in ``main.tex`` -- including the
+    ``\\paperfigure[<width>]`` form -- the same way the paper CI gate does it,
+    so adding a figure tightens the check automatically.
     """
     pypdf = pytest.importorskip("pypdf")
     reader = pypdf.PdfReader(str(_pdf_or_skip()))
     n_images = sum(len(page.images) for page in reader.pages)
     main = _MAIN_TEX.read_text(encoding="utf-8")
-    n_figures = len(re.findall(r"(?m)^\\paperfigure\{", main))
+    n_figures = len(re.findall(r"(?m)^\\paperfigure(?:\[|\{)", main))
     assert n_figures >= 1, "no \\paperfigure calls found in paper/main.tex"
     assert n_images >= n_figures, (
         f"{n_images} embedded images for {n_figures} \\paperfigure calls; "

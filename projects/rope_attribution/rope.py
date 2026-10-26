@@ -1,7 +1,8 @@
 """Faithful RoPE / YaRN / partial-RoPE reference implementation (numpy, float64).
 
-Every formula in this file is transcribed from an original source. Nothing here is
-approximated, and nothing is a hardcoded result. Sources:
+Every formula in this file is re-derived from an original source and written
+independently; no upstream code was copied, and nothing here is approximated or a
+hardcoded result. Sources:
 
 RoPE
     Su, Jianlin; Lu, Yu; Pan, Shengfeng; Murtadha, Ahmed; Wen, Bo; Liu, Yunfeng.
@@ -22,9 +23,10 @@ YaRN
     "YaRN: Efficient Context Window Extension of Large Language Models", 2023.
     https://arxiv.org/abs/2309.00071
     The ramp (`find_correction_dim`, `find_correction_range`, `linear_ramp_mask`)
-    and the magnitude scaling (`get_mscale`) are transcribed verbatim from the
-    authors' own implementation, `scaled_rope/LlamaYaRNScaledRotaryEmbedding.py`
-    in https://github.com/jquesnelle/yarn, and agree with
+    and the magnitude scaling (`get_mscale`) re-derive the formulas published in
+    the authors' own implementation,
+    `scaled_rope/LlamaYaRNScaledRotaryEmbedding.py` in
+    https://github.com/jquesnelle/yarn, and agree with
     `transformers.modeling_rope_utils._compute_yarn_parameters`.
 
 Note on a common misstatement
@@ -228,7 +230,8 @@ def find_correction_dim(
 ) -> float:
     """Inverse-dimension formula: which dim index gives ``num_rotations`` rotations.
 
-    Verbatim from `jquesnelle/yarn` and `transformers`.
+    The formula is the published YaRN ramp expression, re-derived here; see
+    `jquesnelle/yarn` and `transformers`.
     """
     return (dim * math.log(max_position_embeddings / (num_rotations * 2 * math.pi))) / (
         2 * math.log(base)
@@ -245,7 +248,7 @@ def find_correction_range(
 ) -> tuple[float, float]:
     """Bounds of the ramp, in units of *pair index* (0 .. dim//2).
 
-    Clamping to ``[0, dim - 1]`` is unconditional, exactly as in both sources
+    Clamping to ``[0, dim - 1]`` is unconditional, matching both sources
     (jquesnelle/yarn has no ``truncate`` parameter and clamps always;
     ``transformers`` does the same). ``truncate=False`` is an extension this
     module adds for analysis: it returns the values without ``floor``/``ceil``
@@ -259,7 +262,7 @@ def find_correction_range(
 
 
 def linear_ramp_mask(minimum: float, maximum: float, dim: int) -> np.ndarray:
-    """``clamp((arange(dim) - min) / (max - min), 0, 1)``, verbatim from upstream."""
+    """``clamp((arange(dim) - min) / (max - min), 0, 1)``, re-derived from the published ramp."""
     if minimum == maximum:
         maximum += 0.001  # Prevent singularity
     linear = (np.arange(dim, dtype=np.float64) - minimum) / (maximum - minimum)

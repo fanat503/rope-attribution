@@ -1067,8 +1067,13 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--sae",
         type=Path,
-        default=Path(".tmp/research/sae_ctigges_l3.safetensors"),
-        help="safetensors file with W_enc/b_enc/W_dec/b_dec",
+        required=True,
+        help=(
+            "safetensors file with W_enc/b_enc/W_dec/b_dec. The paper used the "
+            "public ctigges/pythia-70m-deduped__res-sm_processed dictionary, "
+            "3-res-sm (d_sae=32768); download it from the SAE Lens release and "
+            "pass the file here. It is not vendored."
+        ),
     )
     parser.add_argument("--out", type=Path, default=None)
     return parser.parse_args(argv)

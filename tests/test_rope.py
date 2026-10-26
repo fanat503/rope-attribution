@@ -127,7 +127,7 @@ def test_inv_freq_endpoints(dim):
 
 
 def test_inv_freq_known_endpoint_values():
-    """Numbers quoted in the module docstring / by the orchestrator."""
+    """Numbers quoted in the module docstring and in the paper."""
     f = R.inv_freq(64, 10000.0)
     assert f[0] == 1.0
     assert f[-1] == pytest.approx(1.334e-04, rel=1e-3)
