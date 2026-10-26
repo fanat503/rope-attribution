@@ -107,7 +107,9 @@
 Rotary position embeddings (RoPE) \citep{su2021ropeformer} are the default
 positional encoding in most modern transformers, and interpretability work now
 routinely attributes attention scores to learned features using an additive
-decomposition. We take the structure of that decomposition seriously and ask a
+decomposition --- the task now called QK attribution
+\citep{kamath2025tracing}. We take the structure of that decomposition
+seriously and ask a
 narrow question: \emph{exactly} what does RoPE do to it? Three things. First,
 for a fixed pair of positions, the RoPE attention score is exactly bilinear in
 the content vectors, so the additive feature decomposition
@@ -151,10 +153,10 @@ include.
 Feature-level attribution has become a working tool in mechanistic
 interpretability. Given a decomposition of an activation into a sum of learned
 features, one asks how much each feature contributed to a circuit's output.
-Applied to attention, this runs into a structural question that is usually
-glossed over: attention scores are computed between a query at one position and
-a key at another, and under a positional encoding, ``how much did feature $i$
-contribute'' is not obviously a scalar.
+Applied to attention, this is QK attribution, and it runs into a structural
+question that is usually glossed over: attention scores are computed between a
+query at one position and a key at another, and under a positional encoding,
+``how much did feature $i$ contribute'' is not obviously a scalar.
 
 Under RoPE it is not a scalar, and the reason is specific. In this paper we
 derive the score in the relative frame, where RoPE's orthogonality makes the
