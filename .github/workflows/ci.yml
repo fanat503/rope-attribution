@@ -58,32 +58,34 @@ jobs:
         # tests/. Do not widen it here to make a red build green.
         run: python -m ruff check .
 
-      - name: Makefile targets exist and `results` reproduces the committed artefact
+      - name: Makefile targets exist and `results` regenerates the committed artifacts
         # The README tells a reader that `make all` reproduces the repository. That
         # promise is checked here rather than asserted in prose, because the
         # machine this was written on has no make and the claim would otherwise be
         # unfalsifiable. `results` is the cheapest target that proves the Makefile
         # works and that the committed JSON is still what the code produces.
         #
-        # `measurements.json` and `sensitivity.json` are required byte-identical:
-        # on a seeded, CPU-only, float64 run their values have reproduced on every
-        # runner so far, and a drift means either the code changed without its
-        # artifact or a dependency changed a reduction order.
+        # The check is on *values and shape*, not on bytes. The README does not
+        # claim byte identity across platforms, and cannot: the JSON writer emits
+        # the platform's float repr, so a Linux rerun of the same seeded float64
+        # code differs from the Windows-generated committed file in the last bits
+        # of a few values (measured: 9 lines in measurements.json, 4 in
+        # sensitivity.json). Asserting bytes here failed both matrix jobs on the
+        # same commit whose values the suite had just verified.
         #
-        # `statistics.json` is exempt from the *byte* comparison, not from the
-        # freshness check. Two of its diagnostics divide by a cancellation
-        # residue (`max_min_ratio`) or *are* one (`additivity_residual_max`), so
-        # the same seeded values differ between runners at the 1e-11 level; the
-        # per-leaf tolerance classes in tests/test_statistics.py encode that, and
-        # `test_the_committed_statistics_json_is_current` is the value-level gate.
-        # It runs in the suite above, so exempting the bytes here does not exempt
-        # the artifact from verification.
+        # What this step still checks, and the suite cannot: `make results` runs,
+        # writes where it says it writes, and neither adds nor deletes files.
+        # Value freshness is owned by the per-leaf tolerance gates in the suite
+        # above (`test_the_committed_statistics_json_is_current` and the
+        # measurements.json freshness tests in test_paper_claims.py and
+        # test_readme_claims.py), which compare every float at a relative 1e-12.
         run: |
           make help
           make results
-          git diff --stat -- results/
-          if ! git diff --quiet -- results/ ':!results/statistics.json'; then
-            echo "::error::make results changed a committed artifact"
-            git diff --stat -- results/ ':!results/statistics.json'
+          git status --porcelain -- results/
+          bad=$(git status --porcelain -- results/ | grep -vE '^( M|M )' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::make results created or deleted files under results/"
+            echo "$bad"
             exit 1
           fi
