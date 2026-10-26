@@ -378,8 +378,18 @@ def _tolerances(where: str) -> tuple[float, float]:
     if where.endswith(".log10_ratio"):
         # ``log10(max_min_ratio)``: the same amplified quotient, compressed.
         return AMPLIFIED_TOL, 1e-15
-    if where.endswith(".log10_ratio_max") or where.endswith(".log10_ratio_min"):
+    if "log10_ratio_max" in where or "log10_ratio_min" in where:
         # A ratio against a near-zero cancellation residue; see LOG_RATIO_ABS.
+        # The block has two shapes: a float per density (``...by_density[3]
+        # .log10_ratio_max``) and a summary dict at the top level
+        # (``...log10_ratio_max.min``, ``.max``, ``.relative_drift``). Matching
+        # only the end of the path caught the first shape and let CI's
+        # 15.0068-vs-15.0190 gap through as an exact-window failure.
+        if where.endswith(".relative_drift"):
+            # The span of two logs, each noise-dominated: its own noise is of
+            # the order of its value, so it gets a one-digit window that still
+            # rejects a doubling.
+            return 2e-1, 1e-15
         return 0.0, LOG_RATIO_ABS
     if where.endswith(".worst_feature_relative_std") or where.endswith(
         ".pooled_relative_std"
@@ -450,7 +460,10 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     Mutation verdict: dropping the ``max_min_ratio`` clause fails the first
     assertion; widening the residual ceiling to 1e-8 fails the third; dropping
     the two log-ratio clauses fails the fourth; widening ``LOG_RATIO_ABS`` to
-    1.0 fails the fifth; dropping the relative-std clause fails the sixth.
+    1.0 fails the fifth; dropping the relative-std clause fails the sixth;
+    matching the log-ratio block by ``endswith`` again (the shape that let CI's
+    1.2e-2 gap through) fails the seventh; dropping the drift window fails the
+    eighth.
     """
     committed = {
         "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
@@ -516,6 +529,42 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     }
     with pytest.raises(AssertionError):
         _assert_json_close(stale_log_ratio_max, ci_logs)
+
+    # The same ratio, in the *other* shape the artifact uses: a top-level
+    # summary dict of ``min``/``max``/``relative_drift``. CI on 7f436ca moved
+    # ``position_free_error.log10_ratio_max.min`` from the committed 15.019034
+    # to 15.006799, a 1.2e-2 gap that the exact window rejected. It must pass,
+    # and a 0.2 change must not.
+    ci_summary = {
+        "position_free_error": {
+            "log10_ratio_max": {
+                "min": 15.019034227272984,
+                "max": 15.235210318507315,
+                "relative_drift": 0.014393474837535034,
+            }
+        }
+    }
+    runner_summary = {
+        "position_free_error": {
+            "log10_ratio_max": {
+                "min": 15.006799770855972,
+                "max": 15.235210318507315,
+                "relative_drift": 0.014393474837535034 * 1.05,
+            }
+        }
+    }
+    _assert_json_close(runner_summary, ci_summary)
+
+    for stale in (
+        {"min": 15.019034227272984 + 0.2},
+        {"relative_drift": 0.014393474837535034 * 2.0},
+    ):
+        block = dict(ci_summary["position_free_error"]["log10_ratio_max"])
+        block.update(stale)
+        with pytest.raises(AssertionError):
+            _assert_json_close(
+                {"position_free_error": {"log10_ratio_max": block}}, ci_summary
+            )
 
     # The third quantity CI moved on: a relative standard deviation across
     # seeds. Same seeded run, two builds: 0.9265496496875988 vs
