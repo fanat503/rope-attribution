@@ -155,6 +155,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="micro-batches per optimizer step (saves memory, same global batch "
         "only when the per-chip batch is lowered with it)",
     )
+    parser.add_argument(
+        "--logit-chunk", type=int, default=None,
+        help="positions per chunk when the output head is applied (0 = one matrix)",
+    )
     parser.add_argument("--log-every", type=int, default=None)
     parser.add_argument("--eval-every", type=int, default=None)
     parser.add_argument("--checkpoint-every", type=int, default=None)
@@ -177,6 +181,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         dtype=args.dtype,
         batch_size=args.batch_size,
         grad_accum=args.grad_accum,
+        logit_chunk=args.logit_chunk,
         log_every=args.log_every,
         eval_every=args.eval_every,
         checkpoint_every=args.checkpoint_every,

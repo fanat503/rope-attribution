@@ -66,6 +66,26 @@ def test_the_override_carries_the_knobs_that_used_to_be_dropped() -> None:
             assert override[key] == preset[key], (name, key)
 
 
+def test_the_chunked_loss_knob_reaches_the_trainer_and_is_validated() -> None:
+    """The memory knob must survive preset -> override -> train, and be checked.
+
+    Mutation verdict: dropping ``logit_chunk`` from ``RUNTIME_KEYS`` leaves it
+    out of the override and the trainer falls back to the whole-logits matrix
+    that does not fit; dropping the validator accepts a negative chunk, which
+    the trainer would reject only after building the model.
+    """
+    for name, preset in C.TPU_PRESETS.items():
+        override = C.launch_overrides(name)
+        assert override["logit_chunk"] == preset["logit_chunk"], name
+        positions = int(preset["per_chip_batch_size"]) * int(preset["seq_len"])
+        assert 0 < int(override["logit_chunk"]) < positions, name
+
+    broken = _broken()
+    broken["logit_chunk"] = -1
+    with pytest.raises(ValueError, match="logit_chunk"):
+        C.validate_preset("tpu_v5e8_102m", broken)
+
+
 def test_expected_params_match_the_train_configs() -> None:
     for name, preset in C.TPU_PRESETS.items():
         config_name = str(preset["train_config"])

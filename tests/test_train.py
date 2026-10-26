@@ -1034,7 +1034,7 @@ def test_gradient_accumulation_is_one_step_over_the_mean_micro_batch(
 def test_the_cli_passes_the_tuning_flags_to_train(monkeypatch) -> None:
     """Every new flag must arrive as a validated config override.
 
-    Mutation verdict: dropping any of the six override entries below leaves the
+    Mutation verdict: dropping any of the seven override entries below leaves the
     corresponding key out of ``captured["override"]``.
     """
     if not T.TORCH_AVAILABLE:
@@ -1052,6 +1052,7 @@ def test_the_cli_passes_the_tuning_flags_to_train(monkeypatch) -> None:
         [
             "train", "--config", "smoke", "--run-name", "stub_flags",
             "--dtype", "fp32", "--batch-size", "8", "--grad-accum", "2",
+            "--logit-chunk", "512",
             "--log-every", "3", "--eval-every", "5", "--checkpoint-every", "7",
             "--max-steps", "9",
         ],
@@ -1061,6 +1062,7 @@ def test_the_cli_passes_the_tuning_flags_to_train(monkeypatch) -> None:
         "dtype": "fp32",
         "batch_size": 8,
         "grad_accum": 2,
+        "logit_chunk": 512,
         "log_every": 3,
         "eval_every": 5,
         "checkpoint_every": 7,
@@ -1175,3 +1177,99 @@ def test_require_xla_runs_the_backend_guard(monkeypatch) -> None:
         T._require_xla()
     assert calls == [1]
 
+
+
+def test_chunked_cross_entropy_matches_the_full_loss(tmp_path: Path) -> None:
+    """The chunked head is the same loss and the same gradient, not an approximation.
+
+    Mutation verdict: dropping the ``/ flat.shape[0]`` in the mean path divides by
+    a chunk instead of the token count and the loss ratio moves off 1; summing
+    the chunk means instead of the chunk sums weights a short final chunk too
+    heavily, which moves the gradient and the loss.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
+    model = T.build_model(dict(T.CONFIGS["smoke"]))
+    generator = torch.Generator().manual_seed(11)
+    ids = torch.randint(0, 512, (2, 7), generator=generator)
+    targets = torch.randint(0, 512, (2, 7), generator=generator)
+
+    full = T._lm_loss(model, ids, targets, 0)
+    full.backward()
+    full_grads = [parameter.grad.detach().clone() for parameter in model.parameters()]
+    full_sum = float(T._lm_loss(model, ids, targets, 0, reduction="sum").item())
+
+    model.zero_grad(set_to_none=True)
+    chunked = T._lm_loss(model, ids, targets, 5)
+    chunked.backward()
+    chunked_grads = [parameter.grad.detach().clone() for parameter in model.parameters()]
+    chunked_sum = float(T._lm_loss(model, ids, targets, 5, reduction="sum").item())
+
+    assert float(chunked.item()) == pytest.approx(float(full.item()), rel=1e-6)
+    assert chunked_sum == pytest.approx(full_sum, rel=1e-6)
+    for got, want in zip(chunked_grads, full_grads, strict=True):
+        assert torch.allclose(got, want, rtol=1e-4, atol=1e-6), (got - want).abs().max()
+
+
+def test_the_chunked_head_sees_one_chunk_at_a_time(monkeypatch) -> None:
+    """The point of the knob is the shape the head is applied to, not just the loss.
+
+    Mutation verdict: ignoring ``logit_chunk`` and running ``model(ids)`` once
+    makes ``cross_entropy`` see all 14 positions in a single call.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+    import torch.nn.functional as F
+
+    model = T.build_model(dict(T.CONFIGS["smoke"]))
+    generator = torch.Generator().manual_seed(12)
+    ids = torch.randint(0, 512, (2, 7), generator=generator)
+    targets = torch.randint(0, 512, (2, 7), generator=generator)
+
+    seen: list[int] = []
+    real = F.cross_entropy
+
+    def spy(input_, target_, *args, **kwargs):
+        seen.append(int(input_.shape[0]))
+        return real(input_, target_, *args, **kwargs)
+
+    monkeypatch.setattr(F, "cross_entropy", spy)
+    T._lm_loss(model, ids, targets, 5)
+    assert seen == [5, 5, 4], seen
+
+
+def test_the_loss_helper_refuses_a_negative_chunk() -> None:
+    """A negative chunk is a typo, not a request for the full matrix.
+
+    Mutation verdict: treating ``logit_chunk < 0`` as the full path (the
+    ``<= 0`` guard) accepts the call and hides the typo.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
+    model = T.build_model(dict(T.CONFIGS["smoke"]))
+    ids = torch.zeros((1, 4), dtype=torch.long)
+    with pytest.raises(ValueError, match="logit_chunk"):
+        T._lm_loss(model, ids, ids, -1)
+
+
+def test_the_resolved_logit_chunk_is_recorded_in_the_run(tmp_path: Path) -> None:
+    """The manifest must say how the loss was computed.
+
+    Mutation verdict: hardcoding the default in ``train`` instead of reading the
+    override leaves ``config["logit_chunk"]`` at 0 in the run_start record.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    tokens = np.random.default_rng(44).integers(0, 512, size=4096)
+    T.train(
+        "smoke", tmp_path / "run", tokens, device="cpu", max_steps=2,
+        override={"logit_chunk": 9, "eval_every": 2, "log_every": 2},
+    )
+    records = _read_jsonl(tmp_path / "run" / "metrics.jsonl")
+    start = next(record for record in records if record["event"] == "run_start")
+    assert start["config"]["logit_chunk"] == 9

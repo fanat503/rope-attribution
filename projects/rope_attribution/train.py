@@ -133,6 +133,9 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 12,
         "batch_size": 4,
         "grad_accum": 1,
+        # The smoke config has 4 x 64 = 256 positions and 512 tokens of vocab:
+        # 0.5 MB of logits. Chunking it would only test the chunker.
+        "logit_chunk": 0,
         "eval_every": 4,
         "log_every": 4,
         "checkpoint_every": 4,
@@ -155,6 +158,7 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 80_000,
         "batch_size": 32,
         "grad_accum": 1,
+        "logit_chunk": 2048,
         "eval_every": 500,
         "log_every": 50,
         "checkpoint_every": 2_000,
@@ -177,6 +181,7 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 100_000,
         "batch_size": 32,
         "grad_accum": 1,
+        "logit_chunk": 2048,
         "eval_every": 500,
         "log_every": 50,
         "checkpoint_every": 2_000,
@@ -199,6 +204,7 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 110_000,
         "batch_size": 32,
         "grad_accum": 1,
+        "logit_chunk": 2048,
         "eval_every": 500,
         "log_every": 50,
         "checkpoint_every": 2_000,
@@ -221,6 +227,7 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 120_000,
         "batch_size": 32,
         "grad_accum": 1,
+        "logit_chunk": 2048,
         "eval_every": 500,
         "log_every": 50,
         "checkpoint_every": 2_000,
@@ -243,6 +250,7 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 130_000,
         "batch_size": 32,
         "grad_accum": 1,
+        "logit_chunk": 2048,
         "eval_every": 500,
         "log_every": 50,
         "checkpoint_every": 2_000,
@@ -265,6 +273,7 @@ CONFIGS: dict[str, dict] = {
         "n_steps": 140_000,
         "batch_size": 32,
         "grad_accum": 1,
+        "logit_chunk": 2048,
         "eval_every": 500,
         "log_every": 50,
         "checkpoint_every": 2_000,
@@ -934,11 +943,21 @@ def build_model(config: dict, device: str = "cpu"):
             self.register_buffer("cos_buf", cos, persistent=False)
             self.register_buffer("sin_buf", sin, persistent=False)
 
-        def forward(self, ids, capture=None):
+        def hidden_states(self, ids, capture=None):
+            """Final hidden states, before the tied output head.
+
+            Separate from ``forward`` so the trainer can apply the head in
+            chunks: at the shipped batch a 303M model's logits matrix alone is
+            ``32 * 1024 * 50304 * 4`` bytes, 6.6 GB, and the backward pass needs
+            as much again for its gradient.
+            """
             x = self.embed(ids)
             for index, block in enumerate(self.blocks):
                 x = block(x, self.cos_buf, self.sin_buf, capture, index)
-            return torch.nn.functional.linear(self.final_norm(x), self.embed.weight)
+            return self.final_norm(x)
+
+        def forward(self, ids, capture=None):
+            return torch.nn.functional.linear(self.hidden_states(ids, capture), self.embed.weight)
 
     model = Model()
     # GPT-2-style initialization: small-variance normal weights, with the
@@ -954,6 +973,55 @@ def build_model(config: dict, device: str = "cpu"):
             for name in ("o_proj", "fc_out"):
                 getattr(block, name).weight.normal_(0.0, scaled)
     return model.to(device)
+
+
+def _lm_loss(model, ids, targets, logit_chunk: int = 0, reduction: str = "mean"):
+    """Token cross-entropy on the tied head, optionally chunked over positions.
+
+    ``model(ids)`` materialises ``batch * ctx * vocab`` logits. That is 6.6 GB
+    for the 303M preset at its shipped batch (32 x 1024 x 50304 float32), and
+    the backward pass needs the same again, so the un-chunked path cannot run
+    the large presets on a 16 GB device. With ``logit_chunk > 0`` the head is
+    applied to a slice of positions at a time under ``torch.utils.checkpoint``:
+    only the chunk's logits are saved, the head is recomputed during the
+    backward pass, and the loss and its gradient are the same quantity -- the
+    sum over chunks, divided by the token count for ``mean``.
+
+    Chunk boundaries are arbitrary: every target's cross-entropy is independent
+    of the positions around it, so a chunk need not align with a sequence.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    if reduction not in ("mean", "sum"):
+        raise ValueError(f"reduction must be 'mean' or 'sum', not {reduction!r}")
+    logit_chunk = int(logit_chunk)
+    if logit_chunk < 0:
+        raise ValueError(f"logit_chunk must be non-negative, not {logit_chunk}")
+    if logit_chunk == 0:
+        logits = model(ids)
+        return F.cross_entropy(
+            logits.float().reshape(-1, logits.shape[-1]),
+            targets.reshape(-1),
+            reduction=reduction,
+        )
+
+    hidden = model.hidden_states(ids)
+    flat = hidden.reshape(-1, hidden.shape[-1])
+    flat_targets = targets.reshape(-1)
+    weight = model.embed.weight
+
+    def piece(h, t):
+        return F.cross_entropy(F.linear(h, weight).float(), t, reduction="sum")
+
+    total = None
+    for start in range(0, flat.shape[0], logit_chunk):
+        stop = start + logit_chunk
+        chunk_loss = torch.utils.checkpoint.checkpoint(
+            piece, flat[start:stop], flat_targets[start:stop], use_reentrant=False
+        )
+        total = chunk_loss if total is None else total + chunk_loss
+    return total if reduction == "sum" else total / flat.shape[0]
 
 
 def _probe_diagnostics(model, ids, deltas, n_pairs: int, seed: int) -> dict:
@@ -1118,6 +1186,7 @@ def cli_overrides(
     dtype: str | None = None,
     batch_size: int | None = None,
     grad_accum: int | None = None,
+    logit_chunk: int | None = None,
     log_every: int | None = None,
     eval_every: int | None = None,
     checkpoint_every: int | None = None,
@@ -1136,6 +1205,7 @@ def cli_overrides(
     for flag, key, value, minimum in (
         ("--batch-size", "batch_size", batch_size, 1),
         ("--grad-accum", "grad_accum", grad_accum, 1),
+        ("--logit-chunk", "logit_chunk", logit_chunk, 0),
         ("--log-every", "log_every", log_every, 1),
         ("--eval-every", "eval_every", eval_every, 1),
         ("--checkpoint-every", "checkpoint_every", checkpoint_every, 0),
@@ -1194,7 +1264,6 @@ def train(
     if not TORCH_AVAILABLE:
         raise RuntimeError("torch is not installed; see train_requirements.txt")
     import torch
-    import torch.nn.functional as F
 
     if int(world_size) < 1:
         raise ValueError(f"world_size must be at least 1, not {world_size!r}")
@@ -1212,6 +1281,14 @@ def train(
     log_every = int(config["log_every"])
     if log_every < 0:
         raise ValueError(f"log_every must be non-negative, not {config['log_every']!r}")
+    logit_chunk = int(config.get("logit_chunk", 0))
+    if logit_chunk < 0:
+        raise ValueError(
+            f"logit_chunk must be non-negative, not {config.get('logit_chunk')!r}"
+        )
+    # Recorded even when it came from the default: the manifest has to say how
+    # the loss was computed, or a memory-saving change is invisible afterwards.
+    config["logit_chunk"] = logit_chunk
     if int(config["eval_every"]) < 1:
         raise ValueError(f"eval_every must be at least 1, not {config['eval_every']!r}")
     # Sequences one optimizer step consumes across all ranks and micro-batches.
@@ -1405,12 +1482,11 @@ def train(
             targets = _id_batch(train_tg[picks]).to(device)
             # Forward in bf16 when requested; the cross-entropy and the master
             # weights stay fp32. A bf16 label in the metrics therefore describes
-            # the arithmetic that actually ran.
+            # the arithmetic that actually ran. ``_lm_loss`` applies the tied
+            # head in chunks when the config asks for it, so the logits matrix
+            # never has to exist in full.
             with _autocast_context(device, dtype):
-                logits = model(ids)
-            loss = F.cross_entropy(
-                logits.float().reshape(-1, logits.shape[-1]), targets.reshape(-1)
-            )
+                loss = _lm_loss(model, ids, targets, logit_chunk)
             micro_losses.append(loss.detach())
             # The mean over micro-batches, so the accumulated gradient does not
             # grow with grad_accum.
@@ -1463,12 +1539,9 @@ def train(
                     batch = slice(offset, offset + config["batch_size"])
                     val_ids = _id_batch(held_in[batch]).to(device)
                     val_targets = _id_batch(held_tg[batch]).to(device)
-                    val_logits = model(val_ids)
                     val_loss_sum += float(
-                        F.cross_entropy(
-                            val_logits.float().reshape(-1, val_logits.shape[-1]),
-                            val_targets.reshape(-1),
-                            reduction="sum",
+                        _lm_loss(
+                            model, val_ids, val_targets, logit_chunk, reduction="sum"
                         ).item()
                     )
                     val_target_count += int(val_targets.numel())
@@ -1660,6 +1733,16 @@ def main() -> None:
         help="micro-batches per optimizer step (default: the config's grad_accum)",
     )
     parser.add_argument(
+        "--logit-chunk",
+        type=int,
+        default=None,
+        help=(
+            "positions per chunk when the tied output head and cross-entropy are "
+            "applied (0 = one matrix for the whole batch; default: the config's "
+            "logit_chunk)"
+        ),
+    )
+    parser.add_argument(
         "--log-every", type=int, default=None, help="steps between step records"
     )
     parser.add_argument(
@@ -1693,6 +1776,7 @@ def main() -> None:
         dtype=args.dtype,
         batch_size=args.batch_size,
         grad_accum=args.grad_accum,
+        logit_chunk=args.logit_chunk,
         log_every=args.log_every,
         eval_every=args.eval_every,
         checkpoint_every=args.checkpoint_every,

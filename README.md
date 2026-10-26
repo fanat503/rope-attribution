@@ -59,7 +59,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1620 tests (CPU-only install)
+pytest -q                                        # 1625 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -169,11 +169,20 @@ CPU-side `runs/<name>/checkpoint.pt` for evaluation or fine-tuning.
 end. Unlike the weights-only checkpoint it carries the AdamW moments and the
 data-order generator, so `--resume` continues the same run rather than a
 lookalike; the config and token stream are checked against the ones that wrote
-it. On TPU, only rank 0 saves, and resuming a multi-rank run is not wired up:
-that would need rank 0's state broadcast to the other chips, which is not
-implemented. `train.py` also refuses to silently emit bare `NaN` in JSONL
-(non-finite metrics become `null`) and treats a fresh run directory as fresh by
-deleting stale checkpoints from a previous run of the same name.
+it. On a multi-rank run every rank writes its own resume file: the model state
+is the synchronised one, but the data order is per rank, so rank 0's file is not
+a substitute for rank 3's. `train.py` also refuses to silently emit bare `NaN` in
+JSONL (non-finite metrics become `null`) and treats a fresh run directory as
+fresh by deleting stale checkpoints from a previous run of the same name.
+
+The tied head is applied in chunks when `logit_chunk` is set, which is what lets
+the 100M-300M presets run on a 16 GB device: the whole-batch logits for a 303M
+model at its shipped batch are 6.6 GB, and their gradient is as much again. The
+training configs set 2048 positions per chunk (0.4 GB of logits); the TPU
+presets set 1024 (0.2 GB), and the head is recomputed during the backward pass.
+`0` restores the single-matrix path and is what the `smoke` config uses. The
+chunked and the full path are asserted to give the same loss and the same
+gradient.
 
 Two runs of the same command with the same seed produce identical records
 except the throughput field; `tests/test_train.py` pins that, and the torch-free
@@ -227,7 +236,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1620 tests (CPU-only install)
+tests/            1625 tests (CPU-only install)
 figures/          twelve figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)

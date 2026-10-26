@@ -31,6 +31,16 @@ global batch. The effective batch is
 `per_chip_batch_size * chips * grad_accum`; `tpu_configs._preset` derives it and
 `validate_preset` refuses a preset whose parts disagree.
 
+`logit_chunk` is the second memory knob, and the one that decides whether the
+large presets run at all. The tied head produces `positions * vocab` logits:
+8 sequences of 2048 tokens is 16,384 positions, which is 3.3 GB of float32
+logits per chip and as much again for their gradient. `train._lm_loss` applies
+the head to `logit_chunk` positions at a time under `torch.utils.checkpoint`,
+so only one chunk is saved and the head is recomputed during the backward pass;
+the loss and its gradient are unchanged, because every target's cross-entropy is
+independent of its neighbours. The presets use 1024 positions (206 MB); `0`
+means one matrix for the whole batch and is what the `smoke` config keeps.
+
 The trainer in `train.py` is single-device PyTorch. The launcher starts eight
 processes; every process builds the model from the **same** seed, draws batches
 with its own `data_seed = preset_seed + rank`, and calls
@@ -91,10 +101,10 @@ python -m projects.rope_attribution.tpu_launch \
 ```
 
 The launcher accepts the same tuning flags as `train.py --help` (`--max-steps`,
-`--dtype`, `--batch-size`, `--grad-accum`, `--log-every`, `--eval-every`,
-`--checkpoint-every`) plus `--resume`. They are validated by the shared
-`train.cli_overrides` and layered on top of the preset, so a flag means the same
-thing on both entry points.
+`--dtype`, `--batch-size`, `--grad-accum`, `--logit-chunk`, `--log-every`,
+`--eval-every`, `--checkpoint-every`) plus `--resume`. They are validated by the
+shared `train.cli_overrides` and layered on top of the preset, so a flag means
+the same thing on both entry points.
 
 ## Running
 

@@ -57,6 +57,7 @@ def _preset(
     warmup_steps: int,
     seed: int = 20261010,
     grad_accum: int = 1,
+    logit_chunk: int = 1024,
 ) -> dict[str, object]:
     params = count_params(CONFIGS[train_config])
     global_batch = _PER_CHIP_BATCH * _CHIPS * grad_accum
@@ -69,6 +70,10 @@ def _preset(
         "per_chip_batch_size": _PER_CHIP_BATCH,
         "seq_len": _SEQ_LEN,
         "grad_accum": grad_accum,
+        # 8 sequences of 2048 tokens per chip is 16k positions; applying the
+        # tied head to all of them at once is 3.3 GB of logits per chip, and as
+        # much again for the gradient. 1024 positions per chunk is 206 MB.
+        "logit_chunk": logit_chunk,
         "global_batch_size": global_batch,
         "tokens_per_step": tokens_per_step,
         "n_steps": n_steps,
@@ -104,6 +109,7 @@ RUNTIME_KEYS: dict[str, str] = {
     "per_chip_batch_size": "batch_size",
     "seq_len": "ctx",
     "grad_accum": "grad_accum",
+    "logit_chunk": "logit_chunk",
     "n_steps": "n_steps",
     "lr": "lr",
     "warmup_steps": "warmup_steps",
@@ -183,6 +189,8 @@ def validate_preset(name: str, preset: dict[str, object]) -> None:
         raise ValueError(f"{name}: grad_clip must be in (0, 10]")
     if int(preset["checkpoint_every"]) < 0:
         raise ValueError(f"{name}: checkpoint_every must be non-negative")
+    if int(preset["logit_chunk"]) < 0:
+        raise ValueError(f"{name}: logit_chunk must be non-negative")
     for key in ("eval_every", "log_every"):
         if int(preset[key]) < 1:
             raise ValueError(f"{name}: {key} must be at least 1")
