@@ -418,6 +418,15 @@ def _tolerances(where: str) -> tuple[float, float]:
         # object, including the four in ``seed_variance.statistics`` (the
         # endpoint mean crosses zero, so its relative std is 2.8).
         return AMPLIFIED_TOL, 1e-15
+    if where.endswith(".position_free_error_min") or where.endswith(
+        ".position_free_error_max"
+    ):
+        # Order statistics over the same per-cell errors. The minimum is a
+        # near-zero cell (0.0143), so its relative spread is larger than the
+        # ordinary window: CI py3.10 moved it by 3.55e-14 absolute, 2.5e-12
+        # relative. Neither leaf is a quoted literal; the paper quotes the band
+        # and the max/min stability ratio instead.
+        return AMPLIFIED_TOL, 1e-15
     if "max_min_ratio" in where:
         return AMPLIFIED_TOL, 1e-15
     return EXACT_TOL, 1e-15
@@ -487,7 +496,9 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     longer passes); dropping the log-dynamic-range clause fails the tenth (its
     1.18e-12 py3.11 pair no longer passes); restricting the relative-std clause
     to the two ladder leaf names fails the eleventh (a ``seed_variance``
-    relative std falls through to the exact window).
+    relative std falls through to the exact window); dropping the
+    position-free-order-statistic clause fails the twelfth (its 2.5e-12 py3.10
+    pair no longer passes).
     """
     committed = {
         "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
@@ -704,3 +715,29 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     }
     with pytest.raises(AssertionError):
         _assert_json_close(stale_seed_block, seed_block)
+
+    # A minimum over cells is an order statistic: py3.10 moved this one by
+    # 3.55e-14 absolute (2.5e-12 relative), just outside the ordinary window.
+    # It is not a quoted literal; the CI pair must pass, a 1e-4 change must
+    # not.
+    free_min = {
+        "position_free_error": {
+            "by_density": [{"position_free_error_min": 0.014299891029988743}]
+        }
+    }
+    runner_free_min = {
+        "position_free_error": {
+            "by_density": [{"position_free_error_min": 0.014299891029953216}]
+        }
+    }
+    _assert_json_close(runner_free_min, free_min)
+
+    stale_free_min = {
+        "position_free_error": {
+            "by_density": [
+                {"position_free_error_min": 0.014299891029988743 * 1.0001}
+            ]
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_free_min, free_min)
