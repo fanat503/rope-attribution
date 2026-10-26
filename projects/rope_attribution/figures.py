@@ -28,6 +28,7 @@ Run it from the repository root either way::
 from __future__ import annotations
 
 import csv
+import json
 import math
 import sys
 from collections.abc import Sequence
@@ -1387,6 +1388,149 @@ def fig11_sensitivity_sweep() -> FigureRecord:
 # --------------------------------------------------------------------------
 
 
+def fig12_qk_case_study() -> FigureRecord:
+    """The trained-dictionary result as a picture, from the committed artifact.
+
+    The table in Section~\\ref{sec:features} reports two numbers that disagree:
+    the total per-feature profile reverses on 0.03% of cells, the rotary
+    sub-score on 22.4%. A reader can accept the arithmetic and still not see
+    how the same feature can be flat in one view and oscillating in the other.
+    This figure shows one feature on one head: the total profile is flat to
+    within a fraction of a percent of its own scale, while the rotary sub-score
+    runs from negative to positive and crosses zero.
+
+    Nothing is recomputed here. The artifact is the one
+    ``rope_attribution.qk_attribution`` writes and the claim gates read; the
+    guard below refuses a different schema or a head set that does not match
+    the artifact's own ``n_heads``.
+    """
+    path = REPO_ROOT / "results" / "qk_attribution.json"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} is missing; run `python -m projects.rope_attribution.qk_attribution`"
+        )
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != "qk-attribution/v1":
+        raise ValueError(
+            f"{path}: schema {data.get('schema')!r}, expected 'qk-attribution/v1'"
+        )
+    heads = data.get("heads") or []
+    if len(heads) != int(data.get("n_heads", -1)):
+        raise ValueError(
+            f"{path}: {len(heads)} head records for n_heads={data.get('n_heads')}"
+        )
+
+    # One feature that is in both top lists, so the two curves are the same
+    # feature's total and rotary sub-score rather than two different features.
+    chosen = None
+    for head in heads:
+        total_rows = {int(row["feature"]): row for row in head["top_sweep_features"]}
+        rotary_rows = {int(row["feature"]): row for row in head["top_sweep_rotary"]}
+        common = sorted(set(total_rows) & set(rotary_rows))
+        if common:
+            feature = common[0]
+            chosen = (head, feature, total_rows[feature], rotary_rows[feature])
+            break
+    if chosen is None:
+        raise ValueError(f"{path}: no feature appears in both top-sweep lists")
+
+    head, feature, total_row, rotary_row = chosen
+    deltas = np.asarray(data["sweep_deltas"], dtype=np.float64)
+    total = np.asarray(total_row["profile"], dtype=np.float64)
+    rotary = np.asarray(rotary_row["profile"], dtype=np.float64)
+    if total.size != deltas.size or rotary.size != deltas.size:
+        raise ValueError(
+            f"{path}: profile length {total.size}/{rotary.size} != {deltas.size}"
+        )
+    total_scale = float(np.mean(np.abs(total)))
+    rotary_scale = float(np.mean(np.abs(rotary)))
+    if total_scale == 0.0 or rotary_scale == 0.0:
+        raise ValueError(f"{path}: a chosen profile has zero scale")
+    total_n = total / total_scale
+    rotary_n = rotary / rotary_scale
+
+    fig, (ax_profile, ax_bars) = plt.subplots(
+        1, 2, figsize=(6.6, 2.7), gridspec_kw={"width_ratios": [1.15, 1.0]}
+    )
+    ax_profile.axhline(0.0, color="#555555", lw=0.8)
+    ax_profile.plot(
+        deltas, total_n, color=PALETTE[0], marker="o", ms=2.0,
+        label="total $c_i(\\delta)$",
+    )
+    ax_profile.plot(
+        deltas, rotary_n, color=PALETTE[1], marker="s", ms=2.0,
+        label="rotary sub-score",
+    )
+    ax_profile.set_xscale("log", base=2)
+    ax_profile.set_xlabel("relative distance $\\delta$")
+    ax_profile.set_ylabel("contribution / mean $|c_i|$")
+    ax_profile.set_title(
+        f"One feature (head {head['head']}, feature {feature})", fontsize=9
+    )
+    ax_profile.legend(fontsize=7, loc="lower left")
+
+    n_heads = len(heads)
+    positions = np.arange(n_heads, dtype=np.float64)
+    width = 0.26
+    bars = (
+        ("sweep_feature_metrics", "total", PALETTE[0], -width),
+        ("sweep_rotary_metrics", "rotary", PALETTE[1], 0.0),
+        ("sweep_pair_metrics", "pair", PALETTE[2], width),
+    )
+    for key, label, colour, offset in bars:
+        values = [float(head_row[key]["sign_flip_fraction"]) for head_row in heads]
+        ax_bars.bar(
+            positions + offset, values, width=width, label=label, color=colour
+        )
+    ax_bars.set_xticks(positions)
+    ax_bars.set_xticklabels([str(head_row["head"]) for head_row in heads], fontsize=7)
+    ax_bars.set_xlabel("head")
+    ax_bars.set_ylabel("sign-flip fraction")
+    ax_bars.set_yscale("log")
+    ax_bars.set_ylim(1e-4, 0.5)
+    ax_bars.set_title("Sign reversal by head", fontsize=9)
+    ax_bars.legend(fontsize=7, loc="lower right")
+
+    stem = "fig12_qk_case_study"
+    png = _save(fig, stem, "The total profile hides the rotary reversal")
+
+    csv_path = _write_csv(
+        stem,
+        [
+            "delta",
+            "total_profile",
+            "rotary_profile",
+            "total_normalized",
+            "rotary_normalized",
+        ],
+        [
+            [float(d), float(t), float(r), float(tn), float(rn)]
+            for d, t, r, tn, rn in zip(
+                deltas, total, rotary, total_n, rotary_n, strict=True
+            )
+        ],
+    )
+    aggregate = data["aggregate"]
+    total_pooled = float(aggregate["sweep_feature"]["sign_flip_fraction"])
+    rotary_pooled = float(aggregate["sweep_rotary"]["sign_flip_fraction"])
+    pair_pooled = float(aggregate["sweep_pair"]["sign_flip_fraction"])
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/qk_attribution.json (pythia-70m + public 32k SAE, layer 3); "
+            f"head {head['head']}, feature {feature}"
+        ),
+        headline=(
+            f"the total profile stays within {100 * (total_n.max() - total_n.min()):.2f}% "
+            f"of its mean absolute value while the rotary sub-score runs "
+            f"{rotary.min():.1f} to {rotary.max():.1f} and changes sign; pooled "
+            f"sign-flip fractions are {100 * total_pooled:.2f}% (total), "
+            f"{100 * rotary_pooled:.2f}% (rotary), {100 * pair_pooled:.2f}% (pair)"
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
+
+
 def _method_rows() -> dict[str, list[dict]]:
     """Call ``experiments.method_spectrum`` once and group it by method."""
     rows = method_spectrum(
@@ -1414,7 +1558,9 @@ def _write_readme(records: Sequence[FigureRecord]) -> Path:
         "`rope_attribution.rope` or `rope_attribution.statistics` -- except fig11,",
         "which reads `results/sensitivity.json`, the artifact that `make results`",
         "regenerates and CI diff-reports; the figure asserts the artifact's grid",
-        "against `sensitivity.BASES`/`HEAD_DIMS` before plotting. The literals",
+        "against `sensitivity.BASES`/`HEAD_DIMS` before plotting, and fig12, which",
+        "reads `results/qk_attribution.json` and asserts its schema and head count.",
+        "The literals",
         "that do appear in `figures.py` are",
         "configuration (head dim, RoPE base, extension scale, seeds), the distance",
         "grid definition, plotting parameters, and two dimensionless thresholds that",
@@ -1470,6 +1616,8 @@ def _write_readme(records: Sequence[FigureRecord]) -> Path:
         "",
         "fig11 is the configuration sweep behind the paper's robustness paragraph,",
         "read from its artifact; the artifact's grid is asserted against the module.",
+        "fig12 is the trained-dictionary case study: the same feature's total and",
+        "rotary profiles, read from `results/qk_attribution.json`.",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
@@ -1497,6 +1645,7 @@ def main() -> int:
         fig09_position_conditional_attribution(),
         fig10_seed_variance(),
         fig11_sensitivity_sweep(),
+        fig12_qk_case_study(),
     ]
     readme = _write_readme(records)
 

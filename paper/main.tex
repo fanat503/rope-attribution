@@ -632,7 +632,7 @@ total therefore looks almost perfect --- about the part of the score RoPE does
 not touch. In the subspace RoPE acts on, the same estimator is wrong about one
 cell in five, at very nearly the synthetic rate. A reader of a total table would
 see $0.03\%$ and conclude that position does not matter at this layer; the
-rotary subspace says otherwise.
+rotary subspace says otherwise (Figure~\ref{fig:qkcase}).
 
 The attribution is not concentrated: the base bucket carries $1.46\times$ the
 score magnitude on average and the top-$32$ features $3.71\times$, above one
@@ -1668,6 +1668,29 @@ cover checkpoint selection. Per-head rates are in
 \texttt{results/uncertainty.json} and the ranking rows in
 \texttt{results/agreement.json}. The interval is quoted next to the $27.0\%$
 itself, not instead of it: the two summaries answer different questions.
+
+\section{The trained-dictionary case study}
+\label{app:qkcase}
+
+\paperfigure{fig12_qk_case_study}{%
+  The trained-dictionary case study behind Section~\ref{sec:features}. Left: one
+  feature's total contribution profile and its rotary sub-score across the
+  pre-registered distance grid, each divided by its own mean absolute value, so
+  the two curves share a scale. The total profile is flat; the rotary sub-score
+  changes sign. Right: per-head sign-flip fractions for the total profile, the
+  rotary sub-score and the feature-pair block, on a logarithmic axis. Both
+  panels are read from \texttt{results/qk\_attribution.json} by
+  \texttt{figures.py}; no value is typed into either the figure or this
+  caption.%
+}{fig:qkcase}
+
+The two views answer different questions and are not in tension. The total
+contribution of a feature is the quantity a position-free attribution table
+would report, and on this head it barely moves. The rotary sub-score is what
+that table has already discarded, and it is where the distance dependence
+lives. A reader who wants to know whether the decomposition is stable across
+distance should look at the left panel of Figure~\ref{fig:qkcase}; a reader who
+wants to know what a position-free summary loses should look at the right one.
 
 \section{The attention-level cost, in full}
 \label{app:attention}
