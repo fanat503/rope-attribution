@@ -31,6 +31,13 @@ NOISE_FLOOR = 1e-12
 #: policy as ``tests/test_paper_claims.py::_leaves``, applied to the statistics
 #: artifact rather than to measurements.json.
 AMPLIFIED_TOL = 1e-9
+#: Absolute tolerance for a base-10 logarithm of a ratio whose denominator is a
+#: cancellation residue.  ``position_free_error_min`` can be ~3e-3 while the
+#: numerator is O(1), so a 1e-15 change in the denominator moves the logarithm
+#: by O(1e-13); the observed Windows/Linux gap on the same seeded run is 0.079
+#: (15.068 vs 15.147).  The logarithm is a diagnostic, not a quoted quantity.
+#: A 0.1 window admits that gap and still rejects a 26% change in the ratio.
+LOG_RATIO_ABS = 0.1
 
 
 # --------------------------------------------------------------------------
@@ -355,15 +362,23 @@ def test_the_position_free_residual_is_what_the_mean_summary_actually_incurs() -
 
 
 def _tolerances(where: str) -> tuple[float, float]:
-    """``(relative, absolute)`` for the leaf at ``where``; three classes.
+    """``(relative, absolute)`` for the leaf at ``where``; four classes.
 
     Ordinary results keep the strict window. Error floors and amplified
     quotients get the tolerances the module docstring of ``_leaves`` in
     ``tests/test_paper_claims.py`` explains; both are properties of float64
-    summation order, not of the measurement.
+    summation order, not of the measurement. The fourth class is the base-10
+    logarithm of a ratio with a near-zero denominator: it is compared on the
+    log scale because a relative window there is a different quantity.
     """
     if where.endswith(".additivity_residual_max"):
         return 0.0, NOISE_FLOOR
+    if where.endswith(".log10_ratio"):
+        # ``log10(max_min_ratio)``: the same amplified quotient, compressed.
+        return AMPLIFIED_TOL, 1e-15
+    if where.endswith(".log10_ratio_max") or where.endswith(".log10_ratio_min"):
+        # A ratio against a near-zero cancellation residue; see LOG_RATIO_ABS.
+        return 0.0, LOG_RATIO_ABS
     if "max_min_ratio" in where:
         return AMPLIFIED_TOL, 1e-15
     return EXACT_TOL, 1e-15
@@ -423,7 +438,9 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     quotient, or a residual that stopped cancelling at 1e-9, must not.
 
     Mutation verdict: dropping the ``max_min_ratio`` clause fails the first
-    assertion; widening the residual ceiling to 1e-8 fails the third.
+    assertion; widening the residual ceiling to 1e-8 fails the third; dropping
+    the two log-ratio clauses fails the fourth, and widening
+    ``LOG_RATIO_ABS`` to 1.0 fails the fifth.
     """
     committed = {
         "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
@@ -454,3 +471,38 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     }
     with pytest.raises(AssertionError):
         _assert_json_close(stale_residual, committed)
+
+    # The two leaves CI actually moved on the same seeded run: log10 of a
+    # quotient (3.045999280925157 vs 3.045999280934803) and log10 of a ratio
+    # whose denominator is a cancellation residue (15.147 vs 15.068). Both are
+    # diagnostics, not quoted claims; the windows are chosen from the observed
+    # platform gap, and a 1% / 0.2 change must still be rejected.
+    ci_logs = {
+        "ratio_vs_density": [{"log10_ratio": 3.045999280925157}],
+        "position_free_error": {
+            "by_density": [{"log10_ratio_max": 15.147178543837066}]
+        },
+    }
+    runner_logs = {
+        "ratio_vs_density": [{"log10_ratio": 3.045999280934803}],
+        "position_free_error": {
+            "by_density": [{"log10_ratio_max": 15.067997297789441}]
+        },
+    }
+    _assert_json_close(runner_logs, ci_logs)
+
+    stale_log_ratio = {
+        "ratio_vs_density": [{"log10_ratio": 3.045999280925157 + 0.01}],
+        "position_free_error": ci_logs["position_free_error"],
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_log_ratio, ci_logs)
+
+    stale_log_ratio_max = {
+        "ratio_vs_density": ci_logs["ratio_vs_density"],
+        "position_free_error": {
+            "by_density": [{"log10_ratio_max": 15.147178543837066 + 0.2}]
+        },
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_log_ratio_max, ci_logs)
