@@ -362,7 +362,7 @@ def test_the_position_free_residual_is_what_the_mean_summary_actually_incurs() -
 
 
 def _tolerances(where: str) -> tuple[float, float]:
-    """``(relative, absolute)`` for the leaf at ``where``; five classes.
+    """``(relative, absolute)`` for the leaf at ``where``; six classes.
 
     Ordinary results keep the strict window. Error floors and amplified
     quotients get the tolerances the module docstring of ``_leaves`` in
@@ -371,10 +371,21 @@ def _tolerances(where: str) -> tuple[float, float]:
     logarithm of a ratio with a near-zero denominator: it is compared on the
     log scale because a relative window there is a different quantity. The
     fifth is a relative standard deviation across seeds, a second moment of
-    ratios whose individual values inherit the same ordering noise.
+    ratios whose individual values inherit the same ordering noise. The sixth
+    is the withdrawn ratio ladder as a block: every leaf in it is a quotient of
+    the same near-zero sums, so the block as a whole moves with the platform.
     """
     if where.endswith(".additivity_residual_max"):
         return 0.0, NOISE_FLOOR
+    if where.startswith("root.withdrawn_ratio_ladder") and "relative_std" not in where:
+        # Every number in this block is a quotient of the same sweeps, and the
+        # block is the statistic the paper *withdrew*: it measures the grid, not
+        # the model. The noise is 1.43e-12 relative on Linux (4937.569559608477
+        # against 4937.569559615532), which the ordinary window rejects by a
+        # hair; nothing here is quoted, and no value is used by a claim. The
+        # ``relative_std`` leaves keep their own clause below, so that dropping
+        # that clause is still caught by the CI pair rather than absorbed here.
+        return AMPLIFIED_TOL, 1e-15
     if where.endswith(".log10_ratio"):
         # ``log10(max_min_ratio)``: the same amplified quotient, compressed.
         return AMPLIFIED_TOL, 1e-15
@@ -460,10 +471,12 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     Mutation verdict: dropping the ``max_min_ratio`` clause fails the first
     assertion; widening the residual ceiling to 1e-8 fails the third; dropping
     the two log-ratio clauses fails the fourth; widening ``LOG_RATIO_ABS`` to
-    1.0 fails the fifth; dropping the relative-std clause fails the sixth;
-    matching the log-ratio block by ``endswith`` again (the shape that let CI's
-    1.2e-2 gap through) fails the seventh; dropping the drift window fails the
-    eighth.
+    1.0 fails the fifth; dropping the relative-std clause fails the sixth
+    (the 3.3e-12 CI pair no longer passes); matching the log-ratio block by
+    ``endswith`` again (the shape that let CI's 1.2e-2 gap through) fails the
+    seventh; dropping the drift window fails the eighth; dropping the
+    withdrawn-ladder block clause fails the ninth (its 1.43e-12 CI pair no
+    longer passes).
     """
     committed = {
         "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
@@ -589,3 +602,34 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     }
     with pytest.raises(AssertionError):
         _assert_json_close(stale_seed_std, seed_std)
+
+    # The CI failure that sent this block to its own class: the same seeded
+    # sweep on Linux returned 4937.569559608477 for the pooled mean against the
+    # committed 4937.569559615532, a 1.43e-12 relative gap. The ordinary window
+    # rejected it by a hair; the block's window admits it, a 1e-4 change does
+    # not.
+    ladder = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {
+                "worst_feature_mean": 1145.068905459464,
+                "pooled_mean": 4937.569559615532,
+            }
+        }
+    }
+    runner_ladder = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {
+                "worst_feature_mean": 1145.068905459464,
+                "pooled_mean": 4937.569559608477,
+            }
+        }
+    }
+    _assert_json_close(runner_ladder, ladder)
+
+    stale_ladder = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {"pooled_mean": 4937.569559615532 * 1.0001}
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_ladder, ladder)
