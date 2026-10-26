@@ -362,14 +362,16 @@ def test_the_position_free_residual_is_what_the_mean_summary_actually_incurs() -
 
 
 def _tolerances(where: str) -> tuple[float, float]:
-    """``(relative, absolute)`` for the leaf at ``where``; four classes.
+    """``(relative, absolute)`` for the leaf at ``where``; five classes.
 
     Ordinary results keep the strict window. Error floors and amplified
     quotients get the tolerances the module docstring of ``_leaves`` in
     ``tests/test_paper_claims.py`` explains; both are properties of float64
     summation order, not of the measurement. The fourth class is the base-10
     logarithm of a ratio with a near-zero denominator: it is compared on the
-    log scale because a relative window there is a different quantity.
+    log scale because a relative window there is a different quantity. The
+    fifth is a relative standard deviation across seeds, a second moment of
+    ratios whose individual values inherit the same ordering noise.
     """
     if where.endswith(".additivity_residual_max"):
         return 0.0, NOISE_FLOOR
@@ -379,6 +381,14 @@ def _tolerances(where: str) -> tuple[float, float]:
     if where.endswith(".log10_ratio_max") or where.endswith(".log10_ratio_min"):
         # A ratio against a near-zero cancellation residue; see LOG_RATIO_ABS.
         return 0.0, LOG_RATIO_ABS
+    if where.endswith(".worst_feature_relative_std") or where.endswith(
+        ".pooled_relative_std"
+    ):
+        # Std of per-seed ratios (paper: 0.93x and 1.13x their means). The
+        # ratios are quotients of near-zero sums, so their second moment moves
+        # by ~3e-12 between BLAS builds. Quoted to two digits; a real change is
+        # orders above this window.
+        return AMPLIFIED_TOL, 1e-15
     if "max_min_ratio" in where:
         return AMPLIFIED_TOL, 1e-15
     return EXACT_TOL, 1e-15
@@ -439,8 +449,8 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
 
     Mutation verdict: dropping the ``max_min_ratio`` clause fails the first
     assertion; widening the residual ceiling to 1e-8 fails the third; dropping
-    the two log-ratio clauses fails the fourth, and widening
-    ``LOG_RATIO_ABS`` to 1.0 fails the fifth.
+    the two log-ratio clauses fails the fourth; widening ``LOG_RATIO_ABS`` to
+    1.0 fails the fifth; dropping the relative-std clause fails the sixth.
     """
     committed = {
         "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
@@ -506,3 +516,27 @@ def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> Non
     }
     with pytest.raises(AssertionError):
         _assert_json_close(stale_log_ratio_max, ci_logs)
+
+    # The third quantity CI moved on: a relative standard deviation across
+    # seeds. Same seeded run, two builds: 0.9265496496875988 vs
+    # 0.9265496496845552, a 3.3e-12 relative gap. Must pass; a 1e-4 change
+    # (far below anything a reader would notice in the quoted 0.93) must not.
+    seed_std = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {"worst_feature_relative_std": 0.9265496496875988}
+        }
+    }
+    runner_seed_std = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {"worst_feature_relative_std": 0.9265496496845552}
+        }
+    }
+    _assert_json_close(runner_seed_std, seed_std)
+
+    stale_seed_std = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {"worst_feature_relative_std": 0.9265496496875988 * 1.0001}
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_seed_std, seed_std)
