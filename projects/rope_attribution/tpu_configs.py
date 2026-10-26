@@ -56,9 +56,10 @@ def _preset(
     lr: float,
     warmup_steps: int,
     seed: int = 20261010,
+    grad_accum: int = 1,
 ) -> dict[str, object]:
     params = count_params(CONFIGS[train_config])
-    global_batch = _PER_CHIP_BATCH * _CHIPS
+    global_batch = _PER_CHIP_BATCH * _CHIPS * grad_accum
     tokens_per_step = global_batch * _SEQ_LEN
     return {
         "train_config": train_config,
@@ -67,6 +68,7 @@ def _preset(
         "dtype": "bf16",
         "per_chip_batch_size": _PER_CHIP_BATCH,
         "seq_len": _SEQ_LEN,
+        "grad_accum": grad_accum,
         "global_batch_size": global_batch,
         "tokens_per_step": tokens_per_step,
         "n_steps": n_steps,
@@ -77,6 +79,10 @@ def _preset(
         "lr_floor_fraction": 0.1,
         "grad_clip": 1.0,
         "seed": seed,
+        "checkpoint_every": 2_000,
+        "eval_every": 500,
+        "val_batches": 8,
+        "log_every": 50,
     }
 
 
@@ -90,26 +96,42 @@ TPU_PRESETS: dict[str, dict[str, object]] = {
     "tpu_v5e8_303m": _preset("train_303m", n_steps=48_000, lr=5.0e-4, warmup_steps=960),
 }
 
-_REQUIRED = frozenset(
+#: Preset key -> the ``train.CONFIGS`` key it becomes. Every preset field that
+#: is a hyperparameter for ``train()`` must appear here: ``launch_overrides`` is
+#: generated from this mapping, so a knob cannot be written down in a preset and
+#: then silently dropped on the way to the trainer.
+RUNTIME_KEYS: dict[str, str] = {
+    "per_chip_batch_size": "batch_size",
+    "seq_len": "ctx",
+    "grad_accum": "grad_accum",
+    "n_steps": "n_steps",
+    "lr": "lr",
+    "warmup_steps": "warmup_steps",
+    "lr_floor_fraction": "lr_floor_fraction",
+    "grad_clip": "grad_clip",
+    "seed": "seed",
+    "dtype": "dtype",
+    "checkpoint_every": "checkpoint_every",
+    "eval_every": "eval_every",
+    "val_batches": "val_batches",
+    "log_every": "log_every",
+}
+
+#: Preset fields that describe the run or are derived from the ones above. They
+#: are never handed to ``train()``; ``validate_preset`` checks their arithmetic.
+METADATA_KEYS = frozenset(
     {
         "train_config",
         "chips",
         "hosts",
-        "dtype",
-        "per_chip_batch_size",
-        "seq_len",
         "global_batch_size",
         "tokens_per_step",
-        "n_steps",
         "total_tokens",
         "expected_params",
-        "lr",
-        "warmup_steps",
-        "lr_floor_fraction",
-        "grad_clip",
-        "seed",
     }
 )
+
+_REQUIRED = frozenset(RUNTIME_KEYS) | METADATA_KEYS
 
 
 def validate_preset(name: str, preset: dict[str, object]) -> None:
@@ -128,11 +150,18 @@ def validate_preset(name: str, preset: dict[str, object]) -> None:
         raise ValueError(f"{name}: dtype must be bf16 or fp32, not {preset['dtype']!r}")
     if int(preset["per_chip_batch_size"]) <= 0:
         raise ValueError(f"{name}: per_chip_batch_size must be positive")
+    if int(preset["grad_accum"]) < 1:
+        raise ValueError(
+            f"{name}: grad_accum must be at least 1, not {preset['grad_accum']!r}"
+        )
     if int(preset["seq_len"]) <= 0 or int(preset["seq_len"]) % 128:
         raise ValueError(f"{name}: seq_len must be a positive multiple of 128 for XLA")
-    if int(preset["global_batch_size"]) != int(preset["per_chip_batch_size"]) * _CHIPS:
+    if int(preset["global_batch_size"]) != (
+        int(preset["per_chip_batch_size"]) * _CHIPS * int(preset["grad_accum"])
+    ):
         raise ValueError(
-            f"{name}: global_batch_size must be per_chip_batch_size * {_CHIPS}"
+            f"{name}: global_batch_size must be per_chip_batch_size * {_CHIPS} "
+            "* grad_accum"
         )
     if int(preset["tokens_per_step"]) != int(preset["global_batch_size"]) * int(
         preset["seq_len"]
@@ -152,6 +181,13 @@ def validate_preset(name: str, preset: dict[str, object]) -> None:
         raise ValueError(f"{name}: lr_floor_fraction must be in (0, 1)")
     if not 0.0 < float(preset["grad_clip"]) <= 10.0:
         raise ValueError(f"{name}: grad_clip must be in (0, 10]")
+    if int(preset["checkpoint_every"]) < 0:
+        raise ValueError(f"{name}: checkpoint_every must be non-negative")
+    for key in ("eval_every", "log_every"):
+        if int(preset[key]) < 1:
+            raise ValueError(f"{name}: {key} must be at least 1")
+    if int(preset["val_batches"]) < 1:
+        raise ValueError(f"{name}: val_batches must be at least 1")
     if int(preset["seed"]) < 0:
         raise ValueError(f"{name}: seed must be non-negative")
 
@@ -185,19 +221,16 @@ validate_all()
 def launch_overrides(name: str) -> dict[str, object]:
     """The ``override`` dict ``train.train`` needs for this preset.
 
-    Only keys that ``train.CONFIGS`` already has are returned; the launcher adds
-    the per-rank seed. Keeping this function here means the launch path and the
-    validator read the same fields.
+    Generated from :data:`RUNTIME_KEYS`, so every hyperparameter the preset
+    records reaches the trainer -- including ``grad_clip``,
+    ``lr_floor_fraction`` and the logging/evaluation cadence, which a
+    hand-written dict had dropped. The launcher adds the per-rank seed; the
+    derived fields in :data:`METADATA_KEYS` are not trainer arguments.
     """
     preset = TPU_PRESETS[name]
     return {
-        "batch_size": preset["per_chip_batch_size"],
-        "ctx": preset["seq_len"],
-        "lr": preset["lr"],
-        "n_steps": preset["n_steps"],
-        "warmup_steps": preset["warmup_steps"],
-        "seed": preset["seed"],
-        "dtype": preset["dtype"],
+        config_key: preset[preset_key]
+        for preset_key, config_key in RUNTIME_KEYS.items()
     }
 
 

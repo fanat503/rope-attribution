@@ -111,7 +111,7 @@ def test_every_config_is_a_complete_call() -> None:
         "n_layers", "n_heads", "head_dim", "dim", "ffn", "vocab", "ctx",
         "lr", "n_steps", "batch_size", "eval_every", "warmup_steps",
         "lr_floor_fraction", "grad_clip", "seed", "checkpoint_every",
-        "val_batches",
+        "val_batches", "log_every", "grad_accum",
     }
     for name, config in T.CONFIGS.items():
         missing = required - set(config)
@@ -631,8 +631,13 @@ def test_two_smoke_runs_log_identical_series(tmp_path: Path) -> None:
     def strip(run: str) -> list:
         records = [json.loads(line) for line in
                    (tmp_path / run / "metrics.jsonl").read_text(encoding="utf-8").splitlines()]
+        # The determinism contract is "every field is identical except
+        # wall-clock". Per-step telemetry adds interval and elapsed clocks,
+        # so every wall-clock field is removed here; a change to any seeded
+        # value (loss, lr, grad_norm, tokens_seen, step) still fails.
         for record in records:
-            record.pop("tok_per_s", None)
+            for key in ("tok_per_s", "interval_tok_per_s", "interval_s", "elapsed_s"):
+                record.pop(key, None)
         return records
 
     assert strip("a") == strip("b")
@@ -791,6 +796,12 @@ def test_xla_update_reduces_before_clipping_and_steps_once() -> None:
     first, the parameter update would have norm ten after the fake reduction;
     with the intended order it has norm one. This is the exact bug a
     ``xm.optimizer_step`` call after ``xm.reduce_gradients`` would hide.
+
+    The fake records the object it was handed: the real
+    ``xm.reduce_gradients`` signature takes the *optimizer* (it fetches
+    ``optimizer.__getstate__()['param_groups']``), so passing the model would
+    raise ``KeyError: 'param_groups'`` on a TPU. The identity assertion is the
+    detector for that mistake.
     """
     if not T.TORCH_AVAILABLE:
         pytest.skip("torch is not installed")
@@ -799,11 +810,13 @@ def test_xla_update_reduces_before_clipping_and_steps_once() -> None:
     class FakeXM:
         def __init__(self) -> None:
             self.calls: list[str] = []
+            self.reduced = None
 
-        def reduce_gradients(self, model) -> None:
+        def reduce_gradients(self, optimizer) -> None:
             self.calls.append("reduce")
+            self.reduced = optimizer
             with torch.no_grad():
-                for parameter in model.parameters():
+                for parameter in optimizer.param_groups[0]["params"]:
                     if parameter.grad is not None:
                         parameter.grad.mul_(10.0)
 
@@ -818,7 +831,347 @@ def test_xla_update_reduces_before_clipping_and_steps_once() -> None:
     xm = FakeXM()
     grad_norm = T._reduce_update(model, opt, xm, grad_clip=1.0)
     assert xm.calls == ["reduce", "mark"], xm.calls
+    assert xm.reduced is opt, "reduce_gradients takes the optimizer, not the model"
     assert float(grad_norm) == pytest.approx(50.0), "the norm must be pre-clip, post-reduce"
     assert float(model.weight.detach().norm()) == pytest.approx(1.0), (
         "the step must use the clipped, reduced gradient exactly once"
     )
+
+
+# ==========================================================================
+# Crash recovery, resume protocol, telemetry and accumulation
+# ==========================================================================
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def test_metrics_writer_drops_a_truncated_tail_before_appending(tmp_path: Path) -> None:
+    """A crash leaves a partial line; the next append must not inherit it.
+
+    Mutation verdict: without the truncation in the ``append=True`` branch the
+    third write is glued onto the partial prefix, and the ``json.loads`` over
+    every line at the end raises -- the whole series is unreadable, not just
+    the crashed record.
+    """
+    run = tmp_path / "run"
+    writer = T.MetricsWriter(run)
+    writer.log({"event": "eval", "step": 1})
+    # The bytes a crash between the record write and its newline leaves behind.
+    with (run / "metrics.jsonl").open("ab") as handle:
+        handle.write(b'{"event": "eval", "step": 2, "val')
+
+    resumed = T.MetricsWriter(run, append=True)
+    assert resumed.records == [{"event": "eval", "step": 1}]
+    resumed.log({"event": "eval", "step": 3})
+    resumed.finalize({"event": "summary", "steps": 3})
+    text = (run / "metrics.jsonl").read_text(encoding="utf-8")
+    assert text.endswith("\n")
+    assert [json.loads(line) for line in text.splitlines()] == [
+        {"event": "eval", "step": 1},
+        {"event": "eval", "step": 3},
+    ]
+
+
+def test_a_resumed_run_writes_one_start_one_resume_and_one_summary(
+    tmp_path: Path,
+) -> None:
+    """A resumed run keeps one ``run_start`` and closes with one summary.
+
+    The first segment completed and wrote its own summary; the resume replaces
+    it, because it describes a run that did not finish. The partial tail left
+    by a crash is dropped at the same time.
+
+    Mutation verdict: logging ``run_start`` again on the resumed segment (the
+    old behaviour) makes both ``count`` assertions fail, which is exactly the
+    condition ``report_run.split_records`` used to refuse. Keeping the first
+    segment's summary makes ``count("summary")`` two.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    from rope_attribution import report_run
+
+    tokens = np.random.default_rng(41).integers(0, 512, size=8192)
+    run = tmp_path / "run"
+    T.train("smoke", run, tokens, device="cpu", max_steps=4)
+    with (run / "metrics.jsonl").open("ab") as handle:
+        handle.write(b'{"event": "eval", "step": 5, "val_l')
+    summary = T.train("smoke", run, tokens, device="cpu", max_steps=8, resume=True)
+
+    records = _read_jsonl(run / "metrics.jsonl")
+    events = [record["event"] for record in records]
+    assert events.count("run_start") == 1, events
+    assert events.count("resume") == 1, events
+    assert events.count("summary") == 1, events
+    resume = next(record for record in records if record["event"] == "resume")
+    assert resume["resumed_from_step"] == 4
+    assert resume["config_name"] == "smoke"
+    assert resume["global_batch_size"] == (
+        T.CONFIGS["smoke"]["batch_size"]
+        * T.CONFIGS["smoke"]["grad_accum"]
+    )
+    assert records[-1]["event"] == "summary", "the summary must close the file"
+    assert summary["steps"] == 8
+    assert summary["resumed_from_step"] == 4
+
+    start, evals, last_summary = report_run.split_records(records)
+    assert start["event"] == "run_start"
+    assert last_summary is not None and last_summary["steps"] == 8
+    assert [record["step"] for record in evals] == [4, 8]
+
+
+def test_a_run_writes_per_step_and_checkpoint_telemetry(tmp_path: Path) -> None:
+    """The step series answers "what was the loss and lr between evals".
+
+    Mutation verdict: deleting the ``log_every`` branch leaves no ``step``
+    record; deleting the checkpoint log leaves no ``checkpoint`` record; a
+    ``tokens_seen`` that misses the accumulation factor fails the per-step
+    token count recomputed here from the config.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    tokens = np.random.default_rng(43).integers(0, 512, size=8192)
+    config = dict(T.CONFIGS["smoke"])
+    config.update(
+        {"n_steps": 4, "eval_every": 4, "log_every": 2, "checkpoint_every": 2}
+    )
+    summary = T.train(
+        "smoke", tmp_path / "run", tokens, device="cpu", max_steps=4,
+        override={"eval_every": 4, "log_every": 2, "checkpoint_every": 2},
+    )
+    records = _read_jsonl(tmp_path / "run" / "metrics.jsonl")
+    steps = [record for record in records if record["event"] == "step"]
+    assert [record["step"] for record in steps] == [2, 4]
+    keys = {
+        "step", "lr", "train_loss", "grad_norm", "tokens_seen",
+        "interval_tok_per_s", "interval_s", "elapsed_s",
+    }
+    per_step_tokens = config["batch_size"] * config["ctx"]
+    for index, record in enumerate(steps):
+        assert keys <= set(record), sorted(keys - set(record))
+        assert record["tokens_seen"] == (index + 1) * 2 * per_step_tokens
+        assert record["lr"] == pytest.approx(T.lr_at(record["step"], config))
+        assert record["interval_tok_per_s"] > 0.0
+        assert record["interval_s"] > 0.0
+        assert record["elapsed_s"] > 0.0
+        assert np.isfinite(record["train_loss"])
+        assert np.isfinite(record["grad_norm"])
+    assert steps[0]["elapsed_s"] <= steps[1]["elapsed_s"]
+
+    checkpoints = [record for record in records if record["event"] == "checkpoint"]
+    assert [(record["step"], record["path"]) for record in checkpoints] == [
+        (2, "checkpoint_resume.pt"),
+        (4, "checkpoint.pt"),
+        (4, "checkpoint_resume.pt"),
+    ]
+    for record in checkpoints:
+        assert record["tokens_seen"] == per_step_tokens * record["step"]
+
+    assert summary["elapsed_s"] > 0.0
+    assert summary["grad_accum"] == 1
+    assert summary["global_batch_size"] == config["batch_size"]
+
+
+def test_gradient_accumulation_is_one_step_over_the_mean_micro_batch(
+    tmp_path: Path,
+) -> None:
+    """Accumulation must average micro-batches, not sum them or step per batch.
+
+    The token stream is one period of ``ctx`` tokens, so every training window
+    is identical and the two micro-batches of an accumulated step carry exactly
+    the same gradient. The mean over them is then exactly the single-batch
+    gradient, and both runs must perform the same update.
+
+    Mutation verdict: dropping the ``loss / grad_accum`` scaling doubles the
+    logged pre-clip ``grad_norm``; stepping inside the micro-batch loop makes
+    the two checkpoints differ; forgetting ``grad_accum`` in the token count
+    fails the ``tokens_seen`` assertion.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    import torch
+
+    config = T.CONFIGS["smoke"]
+    pattern = np.random.default_rng(47).integers(0, config["vocab"], size=config["ctx"])
+    tokens = np.tile(pattern, 200)
+    one = T.train(
+        "smoke", tmp_path / "one", tokens, device="cpu", max_steps=1,
+        override={"grad_accum": 1, "eval_every": 1},
+    )
+    two = T.train(
+        "smoke", tmp_path / "two", tokens, device="cpu", max_steps=1,
+        override={"grad_accum": 2, "eval_every": 1}, world_size=3,
+    )
+
+    def eval_record(name: str) -> dict:
+        return next(
+            record
+            for record in _read_jsonl(tmp_path / name / "metrics.jsonl")
+            if record["event"] == "eval"
+        )
+
+    assert eval_record("two")["grad_norm"] == pytest.approx(
+        eval_record("one")["grad_norm"], rel=1e-6
+    ), "the accumulated gradient must be the mean of the micro-batches"
+    start = _read_jsonl(tmp_path / "two" / "metrics.jsonl")[0]
+    assert start["grad_accum"] == 2
+    assert start["global_batch_size"] == config["batch_size"] * 3 * 2
+    assert two["tokens_seen"] == config["batch_size"] * config["ctx"] * 3 * 2
+    assert eval_record("two")["tokens_seen"] == two["tokens_seen"]
+    assert one["tokens_seen"] == config["batch_size"] * config["ctx"]
+
+    payload_one = torch.load(tmp_path / "one" / "checkpoint.pt", map_location="cpu")
+    payload_two = torch.load(tmp_path / "two" / "checkpoint.pt", map_location="cpu")
+    for key, value in payload_one["model"].items():
+        assert torch.equal(value, payload_two["model"][key]), key
+
+
+def test_the_cli_passes_the_tuning_flags_to_train(monkeypatch) -> None:
+    """Every new flag must arrive as a validated config override.
+
+    Mutation verdict: dropping any of the six override entries below leaves the
+    corresponding key out of ``captured["override"]``.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    captured: dict = {}
+
+    def fake_train(*args, **kwargs):
+        captured.update(kwargs)
+        return {"event": "summary", "steps": 0}
+
+    monkeypatch.setattr(T, "train", fake_train)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train", "--config", "smoke", "--run-name", "stub_flags",
+            "--dtype", "fp32", "--batch-size", "8", "--grad-accum", "2",
+            "--log-every", "3", "--eval-every", "5", "--checkpoint-every", "7",
+            "--max-steps", "9",
+        ],
+    )
+    T.main()
+    assert captured["override"] == {
+        "dtype": "fp32",
+        "batch_size": 8,
+        "grad_accum": 2,
+        "log_every": 3,
+        "eval_every": 5,
+        "checkpoint_every": 7,
+    }
+    assert captured["max_steps"] == 9
+
+
+def test_the_cli_refuses_invalid_tuning_flags(monkeypatch) -> None:
+    """A bad knob must stop before a run directory is written."""
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+    monkeypatch.setattr(
+        sys, "argv", ["train", "--config", "smoke", "--grad-accum", "0"]
+    )
+    with pytest.raises(SystemExit, match="grad-accum"):
+        T.main()
+    monkeypatch.setattr(
+        sys, "argv", ["train", "--config", "smoke", "--batch-size", "0"]
+    )
+    with pytest.raises(SystemExit, match="batch-size"):
+        T.main()
+    monkeypatch.setattr(
+        sys, "argv", ["train", "--config", "smoke", "--device", "cpu", "--dtype", "bf16"]
+    )
+    with pytest.raises(SystemExit, match="bf16"):
+        T.main()
+
+
+def test_the_cli_dry_run_prints_the_resolved_config(
+    monkeypatch, capsys
+) -> None:
+    """--dry-run must show what would run and must not train or read data.
+
+    Mutation verdict: moving the branch after the data load makes the stubbed
+    ``train`` unnecessary -- the test replaces train with a failure, so a dry
+    run that trains fails loudly.
+    """
+    if not T.TORCH_AVAILABLE:
+        pytest.skip("torch is not installed")
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a dry run must not train")
+
+    monkeypatch.setattr(T, "train", refuse)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["train", "--config", "smoke", "--dry-run", "--batch-size", "8",
+         "--grad-accum", "2"],
+    )
+    T.main()
+    data = json.loads(capsys.readouterr().out)
+    assert data["config_name"] == "smoke"
+    assert data["config"]["batch_size"] == 8
+    assert data["config"]["grad_accum"] == 2
+    assert data["overrides"] == {"batch_size": 8, "grad_accum": 2}
+    assert data["run_dir"].replace("\\", "/") == "runs/smoke"
+
+
+def test_the_xla_backend_guard_requires_a_tpu(monkeypatch) -> None:
+    """Importing torch_xla is not enough: an XLA-CPU backend must be refused.
+
+    Mutation verdict: making ``_check_xla_backend`` a no-op lets both refusals
+    below through, which is the silent-CPU-backend failure the guard exists
+    for.
+    """
+    monkeypatch.delenv("PJRT_DEVICE", raising=False)
+    monkeypatch.delenv("ROPE_ATTRIBUTION_ALLOW_XLA_CPU", raising=False)
+    with pytest.raises(RuntimeError, match="PJRT_DEVICE"):
+        T._check_xla_backend()
+    monkeypatch.setenv("PJRT_DEVICE", "CPU")
+    with pytest.raises(RuntimeError, match="PJRT_DEVICE"):
+        T._check_xla_backend()
+    monkeypatch.setenv("PJRT_DEVICE", "cuda")
+    with pytest.raises(RuntimeError, match="PJRT_DEVICE"):
+        T._check_xla_backend()
+
+
+def test_the_xla_backend_guard_honours_the_escape_hatch(monkeypatch) -> None:
+    """The CPU escape hatch is explicit, and it is the only way through.
+
+    Mutation verdict: dropping the ``ROPE_ATTRIBUTION_ALLOW_XLA_CPU`` branch
+    makes the first call raise; the TPU case must never need the hatch.
+    """
+    monkeypatch.setenv("PJRT_DEVICE", "TPU")
+    monkeypatch.delenv("ROPE_ATTRIBUTION_ALLOW_XLA_CPU", raising=False)
+    T._check_xla_backend()
+    monkeypatch.setenv("PJRT_DEVICE", "CPU")
+    monkeypatch.setenv("ROPE_ATTRIBUTION_ALLOW_XLA_CPU", "1")
+    T._check_xla_backend()
+    # "0" is not the hatch; only the documented value is.
+    monkeypatch.setenv("ROPE_ATTRIBUTION_ALLOW_XLA_CPU", "0")
+    with pytest.raises(RuntimeError, match="PJRT_DEVICE"):
+        T._check_xla_backend()
+
+
+def test_require_xla_runs_the_backend_guard(monkeypatch) -> None:
+    """The guard must be wired into the importer, not just importable.
+
+    Mutation verdict: deleting the ``_check_xla_backend()`` call from
+    ``_require_xla`` makes the expected error never surface.
+    """
+    monkeypatch.setattr(T, "XLA_AVAILABLE", True)
+    calls: list[int] = []
+
+    def guard() -> None:
+        calls.append(1)
+        raise RuntimeError("backend guard fired")
+
+    monkeypatch.setattr(T, "_check_xla_backend", guard)
+    with pytest.raises(RuntimeError, match="backend guard fired"):
+        T._require_xla()
+    assert calls == [1]
+

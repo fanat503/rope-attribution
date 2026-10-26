@@ -15,6 +15,11 @@ next to the run by default:
   a spreadsheet or a plotting script;
 * ``report/report.md`` -- a compact human-readable table and the final
   diagnostics;
+* ``report/steps.csv`` -- the per-step telemetry (loss, lr, gradient norm,
+  interval throughput), when the run wrote any. Step and checkpoint records are
+  deliberately **not** rows of the eval table: an eval row is a validation
+  measurement, a step row is not, and mixing them would make ``val_loss`` a
+  column of blanks;
 * optionally, a self-contained HTML report via ``--html PATH``.
 
 No new dependencies, and no plotting side effects: the CSV is the data, and the
@@ -41,6 +46,20 @@ CORE_COLUMNS: tuple[str, ...] = (
     "val_loss",
     "tokens_seen",
     "tok_per_s",
+)
+
+#: The columns of a per-step telemetry record, in reading order. Step records
+#: answer a different question than evaluations (they are the loss curve
+#: *between* evaluations), so they are reported separately.
+STEP_COLUMNS: tuple[str, ...] = (
+    "step",
+    "lr",
+    "train_loss",
+    "grad_norm",
+    "tokens_seen",
+    "interval_tok_per_s",
+    "interval_s",
+    "elapsed_s",
 )
 
 
@@ -84,26 +103,46 @@ def load_records(path: Path) -> list[dict[str, Any]]:
 def split_records(
     records: Sequence[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any] | None]:
-    """Return ``(run_start, evals, summary)`` and refuse an ambiguous stream.
+    """Return ``(run_start, evals, summary)`` for a possibly resumed file.
 
-    A run directory is wiped at the start of a run, so more than one
-    ``run_start`` means the file has been concatenated by hand. Reporting the
-    first run and ignoring the second would be a silent lie about the series.
+    A run resumed in place appends to the same ``metrics.jsonl``, and files
+    written before the resume protocol changed contain one ``run_start`` per
+    restart. The file describes one run, so the report uses the **first**
+    ``run_start`` (the original configuration is the run's configuration) and
+    the **last** ``summary`` (the final state; an earlier summary stopped at a
+    checkpoint, not at the end of the run).
+
+    ``step`` and ``checkpoint`` records are not evaluations and are not
+    returned here; :func:`telemetry_records` separates them. A file with no
+    start record at all is refused: there is no configuration to report.
     """
     starts = [r for r in records if r.get("event") == "run_start"]
     evals = [r for r in records if r.get("event") == "eval"]
     summaries = [r for r in records if r.get("event") == "summary"]
-    if len(starts) != 1:
-        raise ValueError(f"expected exactly one run_start record, found {len(starts)}")
-    if len(summaries) > 1:
-        raise ValueError(f"expected at most one summary record, found {len(summaries)}")
-    return starts[0], evals, (summaries[0] if summaries else None)
+    if not starts:
+        raise ValueError("expected a run_start record, found none")
+    return starts[0], evals, (summaries[-1] if summaries else None)
 
 
-def scalar_columns(evals: Iterable[dict[str, Any]]) -> list[str]:
-    """Core columns first, then any additional numeric diagnostics in order."""
-    columns = list(CORE_COLUMNS)
-    for record in evals:
+def telemetry_records(
+    records: Sequence[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return ``(step_records, checkpoint_records)`` in file order.
+
+    Kept out of :func:`split_records` so the eval table cannot accidentally
+    grow a row per training step.
+    """
+    steps = [r for r in records if r.get("event") == "step"]
+    checkpoints = [r for r in records if r.get("event") == "checkpoint"]
+    return steps, checkpoints
+
+
+def _columns(
+    records: Iterable[dict[str, Any]], core: Sequence[str]
+) -> list[str]:
+    """``core`` first, then any additional numeric fields in first-seen order."""
+    columns = list(core)
+    for record in records:
         for key, value in record.items():
             if key == "event" or key in columns:
                 continue
@@ -111,6 +150,16 @@ def scalar_columns(evals: Iterable[dict[str, Any]]) -> list[str]:
                 continue
             columns.append(key)
     return columns
+
+
+def scalar_columns(evals: Iterable[dict[str, Any]]) -> list[str]:
+    """Core eval columns first, then any additional numeric diagnostics."""
+    return _columns(evals, CORE_COLUMNS)
+
+
+def step_columns(steps: Iterable[dict[str, Any]]) -> list[str]:
+    """Core step columns first, then any additional numeric fields."""
+    return _columns(steps, STEP_COLUMNS)
 
 
 def write_csv(
@@ -139,6 +188,8 @@ def render_markdown(
     evals: Sequence[dict[str, Any]],
     summary: dict[str, Any] | None,
     columns: Sequence[str],
+    steps: Sequence[dict[str, Any]] = (),
+    checkpoints: Sequence[dict[str, Any]] = (),
 ) -> str:
     config = start.get("config", {})
     lines = [
@@ -188,6 +239,36 @@ def render_markdown(
             lines.extend(["", "## Final diagnostics", "", "| key | value |", "| --- | --- |"])
             for key in sorted(diagnostics):
                 lines.append(f"| `{key}` | {_value(diagnostics[key])} |")
+
+    lines.extend(["", "## Step telemetry", ""])
+    if steps:
+        last = steps[-1]
+        lines.extend(
+            [
+                f"- step records: {len(steps)}",
+                f"- last logged step: {_value(last.get('step'))} "
+                f"({_value(last.get('tokens_seen'))} tokens seen)",
+                "- full series: `steps.csv` (this table has evaluations only)",
+            ]
+        )
+    else:
+        lines.append(
+            "No per-step records were written: the file predates step telemetry, "
+            "or `log_every` is 0."
+        )
+    if checkpoints:
+        lines.extend(
+            [
+                "",
+                "| step | checkpoint | tokens_seen |",
+                "| --- | --- | --- |",
+            ]
+        )
+        for record in checkpoints:
+            lines.append(
+                f"| {_value(record.get('step'))} | `{_value(record.get('path'))}` "
+                f"| {_value(record.get('tokens_seen'))} |"
+            )
     lines.append("")
     return "\n".join(lines)
 
@@ -197,6 +278,8 @@ def render_html(
     evals: Sequence[dict[str, Any]],
     summary: dict[str, Any] | None,
     columns: Sequence[str],
+    steps: Sequence[dict[str, Any]] = (),
+    checkpoints: Sequence[dict[str, Any]] = (),
 ) -> str:
     """A self-contained HTML view: no scripts, no external assets."""
     title = escape(str(start.get("config_name", "training run")))
@@ -217,6 +300,36 @@ def render_html(
         summary_line = (
             f"<p>steps: {escape(_value(summary.get('steps')))}; "
             f"final train loss EMA: {escape(_value(summary.get('final_train_loss_ema')))}</p>"
+        )
+    telemetry = ""
+    if steps:
+        step_cols = step_columns(steps)
+        step_head = "".join(f"<th>{escape(column)}</th>" for column in step_cols)
+        step_rows = "".join(
+            "<tr>"
+            + "".join(
+                f"<td>{escape(_value(record.get(column)))}</td>" for column in step_cols
+            )
+            + "</tr>"
+            for record in steps
+        )
+        telemetry += (
+            "<h2>Step telemetry</h2>\n"
+            f"<table><thead><tr>{step_head}</tr></thead><tbody>{step_rows}</tbody></table>"
+        )
+    if checkpoints:
+        checkpoint_rows = "".join(
+            "<tr>"
+            f"<td>{escape(_value(record.get('step')))}</td>"
+            f"<td>{escape(_value(record.get('path')))}</td>"
+            f"<td>{escape(_value(record.get('tokens_seen')))}</td>"
+            "</tr>"
+            for record in checkpoints
+        )
+        telemetry += (
+            "<h2>Checkpoints</h2>\n"
+            "<table><thead><tr><th>step</th><th>path</th><th>tokens_seen</th></tr>"
+            f"</thead><tbody>{checkpoint_rows}</tbody></table>"
         )
     return f"""<!doctype html>
 <html lang="en">
@@ -240,6 +353,7 @@ code {{ background: #f4f6f7; padding: .1rem .25rem; }}
 <table>{config_rows}</table>
 <h2>Curves</h2>
 <table><thead><tr>{header}</tr></thead><tbody>{rows}</tbody></table>
+{telemetry}
 </body>
 </html>
 """
@@ -254,28 +368,39 @@ def write_report(
     run_dir = Path(run_dir)
     records = load_records(run_dir / "metrics.jsonl")
     start, evals, summary = split_records(records)
+    steps, checkpoints = telemetry_records(records)
     columns = scalar_columns(evals)
     destination = Path(out_dir) if out_dir is not None else run_dir / "report"
     destination.mkdir(parents=True, exist_ok=True)
     csv_path = write_csv(evals, destination / "curves.csv", columns)
+    steps_csv_path = None
+    if steps:
+        steps_csv_path = write_csv(
+            steps, destination / "steps.csv", step_columns(steps)
+        )
     markdown_path = destination / "report.md"
     markdown_path.write_text(
-        render_markdown(start, evals, summary, columns), encoding="utf-8"
+        render_markdown(start, evals, summary, columns, steps, checkpoints),
+        encoding="utf-8",
     )
     html_result = None
     if html_path is not None:
         html_path = Path(html_path)
         html_path.parent.mkdir(parents=True, exist_ok=True)
         html_path.write_text(
-            render_html(start, evals, summary, columns), encoding="utf-8"
+            render_html(start, evals, summary, columns, steps, checkpoints),
+            encoding="utf-8",
         )
         html_result = str(html_path)
     return {
         "run_dir": str(run_dir),
         "csv": str(csv_path),
         "markdown": str(markdown_path),
+        "steps_csv": None if steps_csv_path is None else str(steps_csv_path),
         "html": html_result,
         "n_evals": len(evals),
+        "n_step_records": len(steps),
+        "n_checkpoints": len(checkpoints),
         "columns": columns,
     }
 
@@ -298,6 +423,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
     result = write_report(args.run_dir, args.out_dir, args.html)
     print(f"wrote {result['csv']} ({result['n_evals']} evaluations)")
+    if result["steps_csv"]:
+        print(f"wrote {result['steps_csv']} ({result['n_step_records']} step records)")
     print(f"wrote {result['markdown']}")
     if result["html"]:
         print(f"wrote {result['html']}")

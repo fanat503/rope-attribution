@@ -79,6 +79,7 @@ __all__ = [
     "count_params",
     "lr_at",
     "MetricsWriter",
+    "cli_overrides",
     "train",
     "main",
 ]
@@ -131,7 +132,9 @@ CONFIGS: dict[str, dict] = {
         "lr": 3e-3,
         "n_steps": 12,
         "batch_size": 4,
+        "grad_accum": 1,
         "eval_every": 4,
+        "log_every": 4,
         "checkpoint_every": 4,
         "val_batches": 2,
         "warmup_steps": 4,
@@ -151,7 +154,9 @@ CONFIGS: dict[str, dict] = {
         "lr": 6e-4,
         "n_steps": 80_000,
         "batch_size": 32,
+        "grad_accum": 1,
         "eval_every": 500,
+        "log_every": 50,
         "checkpoint_every": 2_000,
         "val_batches": 8,
         "warmup_steps": 2_000,
@@ -171,7 +176,9 @@ CONFIGS: dict[str, dict] = {
         "lr": 6e-4,
         "n_steps": 100_000,
         "batch_size": 32,
+        "grad_accum": 1,
         "eval_every": 500,
+        "log_every": 50,
         "checkpoint_every": 2_000,
         "val_batches": 8,
         "warmup_steps": 2_000,
@@ -191,7 +198,9 @@ CONFIGS: dict[str, dict] = {
         "lr": 6e-4,
         "n_steps": 110_000,
         "batch_size": 32,
+        "grad_accum": 1,
         "eval_every": 500,
+        "log_every": 50,
         "checkpoint_every": 2_000,
         "val_batches": 8,
         "warmup_steps": 2_000,
@@ -211,7 +220,9 @@ CONFIGS: dict[str, dict] = {
         "lr": 6e-4,
         "n_steps": 120_000,
         "batch_size": 32,
+        "grad_accum": 1,
         "eval_every": 500,
+        "log_every": 50,
         "checkpoint_every": 2_000,
         "val_batches": 8,
         "warmup_steps": 2_000,
@@ -231,7 +242,9 @@ CONFIGS: dict[str, dict] = {
         "lr": 6e-4,
         "n_steps": 130_000,
         "batch_size": 32,
+        "grad_accum": 1,
         "eval_every": 500,
+        "log_every": 50,
         "checkpoint_every": 2_000,
         "val_batches": 8,
         "warmup_steps": 2_000,
@@ -251,7 +264,9 @@ CONFIGS: dict[str, dict] = {
         "lr": 6e-4,
         "n_steps": 140_000,
         "batch_size": 32,
+        "grad_accum": 1,
         "eval_every": 500,
+        "log_every": 50,
         "checkpoint_every": 2_000,
         "val_batches": 8,
         "warmup_steps": 2_000,
@@ -320,6 +335,20 @@ def lr_at(step: int, config: dict) -> float:
     return floor + (peak - floor) * cosine
 
 
+def _record_event(line: str) -> str | None:
+    """The ``event`` of one JSONL line, or ``None`` if the line is not a record.
+
+    Used by :class:`MetricsWriter` to recognise superseded summaries without
+    rewriting a line it cannot parse -- a malformed interior line is left for
+    the report to refuse loudly instead of being silently dropped here.
+    """
+    try:
+        record = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return record.get("event") if isinstance(record, dict) else None
+
+
 class MetricsWriter:
     """One JSONL line per record, plus a closing ``summary.json``.
 
@@ -327,6 +356,17 @@ class MetricsWriter:
     order, floats in repr, one line per record -- two identical runs produce
     identical files on the same torch version, thread count and machine,
     except the wall-clock throughput field.
+
+    Resuming rewrites the series rather than blindly appending to it:
+
+    * a partial final line -- the record a crash died in the middle of -- is
+      truncated away, because it has no newline to start a new record from;
+    * every earlier ``summary`` record is dropped, because it described a
+      segment that did not finish; the run gets one final summary when it
+      actually ends.
+
+    The result is a file with one ``run_start``, one ``resume`` per restart and
+    one ``summary``, which is what :mod:`report_run` reads.
     """
 
     def __init__(self, run_dir: Path, *, append: bool = False) -> None:
@@ -340,12 +380,20 @@ class MetricsWriter:
             # outlive the record it belongs to; it is rewritten at finalize.
             if self.summary_path.exists():
                 self.summary_path.unlink()
-            lines = (
-                self.path.read_text(encoding="utf-8").splitlines()
-                if self.path.exists()
-                else []
-            )
-            self._lines: list[str] = [line for line in lines if line.strip()]
+            original = self.path.read_bytes() if self.path.exists() else b""
+            raw = original
+            if raw and not raw.endswith(b"\n"):
+                # A crash between a record's bytes and its newline leaves a
+                # prefix of a JSON object. Appending after it would glue two
+                # records into one unparseable line, so the tail goes.
+                raw = raw[: raw.rfind(b"\n") + 1]
+            lines = [line for line in raw.decode("utf-8").splitlines() if line.strip()]
+            kept = [line for line in lines if _record_event(line) != "summary"]
+            self._lines: list[str] = kept
+            if raw != original or len(kept) != len(lines):
+                self.path.write_text(
+                    "".join(line + "\n" for line in kept), encoding="utf-8"
+                )
             return
         # A run directory is a fresh run: files from a previous run of the
         # same name must not survive next to this run's records -- a stale
@@ -609,11 +657,37 @@ def _resolve_threads(device: str, threads: int | None) -> int:
     return 4 if device == "cpu" else 8
 
 
+def _check_xla_backend() -> None:
+    """Refuse an ``xla`` device whose PJRT backend is not a TPU.
+
+    ``import torch_xla`` registers the ``xla`` device even when the backend
+    behind it is the XLA CPU client; a run would then train on the wrong
+    hardware while every record said ``xla``. ``PJRT_DEVICE`` chooses the
+    backend, so it must name ``TPU``. ``ROPE_ATTRIBUTION_ALLOW_XLA_CPU=1`` is
+    the explicit escape hatch for tests and for a deliberate CPU smoke run;
+    no other value counts.
+    """
+    backend = os.environ.get("PJRT_DEVICE", "").strip().upper()
+    if backend == "TPU":
+        return
+    if os.environ.get("ROPE_ATTRIBUTION_ALLOW_XLA_CPU") == "1":
+        return
+    raise RuntimeError(
+        "device 'xla' requested but PJRT_DEVICE="
+        f"{os.environ.get('PJRT_DEVICE', '<unset>')!r}; an XLA run must target "
+        "a TPU. Set PJRT_DEVICE=TPU (see docs/TPU_V5E8.md), or set "
+        "ROPE_ATTRIBUTION_ALLOW_XLA_CPU=1 to run the XLA path on a CPU "
+        "backend deliberately."
+    )
+
+
 def _require_xla():
     """Import torch_xla and return its XLA model module, or refuse clearly.
 
     Importing ``torch_xla`` is what registers the ``xla`` device with torch, so
     this must run before the first ``torch.device("xla")`` / ``.to("xla")``.
+    The backend guard runs before the import: a CPU PJRT backend is refused
+    without initialising it.
     """
     if not XLA_AVAILABLE:
         raise RuntimeError(
@@ -621,6 +695,7 @@ def _require_xla():
             "install the TPU build of torch_xla on the TPU host "
             "(see docs/TPU_V5E8.md)"
         )
+    _check_xla_backend()
     import torch_xla.core.xla_model as xm
 
     return xm
@@ -669,11 +744,17 @@ def _reduce_update(model, opt, xm, grad_clip: float):
     an explicit ``reduce_gradients`` would all-reduce a second time. This helper
     is deliberately torch_xla-free at import time so the order can be tested on
     CPU with a fake ``xm``.
+
+    ``xm.reduce_gradients`` takes the *optimizer*, not the model: it fetches
+    the gradients through ``optimizer.__getstate__()['param_groups']``. It
+    all-reduces with SUM and then scales by ``1 / world_size`` (see
+    docs/TPU_V5E8.md), so what is clipped below is the mean gradient over the
+    data-parallel ranks.
     """
     import torch
 
     if xm is not None:
-        xm.reduce_gradients(model)
+        xm.reduce_gradients(opt)
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     opt.step()
     if xm is not None:
@@ -1032,6 +1113,41 @@ def _id_batch(rows: np.ndarray):
     return torch.from_numpy(np.ascontiguousarray(rows, dtype=np.int64))
 
 
+def cli_overrides(
+    *,
+    dtype: str | None = None,
+    batch_size: int | None = None,
+    grad_accum: int | None = None,
+    log_every: int | None = None,
+    eval_every: int | None = None,
+    checkpoint_every: int | None = None,
+) -> dict:
+    """The config overrides a command line asked for, validated.
+
+    Shared by ``train.main`` and ``tpu_launch.main`` so the two entry points
+    cannot disagree about what a flag means. Only flags that were given appear
+    in the result: an omitted flag keeps the config's or preset's value.
+    """
+    overrides: dict = {}
+    if dtype is not None:
+        if dtype not in ("fp32", "bf16"):
+            raise SystemExit(f"--dtype must be fp32 or bf16, not {dtype!r}")
+        overrides["dtype"] = dtype
+    for flag, key, value, minimum in (
+        ("--batch-size", "batch_size", batch_size, 1),
+        ("--grad-accum", "grad_accum", grad_accum, 1),
+        ("--log-every", "log_every", log_every, 1),
+        ("--eval-every", "eval_every", eval_every, 1),
+        ("--checkpoint-every", "checkpoint_every", checkpoint_every, 0),
+    ):
+        if value is None:
+            continue
+        if int(value) < minimum:
+            raise SystemExit(f"{flag} must be at least {minimum}, not {value}")
+        overrides[key] = int(value)
+    return overrides
+
+
 def train(
     config_name: str,
     run_dir: Path,
@@ -1045,6 +1161,7 @@ def train(
     save_checkpoint: bool = True,
     world_size: int = 1,
     resume: bool = False,
+    save_resume: bool | None = None,
 ) -> dict:
     """One training run. Returns the summary record it also writes.
 
@@ -1057,13 +1174,22 @@ def train(
 
     ``world_size`` is the number of data-parallel ranks. It enters the token
     accounting, not the model: each rank consumes its own batch, so the run
-    has seen ``batch_size * ctx * world_size`` tokens per step. Logging the
-    per-rank count would under-report an eight-chip run by 8x.
+    has seen ``batch_size * ctx * world_size * grad_accum`` tokens per
+    optimizer step. Logging the per-rank count would under-report an
+    eight-chip run by 8x.
+
+    ``grad_accum`` micro-batches make one optimizer step: the global batch is
+    ``batch_size * world_size * grad_accum`` sequences, and each micro-batch's
+    loss is scaled by ``1 / grad_accum`` so the accumulated gradient is the
+    mean, not the sum.
 
     ``resume`` continues from ``run_dir/checkpoint_resume.pt``, restoring the
     model, the AdamW moments and the data-order generator. Resuming without
     those is a different run, so the file carries all three and the config is
-    checked against the one that wrote it.
+    checked against the one that wrote it. ``save_resume`` controls whether
+    that file is written; it defaults to ``save_checkpoint`` and exists for the
+    multi-rank launcher, which writes the evaluation checkpoint on rank 0 only
+    but needs every rank's own data order to resume.
     """
     if not TORCH_AVAILABLE:
         raise RuntimeError("torch is not installed; see train_requirements.txt")
@@ -1078,6 +1204,19 @@ def train(
     config.update(override or {})
     if max_steps is not None:
         config["n_steps"] = int(max_steps)
+    config.setdefault("grad_accum", 1)
+    config.setdefault("log_every", 0)
+    grad_accum = int(config["grad_accum"])
+    if grad_accum < 1:
+        raise ValueError(f"grad_accum must be at least 1, not {config['grad_accum']!r}")
+    log_every = int(config["log_every"])
+    if log_every < 0:
+        raise ValueError(f"log_every must be non-negative, not {config['log_every']!r}")
+    if int(config["eval_every"]) < 1:
+        raise ValueError(f"eval_every must be at least 1, not {config['eval_every']!r}")
+    # Sequences one optimizer step consumes across all ranks and micro-batches.
+    global_batch_size = int(config["batch_size"]) * world_size * grad_accum
+    save_resume = save_checkpoint if save_resume is None else bool(save_resume)
     params = count_params(config)
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -1216,23 +1355,33 @@ def train(
             tokens_total=tokens_total,
             data_seed=data_seed,
         )
+    provenance = {
+        "config_name": config_name,
+        "config": config,
+        "param_formula": _PARAM_FORMULA_DOC,
+        "n_params": params,
+        "device": device,
+        "dtype": dtype,
+        "tokens_total": tokens_total,
+        "world_size": world_size,
+        "grad_accum": grad_accum,
+        "global_batch_size": global_batch_size,
+        "token_accounting": (
+            "global: micro-batch tokens summed over all ranks and accumulations"
+        ),
+        "resumed_from_step": resumed_from,
+        "manifest": manifest,
+        "seed": config["seed"],
+        "data_seed": None if data_seed is None else int(data_seed),
+    }
+    # A resumed segment appends to the same file; it must not claim to be a
+    # second run, or the report cannot tell which configuration is the run's.
+    # Only a resume whose file has no start record (a wiped metrics file)
+    # writes one, so the file is always reportable.
+    has_start = any(record.get("event") == "run_start" for record in writer.records)
     writer.log(
-        {
-            "event": "run_start",
-            "config_name": config_name,
-            "config": config,
-            "param_formula": _PARAM_FORMULA_DOC,
-            "n_params": params,
-            "device": device,
-            "dtype": dtype,
-            "tokens_total": tokens_total,
-            "world_size": world_size,
-            "token_accounting": "global: batch tokens summed over all ranks",
-            "resumed_from_step": resumed_from,
-            "manifest": manifest,
-            "seed": config["seed"],
-            "data_seed": None if data_seed is None else int(data_seed),
-        }
+        {"event": "resume" if resumed_from is not None and has_start else "run_start",
+         **provenance}
     )
     deltas = np.array(DISTANCE_GRID, dtype=np.int64)
     probe_seed = config["seed"]
@@ -1241,20 +1390,33 @@ def train(
     if val_batches < 1:
         raise ValueError(f"val_batches must be at least 1, not {val_batches}")
     resume_checkpoint_name = None
+    # Throughput is measured over the segment since the last restart for the
+    # interval fields, and over the whole run for ``elapsed_s``/``tok_per_s``
+    # (``start`` is backdated by the saved elapsed time on resume).
+    segment_start = time.perf_counter()
+    last_log_tokens = tokens_seen
+    last_log_time = segment_start
     while step < config["n_steps"]:
-        picks = rng.integers(0, len(train_in), size=config["batch_size"])
-        ids = _id_batch(train_in[picks]).to(device)
-        targets = _id_batch(train_tg[picks]).to(device)
-        # Forward in bf16 when requested; the cross-entropy and the master
-        # weights stay fp32. A bf16 label in the metrics therefore describes
-        # the arithmetic that actually ran.
-        with _autocast_context(device, dtype):
-            logits = model(ids)
-        loss = F.cross_entropy(
-            logits.float().reshape(-1, logits.shape[-1]), targets.reshape(-1)
-        )
         opt.zero_grad(set_to_none=True)
-        loss.backward()
+        micro_losses = []
+        for _micro in range(grad_accum):
+            picks = rng.integers(0, len(train_in), size=config["batch_size"])
+            ids = _id_batch(train_in[picks]).to(device)
+            targets = _id_batch(train_tg[picks]).to(device)
+            # Forward in bf16 when requested; the cross-entropy and the master
+            # weights stay fp32. A bf16 label in the metrics therefore describes
+            # the arithmetic that actually ran.
+            with _autocast_context(device, dtype):
+                logits = model(ids)
+            loss = F.cross_entropy(
+                logits.float().reshape(-1, logits.shape[-1]), targets.reshape(-1)
+            )
+            micro_losses.append(loss.detach())
+            # The mean over micro-batches, so the accumulated gradient does not
+            # grow with grad_accum.
+            (loss / grad_accum).backward()
+            # Global tokens: every rank consumed its own micro-batch.
+            tokens_seen += int(ids.numel()) * world_size
         # The update that follows is the (step + 1)-th, so the schedule is
         # read at step + 1: without this the first update would run at
         # lr_at(0) == 0 and waste a step of the budget.
@@ -1262,15 +1424,31 @@ def train(
         for group in opt.param_groups:
             group["lr"] = current_lr
         # Data-parallel replicas: reduce once, then clip the reduced gradient,
-        # then step once. Every rank initialises from the same config["seed"];
-        # only data_seed differs, so the replicas remain one synchronised
-        # model rather than eight independent runs.
+        # then step once per accumulated group. Every rank initialises from the
+        # same config["seed"]; only data_seed differs, so the replicas remain
+        # one synchronised model rather than eight independent runs.
         grad_norm = _reduce_update(model, opt, xm, config["grad_clip"])
-        loss_value = float(loss.item())
+        loss_value = float(torch.stack(micro_losses).mean().item())
         loss_ema = loss_value if loss_ema is None else 0.9 * loss_ema + 0.1 * loss_value
-        # Global tokens: every rank consumed its own batch this step.
-        tokens_seen += int(ids.numel()) * world_size
         step += 1
+        if log_every and step % log_every == 0:
+            logged_at = time.perf_counter()
+            writer.log(
+                {
+                    "event": "step",
+                    "step": step,
+                    "lr": current_lr,
+                    "train_loss": loss_value,
+                    "grad_norm": float(grad_norm),
+                    "tokens_seen": tokens_seen,
+                    "interval_tok_per_s": (tokens_seen - last_log_tokens)
+                    / max(1e-9, logged_at - last_log_time),
+                    "interval_s": logged_at - last_log_time,
+                    "elapsed_s": logged_at - start,
+                }
+            )
+            last_log_tokens = tokens_seen
+            last_log_time = logged_at
         if step % config["eval_every"] == 0 or step == config["n_steps"]:
             # Several consecutive validation batches, not one: a single batch
             # of 32 sequences is a noisy estimate and the noise does not
@@ -1333,7 +1511,7 @@ def train(
                 }
             )
         if (
-            save_checkpoint
+            save_resume
             and checkpoint_every
             and step % int(checkpoint_every) == 0
             and step < config["n_steps"]
@@ -1359,6 +1537,14 @@ def train(
                 data_seed=data_seed,
                 tokens_total=tokens_total,
             )
+            writer.log(
+                {
+                    "event": "checkpoint",
+                    "step": step,
+                    "path": resume_checkpoint_name,
+                    "tokens_seen": tokens_seen,
+                }
+            )
     checkpoint_name = None
     if save_checkpoint:
         checkpoint_name = _save_checkpoint(
@@ -1368,6 +1554,15 @@ def train(
             step=step,
             n_params=params,
         )
+        writer.log(
+            {
+                "event": "checkpoint",
+                "step": step,
+                "path": checkpoint_name,
+                "tokens_seen": tokens_seen,
+            }
+        )
+    if save_resume:
         # The final state is resumable too: continuing a finished run with a
         # larger n_steps is a legitimate way to extend a budget.
         resume_checkpoint_name = _save_training_state(
@@ -1388,6 +1583,14 @@ def train(
             data_seed=data_seed,
             tokens_total=tokens_total,
         )
+        writer.log(
+            {
+                "event": "checkpoint",
+                "step": step,
+                "path": resume_checkpoint_name,
+                "tokens_seen": tokens_seen,
+            }
+        )
     summary = {
         "event": "summary",
         "config_name": config_name,
@@ -1403,7 +1606,10 @@ def train(
         "tokens_seen": tokens_seen,
         "tokens_total": tokens_total,
         "world_size": world_size,
+        "grad_accum": grad_accum,
+        "global_batch_size": global_batch_size,
         "device": device,
+        "elapsed_s": time.perf_counter() - start,
         "manifest": manifest,
     }
     writer.log(summary)
@@ -1435,20 +1641,87 @@ def main() -> None:
         action="store_true",
         help="continue run_dir/checkpoint_resume.pt instead of starting fresh",
     )
+    parser.add_argument(
+        "--dtype",
+        choices=("fp32", "bf16"),
+        default=None,
+        help="arithmetic for the forward pass (default: the config's dtype)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="sequences per micro-batch (default: the config's batch_size)",
+    )
+    parser.add_argument(
+        "--grad-accum",
+        type=int,
+        default=None,
+        help="micro-batches per optimizer step (default: the config's grad_accum)",
+    )
+    parser.add_argument(
+        "--log-every", type=int, default=None, help="steps between step records"
+    )
+    parser.add_argument(
+        "--eval-every", type=int, default=None, help="steps between evaluation records"
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=None,
+        help="steps between rolling checkpoint_resume.pt saves (0 disables)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the resolved configuration and exit without loading data",
+    )
     args = parser.parse_args()
     if not TORCH_AVAILABLE:
         raise SystemExit("torch is not installed; see train_requirements.txt")
-    if args.device in ("auto", "cpu"):
-        device = args.device
-        if device == "auto":
-            import torch
+    device = args.device
+    if device == "auto":
+        import torch
 
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cpu":
         params = count_params(CONFIGS[args.config])
         refusal = _cpu_refusal(args.config, params, device, args.force_cpu)
         if refusal:
             raise SystemExit(refusal)
+    overrides = cli_overrides(
+        dtype=args.dtype,
+        batch_size=args.batch_size,
+        grad_accum=args.grad_accum,
+        log_every=args.log_every,
+        eval_every=args.eval_every,
+        checkpoint_every=args.checkpoint_every,
+    )
+    config = dict(CONFIGS[args.config])
+    config.update(overrides)
+    if args.max_steps is not None:
+        config["n_steps"] = int(args.max_steps)
+    # The same validation train() runs first, before a run directory exists.
+    try:
+        _amp_dtype(device, str(config.get("dtype", "fp32")))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     run_dir = Path("runs") / (args.run_name or args.config)
+    if args.dry_run:
+        print(
+            json.dumps(
+                {
+                    "config_name": args.config,
+                    "run_dir": str(run_dir),
+                    "device": device,
+                    "config": config,
+                    "overrides": overrides,
+                    "resume": bool(args.resume),
+                },
+                indent=2,
+            )
+        )
+        return
     if args.data_dir is not None:
         from rope_attribution.data import load_tokens
 
@@ -1466,8 +1739,9 @@ def main() -> None:
         args.config,
         run_dir,
         tokens,
-        device=args.device,
+        device=device,
         max_steps=args.max_steps,
+        override=overrides,
         force_cpu=args.force_cpu,
         threads=args.threads,
         save_checkpoint=not args.no_checkpoint,
