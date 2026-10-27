@@ -192,6 +192,50 @@ def test_the_dtype_floor_the_paper_names_is_the_real_one(trained: dict) -> None:
     assert trained["models"], "no per-model records to check the dtype against"
 
 
+def test_the_norm_bound_is_quoted_where_it_belongs(trained: dict) -> None:
+    """Norm preservation is the loose identity; the paper separates it.
+
+    Mutation verdict: reinstating the blanket "at the dtype floor" header, or
+    quoting the scaled bilinearity residual in place of the norm bound, fails
+    here. The eps multiples are recomputed per model and per side, so an
+    endpoint-only edit fails.
+    """
+    low, high = (int(x) for x in groups("trained_norm_eps")[0])
+    multiples = [
+        _ident(trained, model, name)["max"] / FLOAT32_EPS
+        for model in (PYTHIA, LLAMA, SMOLLM)
+        for name in (
+            "key_norm_preservation_max_abs_err",
+            "query_norm_preservation_max_abs_err",
+        )
+    ]
+    assert round(min(multiples)) == low, (min(multiples), low)
+    assert round(max(multiples)) == high, (max(multiples), high)
+    # The paper calls the unscaled ratio worse; it has to actually be worse.
+    for model in (PYTHIA, LLAMA, SMOLLM):
+        assert (
+            _ident(trained, model, "bilinearity_max_rel_err")["max"]
+            > _ident(trained, model, "bilinearity_max_scaled_err")["max"]
+        ), model
+
+
+def test_the_checkpoints_rotate_the_channels_the_paper_names(trained: dict) -> None:
+    """Two architecture families, not three unrelated ones.
+
+    Mutation verdict: calling all three full-RoPE (the old "three unrelated
+    architectures" sentence) fails on pythia's 16/64 split; the artifact's
+    ``rope_dim`` is compared directly, not inferred from the family name.
+    """
+    rotated, dim, full = (int(x) for x in groups("trained_rope_layout")[0])
+    models = {model["model_id"]: model for model in trained["models"]}
+    assert models[PYTHIA]["rope_dim"] == rotated
+    assert models[PYTHIA]["head_dim"] == dim
+    for model_id in (LLAMA, SMOLLM):
+        assert models[model_id]["rope_dim"] == full, model_id
+        assert models[model_id]["head_dim"] == full, model_id
+    assert 0 < rotated < dim == full
+
+
 def test_the_closed_form_and_bilinearity_sit_at_that_floor(trained: dict) -> None:
     """Exact in principle; what matters is that no checkpoint corrects them.
 
@@ -638,3 +682,69 @@ def test_the_section_does_not_claim_a_downstream_result(trained: dict) -> None:
     # And the synthetic measurements the characterisation rests on are still
     # present, so the two halves cannot be confused.
     assert MEASUREMENTS["feature_attribution"]["n_features"] == 8
+
+
+def test_the_grid_drift_is_restated_in_both_places(
+    grid_independence: dict, usefulness: dict
+) -> None:
+    """The main text and the limitations quote the same realized grid sweep.
+
+    Mutation verdict: reverting "materially sensitive" to "mildly sensitive"
+    while keeping the numbers fails the ratio check; editing only one of the two
+    prose copies fails the cross-copy equality.
+    """
+    low, high, ratio = groups("worth_grid_realized")[0]
+    lim_low, lim_high = groups("limitations_grid_drift")[0]
+    rates = [
+        grid_independence["per_density"][str(density)]["sign_flip_fraction_pooled"]
+        * 100.0
+        for density in grid_independence["densities"]
+    ]
+    assert_paper_number_matches(min(rates), low, "main-text grid low")
+    assert_paper_number_matches(max(rates), high, "main-text grid high")
+    assert (lim_low, lim_high) == (low, high), (lim_low, lim_high, low, high)
+    between_head = 100.0 * usefulness["pooled"]["sign_flip_fraction_sd_head"]
+    assert_paper_number_matches(
+        (max(rates) - min(rates)) / between_head,
+        ratio,
+        "the drift in between-head standard deviations",
+    )
+    assert "materially sensitive" in TEX_FLAT
+    assert "mildly sensitive" not in TEX_FLAT
+
+
+def test_the_provenance_rows_name_the_measured_values(
+    trained: dict, agreement_data: dict
+) -> None:
+    """The real-model and ranking rows are pinned to their own artifacts.
+
+    Mutation verdict: dropping either row leaves the main-text numbers
+    unaccounted for; swapping the closed-form median for the relative-position
+    error fails the scientific-notation comparison.
+    """
+    rel, rel_exp, closed, closed_exp, low, high = groups("prov_real_model_row")[0]
+    worst = max(
+        _ident(trained, model, "relative_position_max_abs_err")["max"]
+        for model in (PYTHIA, LLAMA, SMOLLM)
+    )
+    assert_paper_sci_matches(worst, rel, int(rel_exp), "provenance relative position")
+    median = _ident(trained, PYTHIA, "pair_closed_form_max_rel_err")["median"]
+    assert_paper_sci_matches(median, closed, int(closed_exp), "provenance closed form")
+    multiples = [
+        _ident(trained, model, name)["max"] / FLOAT32_EPS
+        for model in (PYTHIA, LLAMA, SMOLLM)
+        for name in (
+            "key_norm_preservation_max_abs_err",
+            "query_norm_preservation_max_abs_err",
+        )
+    ]
+    assert round(min(multiples)) == int(low)
+    assert round(max(multiples)) == int(high)
+
+    agree_low, agree_high, chance_low, chance_high = groups("prov_agreement_row")[0]
+    rates = sorted(100.0 * model["top1_agreement"] for model in agreement_data["models"])
+    chance = [100.0 * model["chance_top1"] for model in agreement_data["models"]]
+    assert_paper_number_matches(rates[0], agree_low, "provenance agreement low")
+    assert_paper_number_matches(rates[-1], agree_high, "provenance agreement high")
+    assert_paper_number_matches(min(chance), chance_low, "provenance chance low")
+    assert_paper_number_matches(max(chance), chance_high, "provenance chance high")

@@ -134,6 +134,15 @@ PYTHONPATH=../projects python -m rope_attribution.qk_attribution \
     --sae /path/to/sae_ctigges_l3.safetensors                   # qk_attribution.json
 ```
 
+The depth profile uses the same family, one dictionary per attributable layer
+(the last block has no block after it). It expects the Hugging Face repository
+layout, `{layer}-res-sm/sae_weights.safetensors` for layers 0--4:
+
+```sh
+PYTHONPATH=../projects python -m rope_attribution.qk_depth \
+    --sae-dir /path/to/pythia-70m-deduped__res-sm_processed     # qk_depth.json
+```
+
 All generators are seeded. The structural artifacts are re-run by the suite and
 compared value by value (floats to a relative `1e-12`, which tolerates last-bit
 drift between platforms). The checkpoint artifacts need network access and CPU

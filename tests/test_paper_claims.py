@@ -480,7 +480,10 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("related_base_10000", r"\$\\mathrm\{base\}\$ from \$(10000)\$ to \$(500000)\$'' recipe"),
     # The "same scheme at s = 50" wording is gone: raising the base is not
     # position interpolation. The corrected sentences assert the s^{-2k/d} form.
-    Claim("bilin_checks_table", r"giving the \$(\d+)\$ score checks in the table"),
+    Claim(
+        "bilin_checks_table",
+        r"giving the \$(\d+)\$ score checks in Table~\\ref\{tab:exact\}",
+    ),
     Claim("amp_at_8192_lead", r"At \$\\delta = (\d+)\$ the amplitude-weighted"),
     Claim("pairs_delta_3_body", r"own contribution at \$\\delta = (\d+)\$, identically under"),
     Claim("partial_clean_zero_2", r"is also exactly \$(0\.0)\$ --- the plotted constant"),
@@ -565,6 +568,15 @@ CLAIMS += (
         r"\|B_k\| < (0\.01)\\,\|A_k\|",
     ),
     Claim("trained_blind_band", r"between \$(0\.\d+)\\%\$ and \$(0\.\d+)\\%\$"),
+    Claim(
+        "trained_norm_eps",
+        r"Norm preservation is looser, at \$(\d+)\$--\$(\d+)\$ float32 epsilons",
+    ),
+    Claim(
+        "trained_rope_layout",
+        r"GPT-NeoX with partial\s+RoPE at \$(\d+)\$ of \$(\d+)\$ channels, and two "
+        r"Llama-family models rotating all \$(\d+)\$",
+    ),
     # The sampling disclosure: 256 content pairs per head and prompt, the
     # resulting sample range, and the degenerate pair-channel entries excluded.
     # Checked against results/real_model.json in test_paper_trained_claims.py.
@@ -699,7 +711,11 @@ CLAIMS += (
 
     Claim("pair_past_one", r"past \$(1)\$, i\.e\. worse than deleting the term"),
     Claim("yarn_scales_fast_one", r"scales those channels by exactly \$(1)\$"),
-    Claim("threshold_rad_within", r"within \$(0\.1)\\rad\$ for more than three tokens"),
+    Claim(
+        "threshold_rad_within",
+        r"only position interpolation keeps the fastest channel within \$(0\.1)\\rad\$, "
+        r"and only for three tokens",
+    ),
     Claim("worth_withdrawn_fourteen", r"claimed a \$(14)\\times\$ span"),
     Claim("fig11_head_dim", r"at head dimension \$(64)\$ \(error bars"),
     Claim("fig11_error_bars", r"error bars: \$\\pm (1)\$ SD across"),
@@ -839,8 +855,20 @@ CLAIMS += (
     ),
     Claim(
         "sensitivity_dim",
-        r"sweeping head dimension \$(32)\$ to \$(128)\$ at base "
+        r"[Ss]weeping head dimension \$(32)\$ to \$(128)\$ at base "
         r"\$(10\^\{4\})\$ leaves it at \$(25\.6)\\%\$ to \$(26\.3)\\%\$",
+    ),
+    Claim(
+        "limitations_base_sensitivity",
+        r"stable in head dimension, at \$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$, but not in "
+        r"base: it falls from \$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$ as the base rises from "
+        r"\$(10\^\{3\})\$ to \$(5\\times10\^\{5\})\$ at \$d = (\d+)\$, and the published "
+        r"\$(10\^\{4\})\$ is mid-range",
+    ),
+    Claim(
+        "limitations_grid_drift",
+        r"pooled rate moves from \$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$ over the three "
+        r"grids actually run",
     ),
     Claim(
         "sensitivity_relerr",
@@ -974,6 +1002,7 @@ CLAIMS += (
         r"\$(\d+\.\d+)\$--\$(\d+\.\d+)\$ argmax flips in the first two layers, against a "
         r"mean of \$(\d+\.\d+)\$--\$(\d+\.\d+)\$ over the rest",
     ),
+    Claim("attn_late_max", r"individual later layers reach \$(\d+\.\d+)\$"),
     Claim(
         "attn_appendix_prompts",
         r"run on three original passages of \$(\d+)\$--\$(\d+)\$ tokens",
@@ -1002,14 +1031,18 @@ CLAIMS += (
     # results/qk_attribution.json, whose aggregate block is the source.
     Claim(
         "qk_intro_dictionary",
-        r"public \$(\d+)\$k dictionary on \\texttt\{pythia-70m\}, where the decomposition "
-        r"stays exact to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$",
+        r"public \$(\d+)\$k dictionary on \\texttt\{pythia-70m\}, where the bucket "
+        r"identity closes to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$",
+    ),
+    Claim(
+        "qk_intro_residual",
+        r"the dictionary residual is \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$: in the rotary",
     ),
     Claim(
         "qk_intro_flip",
         r"in the rotary subspace the best position-free scalar mis-signs \$(\d+\.\d+)\\%\$ of "
         r"material cells, while the total profile --- dominated by the \$(\d+)\$ of \$(\d+)\$ "
-        r"channels RoPE never rotates --- mis-signs \$(\d+\.\d+)\\%\$",
+        r"channels that partial RoPE never rotates --- mis-signs \$(\d+\.\d+)\\%\$",
     ),
     Claim(
         "qk_scope_reversal",
@@ -1052,14 +1085,25 @@ CLAIMS += (
         r"\$(\d+)\$-point grid from \$(\d+)\$ to \$(\d+)\$",
     ),
     Claim(
-        "feat_sweep_compare",
-        r"measurement comparable to the synthetic \$(\d+\.\d+)\\%\$",
+        "feat_sweep_units",
+        r"gives the\s+per-feature analogue of the per-pair rate in "
+        r"Section~\\ref\{sec:worth\}; the units\s+differ, so the two are not directly "
+        r"comparable",
     ),
     Claim(
         "feat_sweep_rates",
         r"total per-feature profile mis-signs \$(\d+\.\d+)\\%\$ of material cells; the "
         r"rotary-only profile mis-signs \$(\d+\.\d+)\\%\$, between \$(\d+\.\d+)\\%\$ and "
         r"\$(\d+\.\d+)\\%\$ per head, and feature pairs \$(\d+\.\d+)\\%\$",
+    ),
+    Claim(
+        "worth_grid_realized",
+        r"over the three grids actually run the pooled rate\s+moves from \$(\d+\.\d+)\\%\$ "
+        r"to \$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\$ times the between-head standard",
+    ),
+    Claim(
+        "related_scale",
+        r"Among the four schemes\s+tested at \$s = (\d+)\$, only position interpolation",
     ),
     Claim(
         "feat_rotary_channels",
@@ -1075,6 +1119,20 @@ CLAIMS += (
         r"top-\$(\d+)\$ features \$(\d+\.\d+)\\times\$",
     ),
     Claim("feat_model_size", r"One layer of one \$(\d+)\$M-parameter checkpoint"),
+    # ---- the depth profile behind the trained-dictionary section --------------
+    #
+    # The table itself is covered wholesale by VERIFIED_TABLES; the prose and the
+    # provenance row quote its minimum, its maximum and its total-rate ceiling.
+    # Both prose occurrences of the layer range are checked, not just the first.
+    Claim(
+        "qk_depth_scope",
+        r"\(five dictionaries, layers \$(\d+)\$--\$(\d+)\$\)",
+        at_least=2,
+    ),
+    Claim(
+        "qk_depth_range",
+        r"keeps the rotary rate between \$(\d+\.\d+)\\%\$ and \$(\d+\.\d+)\\%\$",
+    ),
     # ---- compressed restatements in Sec.~\ref{sec:context} --------------------
     Claim(
         "ctx_max_angle_main",
@@ -1089,6 +1147,17 @@ CLAIMS += (
         "prov_pooled_row",
         r"&\s*\$(\d+\.\d+)\\%\$, \$\[(0\.\d+), (0\.\d+)\]\$ & "
         r"\\texttt\{usefulness\.json\}, \\texttt\{uncertainty\.json :: pooled\}",
+    ),
+    Claim(
+        "prov_real_model_row",
+        r"&\s*\$(\d+\.\d+)\\!\\times\\!10\^\{(-\d+)\}\$, "
+        r"\$(\d+\.\d+)\\!\\times\\!10\^\{(-\d+)\}\$; "
+        r"\$(\d+)\$--\$(\d+)\\epsilon\$ & \\texttt\{results/real\\_model\.json :: identities\}",
+    ),
+    Claim(
+        "prov_agreement_row",
+        r"&\s*\$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$, chance \$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$ & "
+        r"\\texttt\{results/agreement\.json :: models\}",
     ),
     Claim(
         "prov_attention_rates_row",
@@ -1119,6 +1188,11 @@ CLAIMS += (
         "prov_features_share_row",
         r"&\s*\$(\d+\.\d+)\\times\$, \$(\d+\.\d+)\\times\$ & same, "
         r"\\texttt\{base\\_share\\_mean\}, \\texttt\{top\\_k\\_share\\_mean\}",
+    ),
+    Claim(
+        "prov_qk_depth_row",
+        r"App\.~\\ref\{app:qkcase\} & \$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$ rotary; total "
+        r"\$\\le (\d+\.\d+)\\%\$ & \\texttt\{results/qk\\_depth\.json :: layers\}",
     ),
     # ---- the same statistics, restated in App.~\ref{app:stats} ----------------
     Claim(
@@ -2522,7 +2596,7 @@ def test_partial_rope_split_fractions_and_dimensions() -> None:
     # p = 0.25 rotates a quarter, so three quarters carry no position. The
     # paper said "a quarter" here, which inverts the one quantity the section
     # is about. The artifact's clean_fraction is the detector.
-    assert "three quarters of the channels carry no" in TEX_FLAT
+    assert "correct only for the unrotated three quarters of the" in TEX_FLAT
     assert "a quarter of the channels carry no position" not in TEX_FLAT
     assert {int(row["n_rot"]) for row in csv_rows("fig07_partial_rope")} == {partial["n_rot"]}
 
@@ -3294,7 +3368,7 @@ def test_the_scope_and_softmax_qualifiers_are_explicit() -> None:
     assert "it grows as the number of keys grows" not in TEX_FLAT
     assert "The algebraic conclusions are model-independent" in TEX_FLAT
     assert "The conclusions are model-independent" not in TEX_FLAT
-    assert "No downstream task, and one dictionary" in TEX_FLAT
+    assert "No downstream task, and one model's dictionaries" in TEX_FLAT
     assert "No downstream task, and no learned features" not in TEX_FLAT
     assert "No downstream model, and no learned features" not in TEX_FLAT
     assert "Computed before rounding, the two differ by $0.14$ points" in TEX_FLAT
@@ -3419,7 +3493,7 @@ def test_no_model_or_activation_is_reported_anywhere_outside_a_denial() -> None:
 EXEMPT_ALGEBRA: frozenset[str] = frozenset()
 
 # `tabular` blocks whose every cell is verified by a dedicated test.
-VERIFIED_TABLES = ("tab:spectrum", "tab:exact")
+VERIFIED_TABLES = ("tab:spectrum", "tab:exact", "tab:qk-depth")
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 
@@ -3557,6 +3631,7 @@ def unaccounted_numbers() -> set[str]:
 
 ATTENTION_COST_PATH = _REPO / "results" / "attention_cost.json"
 QK_PATH = _REPO / "results" / "qk_attribution.json"
+DEPTH_PATH = _REPO / "results" / "qk_depth.json"
 USEFULNESS_PATH = _REPO / "results" / "usefulness.json"
 UNCERTAINTY_PATH = _REPO / "results" / "uncertainty.json"
 AGREEMENT_PATH = _REPO / "results" / "agreement.json"
@@ -3679,6 +3754,11 @@ def test_the_attention_appendix_reports_the_layer_shape_and_float32_floor() -> N
     assert_paper_number_matches(max(later_means), main_early[3], "later mean max")
     assert_paper_number_matches(min(later_flat), appendix[4], "later layer min")
     assert_paper_number_matches(max(later_flat), appendix[5], "later layer max")
+    # The main text now names the same late-layer maximum, so the earlier claim
+    # that later layers are uniformly mild cannot come back unnoticed.
+    assert_paper_number_matches(
+        max(later_flat), literal("attn_late_max"), "main-text later-layer max"
+    )
 
     residuals = {
         model["model_id"]: max(
@@ -3750,6 +3830,40 @@ def test_the_qk_decomposition_is_exact_on_a_trained_dictionary() -> None:
     )
     assert_paper_sci_matches(qk["ln_residual"], residual, int(residual_exponent), "LN residual")
 
+    # The abstract restates the bucket identity and the dictionary residual;
+    # "exact" is reserved for the identity, and the residual is the real error.
+    thousands, abstract_mantissa, abstract_exponent = groups("qk_intro_dictionary")[0]
+    assert int(thousands) == wide // 1000
+    assert_paper_sci_matches(
+        qk["aggregate"]["max_relative_exactness_error"],
+        abstract_mantissa,
+        int(abstract_exponent),
+        "abstract bucket identity",
+    )
+    abstract_residual, abstract_residual_exponent = groups("qk_intro_residual")[0]
+    assert_paper_sci_matches(
+        qk["ln_residual"],
+        abstract_residual,
+        int(abstract_residual_exponent),
+        "abstract LN residual",
+    )
+    abstract_rotary, abstract_unrotated, abstract_dim, abstract_total = groups(
+        "qk_intro_flip"
+    )[0]
+    aggregate = qk["aggregate"]
+    assert_paper_number_matches(
+        aggregate["sweep_rotary"]["sign_flip_fraction"] * 100,
+        abstract_rotary,
+        "abstract rotary sweep",
+    )
+    assert int(abstract_unrotated) == qk["head_dim"] - qk["rotary_dim"]
+    assert int(abstract_dim) == qk["head_dim"]
+    assert_paper_number_matches(
+        aggregate["sweep_feature"]["sign_flip_fraction"] * 100,
+        abstract_total,
+        "abstract total sweep",
+    )
+
     distances, first, last, pairs = groups("feat_grid")[0]
     assert int(distances) == len(qk["deltas"])
     assert (int(first), int(last)) == (min(qk["deltas"]), max(qk["deltas"]))
@@ -3813,10 +3927,11 @@ def test_the_fixed_content_sweep_reverses_where_the_total_profile_does_not() -> 
     assert_paper_number_matches(per_head[0], rates[2], "per-head rotary min")
     assert_paper_number_matches(per_head[-1], rates[3], "per-head rotary max")
 
-    pooled = _artifact(USEFULNESS_PATH)["pooled"]["sign_flip_fraction"] * 100
-    assert_paper_number_matches(
-        pooled, literal("feat_sweep_compare"), "the synthetic rate the sweep is compared to"
-    )
+    # The sweep and the headline are deliberately not compared: 27.0% is per
+    # rotary pair on trained checkpoints, 22.4% is per SAE feature on one
+    # dictionary. The paper must say so rather than imply a shared scale.
+    assert groups("feat_sweep_units") == [()]
+    assert "not directly comparable" in TEX_FLAT
 
     shares = groups("feat_shares")[0]
     assert_paper_number_matches(aggregate["base_share_mean"], shares[0], "base share")
@@ -3845,6 +3960,68 @@ def test_the_fixed_content_sweep_reverses_where_the_total_profile_does_not() -> 
     prov_shares = groups("prov_features_share_row")[0]
     assert_paper_number_matches(aggregate["base_share_mean"], prov_shares[0], "prov base share")
     assert_paper_number_matches(aggregate["top_k_share_mean"], prov_shares[1], "prov top-k share")
+
+
+def test_the_depth_table_restates_the_depth_artifact() -> None:
+    """Every cell of Table~\\ref{tab:qk-depth} is recomputed from its own row.
+
+    Mutation verdict: swapping two rows, or replacing a rotary cell with the
+    total cell beside it, fails the per-row comparison; so does a stale artifact
+    after a re-run, because each cell is compared at its own layer. The prose
+    range and the provenance row are checked against the same minimum, maximum
+    and ceiling, so editing either without the artifact fails here too.
+    """
+    depth = _artifact(DEPTH_PATH)
+    layers = depth["layers"]
+    rows = []
+    for chunk in table_block("tab:qk-depth").split(r"\\"):
+        cells = chunk.split("&")
+        if len(cells) != 5:
+            continue
+        plain = [_tex_plain(cell) for cell in cells]
+        if not (plain[0].isdigit() and plain[1].isdigit()):
+            continue
+        rows.append(plain)
+    assert len(rows) == len(layers) == 5, rows
+
+    for plain, layer in zip(rows, layers, strict=True):
+        where = f"depth layer {plain[0]}"
+        assert int(plain[0]) == layer["sae_layer"], where
+        assert int(plain[1]) == layer["attention_layer"], where
+        assert_paper_number_matches(
+            layer["sweep_rotary_sign_flip_fraction"] * 100, plain[2], f"{where} rotary"
+        )
+        assert_paper_number_matches(
+            layer["sweep_feature_sign_flip_fraction"] * 100, plain[3], f"{where} total"
+        )
+        assert_paper_number_matches(
+            layer["sweep_pair_sign_flip_fraction"] * 100, plain[4], f"{where} pairs"
+        )
+
+    # The prose range, both occurrences of the layer span, and the provenance row
+    # all restate the same artifact.
+    span = (layers[0]["sae_layer"], layers[-1]["sae_layer"])
+    for low, high in groups("qk_depth_scope"):
+        assert (int(low), int(high)) == span, (low, high, span)
+
+    rotary = [row["sweep_rotary_sign_flip_fraction"] * 100 for row in layers]
+    low, high = groups("qk_depth_range")[0]
+    assert_paper_number_matches(min(rotary), low, "depth rotary minimum")
+    assert_paper_number_matches(max(rotary), high, "depth rotary maximum")
+
+    prov_low, prov_high, prov_total = groups("prov_qk_depth_row")[0]
+    assert_paper_number_matches(min(rotary), prov_low, "provenance depth minimum")
+    assert_paper_number_matches(max(rotary), prov_high, "provenance depth maximum")
+    total = [row["sweep_feature_sign_flip_fraction"] * 100 for row in layers]
+    assert_paper_number_matches(max(total), prov_total, "provenance depth total ceiling")
+
+    # The structural claim of the table: the rotary rate is above the total rate
+    # at every layer, which is what the prose says and what the table shows.
+    for row in layers:
+        assert (
+            row["sweep_rotary_sign_flip_fraction"]
+            > row["sweep_feature_sign_flip_fraction"]
+        ), row
 
 
 def test_the_attention_provenance_rows_name_the_measured_values() -> None:
@@ -3998,6 +4175,7 @@ def test_the_claim_registry_is_not_vacuous() -> None:
         "table_d_base",  # "\mathrm{base} = 10^{4}" as written in the table header
         "partial_p",  # a definition, not a measurement
         "fig02_eight_distances",  # "at eight distances"
+        "feat_sweep_units",  # a units disclaimer, no number to capture
     }
     uncapturing = {entry.name for entry in CLAIMS} - {
         entry.name

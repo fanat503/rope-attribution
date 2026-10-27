@@ -122,7 +122,8 @@ does not extend to position-\emph{free} coefficients: $A_{ij}$ is a function of
 the relative distance $\delta$, and we measure one feature's contribution
 reversing sign across the distance range while
 the total remains additive to $5.0\times10^{-14}$. A position-free per-feature
-attribution number is therefore not well-posed under RoPE; the per-feature,
+attribution number is therefore not faithful under RoPE: it depends on the
+distance range and can reverse sign; the per-feature,
 per-distance one is. Third, we measure what context extension actually buys.
 YaRN \citep{peng2023yarn} keeps $\mathrm{base} = 10000$ and ramps per frequency;
 consequently $\max_k|\D|$ is bit-identical to plain RoPE at every one of $54$
@@ -134,10 +135,11 @@ larger linearizable \emph{majority}, not a safe global linearization of the
 head, because a few fast channels dominate the error. Partial RoPE is the clean
 exception: at $p = 0.25$ the unrotated sub-score is position-free to exactly
 zero spread. We then carry the attribution from synthetic vectors to a public
-$32$k dictionary on \texttt{pythia-70m}, where the decomposition stays exact to
-$3.1\times10^{-14}$: in the rotary subspace the best position-free scalar
+$32$k dictionary on \texttt{pythia-70m}, where the bucket identity closes to
+$3.1\times10^{-14}$ and the dictionary residual is $2.7\times10^{-6}$: in the
+rotary subspace the best position-free scalar
 mis-signs $22.4\%$ of material cells, while the total profile --- dominated by
-the $48$ of $64$ channels RoPE never rotates --- mis-signs $0.03\%$. Finally we
+the $48$ of $64$ channels that partial RoPE never rotates --- mis-signs $0.03\%$. Finally we
 price the same substitution at the attention level: even the
 least-squares-optimal constant, fitted per query with knowledge of the exact
 profile, changes the argmax key for $27\%$--$40\%$ of queries and leaves
@@ -180,8 +182,8 @@ false rather than asserting it.
 
 \paragraph{R2: the real obstacle is position-conditionality, not bilinearity.}
 $A_{ij}$ depends on $\delta$. A single feature's contribution is a function of
-distance, not a number. We measure that every feature's contribution reverses sign across a
-$54$-point distance grid, against an additivity residual of
+distance, not a number. We measure that every one of the eight synthetic directions reverses sign
+across a $54$-point distance grid, against an additivity residual of
 $5.0\times10^{-14}$. The well-posed object under RoPE is a per-feature,
 per-distance attribution. A position-free scalar per feature is not. On real
 dictionary features the reversal reappears at $22.4\%$ of material cells --- but
@@ -281,23 +283,25 @@ is exactly additive and exactly position-conditional, and that is what this
 paper measures; its contribution to the attention \emph{weights} is neither, and
 the error can grow with the number of keys and the logit spread. An additive
 method can be exactly right about the score and still wrong about the weights;
-when the weights are the object, the obstruction is the softmax, not the
-position encoding.
+when the weights are the object, the softmax is a second obstruction that
+amplifies the logit changes RoPE's position-conditionality produces.
 
 We can price that second error. For every query of a real passage we compute the
 exact score against all causal
 keys, and the best position-free surrogate of it: per rotary pair, the
 least-squares constant over exactly the distances that query sees, fitted with
 knowledge of the exact profile and with the unrotated channels left alone. The
-surrogate is optimal by construction, so the damage it does is a lower bound on
-the damage of any content-only score. Across every head and prompt of three
+surrogate is the least-squares optimum by construction, so its damage is a lower
+bound on the least-squares damage of any content-only score; for argmax, total
+variation and KL it is an oracle baseline, not a bound. Across every head and prompt of three
 $135$--$160$M checkpoints and three original passages of $88$--$122$ tokens,
 substituting it changes the argmax key for $27.2\%$--$40.2\%$ of queries, moves
 $25.0\%$--$30.9\%$ of the attention mass in total variation, holds top-5 overlap
 at $0.57$--$0.68$, and raises the mean forward KL to $0.67$--$2.44$ nats. The
-damage concentrates in the early layers --- $0.63$--$0.81$ argmax flips in the
-first two layers, against a mean of $0.24$--$0.33$ over the rest --- where logits
-are least saturated and a small change moves the maximum. Appendix~\ref{app:attention} gives the
+mean damage is higher in the early layers --- $0.63$--$0.81$ argmax flips in the
+first two layers, against a mean of $0.24$--$0.33$ over the rest --- but
+individual later layers reach $0.74$. We did not measure logit saturation, so
+the mechanism is open. Appendix~\ref{app:attention} gives the
 per-layer table, the reconstruction residuals and the provenance.
 
 \subsection{Exactness, measured}
@@ -338,30 +342,6 @@ orthogonality behind Proposition~\ref{prop:gate} on both query and key, and
 bilinearity across $35$ score checks. The per-pair closed form of
 Section~\ref{sec:pair} reproduces the brute-force score to the same floor, so the
 algebra above is the actual computation, not a post-hoc description of it.
-
-We report these as ceilings rather than digits. Each is the residual of
-subtracting two analytically equal expressions, so its value is whatever the
-host's summation order produces: the same computation yields $3.6\times10^{-14}$
-on one platform and $3.9\times10^{-14}$ on another. The claim that carries
-meaning is the bound, and it is checked at test time rather than asserted here.
-
-Two of these deserve a note on how they are tested, because the obvious test is
-the wrong one. The relative-position property is \emph{not} tested by comparing
-$s(i,j)$ against $s(i + c, j + c)$ with independent content vectors at each
-position; that asks whether the score depends on absolute position at all, which
-is stronger and false. We test that shifting a \emph{fixed} pair of content vectors together by $7$
-positions leaves its score unchanged, over $42$ pairs spanning $7$ distances and
-$6$ base positions. Bilinearity is tested by rescaling one side by
-$\{0, 1, 2, -3, 7.5, 10^{-3}, 10^{3}\}$ at $5$ distances, giving the $35$ score
-checks in the table.
-
-A concrete instance makes the structure visible. The amplitude $\Rk$ of the
-fastest rotary pair, $k = 0$, takes the single value $0.9526294617807264$ at
-every one of the $54$ distances and under both \rope\ and \yarn\ --- one value,
-not fifty-four. That is Proposition~\ref{prop:blind} in the data: the amplitude
-is a property of the content vectors, and distance moves only the phase. The
-mid-frequency pair $k = 12$ has amplitude $2.3046990966686227$ under the same
-key and query, so amplitudes are not interchangeable across pairs either.
 
 The additivity check is the one that matters for attribution. Writing
 $q = \sum_i f_i d_i^{(q)}$ and $k = \sum_j g_j d_j^{(k)}$ and expanding both
@@ -531,8 +511,10 @@ $27.0421 \pm 0.0046\%$, below both.
 Two further caveats. The rate is counted only over cells where the exact term
 carries at least $5\%$ of its own peak; below that the exact value is
 numerically indistinguishable from zero and ``sign'' is not meaningful. And the
-statistic is mildly sensitive to grid density, since a coarser grid misses cells
-near the zero crossings; Appendix~\ref{app:stats} gives the measured drift.
+statistic is materially sensitive to grid density, since a coarser grid misses
+cells near the zero crossings: over the three grids actually run the pooled rate
+moves from $24.4\%$ to $32.1\%$, $4.5$ times the between-head standard
+deviation. Appendix~\ref{app:stats} gives the drift.
 
 Beyond sign, the position-free ranking names the same leading pair as the exact
 one on $49.4\%$--$60.1\%$ of triples, against $3.1\%$--$12.5\%$ for chance; the
@@ -541,7 +523,7 @@ per-head spread and the top-three rates are in Appendix~\ref{app:stats}.
 \subsection{The same identities on trained weights}
 \label{sec:trained}
 
-Everything above is measured on synthetic vectors. That is a real limitation for
+The measurements of Sections~\ref{sec:exact}--\ref{sec:wellposed} are on synthetic vectors. That is a real limitation for
 a claim about what trained models do, and it is also avoidable for the narrower
 question of whether the algebra survives contact with real weights. We repeat the
 central measurements on activations taken from three trained checkpoints, across
@@ -552,7 +534,7 @@ $462{,}144$ degenerate \texttt{llama} pair-channel entries excluded.
 
 Three findings, in decreasing order of how much they matter.
 
-\textbf{The identities hold on trained weights, at the dtype floor.} The
+\textbf{The identities hold on trained weights, to float32 precision.} The
 relative-position property $\R_m^{\!\top}\R_n = \R_{n-m}$ is exact for real
 projections, with a worst absolute error of $4.55\times10^{-13}$ across all three
 checkpoints. The per-pair closed form of
@@ -564,8 +546,10 @@ way at $7.70\times10^{-8}$, $5.99\times10^{-8}$ and $7.52\times10^{-8}$ --- each
 a scaled residual, divided by the magnitude sum on which bilinearity is exact
 rather than by the score, whose cancellation on a real head would dominate the
 naive ratio. These are not numbers that happen to pass; they are what correct
-arithmetic at float32 precision gives. A trained checkpoint does not introduce a
-correction term to any of it.
+arithmetic at float32 precision gives. Norm preservation is looser, at $15$--$50$ float32 epsilons; the unscaled
+bilinearity ratio is worse still where the score cancels, so the scaled residual
+above is the meaningful one. A trained checkpoint does not
+introduce a correction term to any of it.
 
 \textbf{The obstruction of Section~\ref{sec:cond} is a fact about the weights.} The
 share of an attention score taken by a feature's contribution is not a stable
@@ -587,7 +571,8 @@ it leaves $A_k\cos(\D)$, which still oscillates with distance. Measured on
 trained weights, the fraction meeting the cutoff is $0.0054$ on
 \texttt{pythia-160m}, $0.0065$ on \texttt{llama-160m} and $0.0063$ on
 \texttt{SmolLM-135M}: between $0.54\%$ and $0.66\%$, within a factor of two
-across three unrelated architectures. Treating the pair as a position-free
+across two architecture families and three checkpoints (GPT-NeoX with partial
+RoPE at $16$ of $64$ channels, and two Llama-family models rotating all $64$). Treating the pair as a position-free
 gate is therefore not a useful approximation on real weights: almost every pair
 has a non-negligible phase offset.
 
@@ -622,8 +607,9 @@ Neither is large: averaging over content at fixed distance removes most of the
 oscillation before the constant is fitted.
 
 \emph{A sweep with content fixed.} Holding each of $24$ pairs fixed and sweeping
-$\delta$ over the paper's $48$-point grid from $1$ to $8192$ is the measurement
-comparable to the synthetic $27.0\%$. The total per-feature profile mis-signs
+$\delta$ over the paper's $48$-point grid from $1$ to $8192$ gives the
+per-feature analogue of the per-pair rate in Section~\ref{sec:worth}; the units
+differ, so the two are not directly comparable. The total per-feature profile mis-signs
 $0.03\%$ of material cells; the rotary-only profile mis-signs $22.4\%$, between
 $19.5\%$ and $27.9\%$ per head, and feature pairs $10.5\%$.
 
@@ -632,15 +618,20 @@ rotates $16$ of its $64$ channels; the other $48$ contribute a term that no
 distance changes, and here it dominates. A position-free table fitted to the
 total therefore looks almost perfect --- about the part of the score RoPE does
 not touch. In the subspace RoPE acts on, the same estimator is wrong about one
-cell in five, at very nearly the synthetic rate. A reader of a total table would
+cell in five. A reader of a total table would
 see $0.03\%$ and conclude that position does not matter at this layer; the
 rotary subspace says otherwise (Figure~\ref{fig:qkcase}).
 
 The attribution is not concentrated: the base bucket carries $1.46\times$ the
 score magnitude on average and the top-$32$ features $3.71\times$, above one
 because the terms cancel. The decomposition is exact but
-not sparse in its effect. One layer of one $70$M-parameter checkpoint is an
-existence proof about real features, not a population estimate.
+not sparse in its effect. This is not a property of the layer we picked: the
+same sweep with the matching dictionary at every layer that still has an
+attention block after it (five dictionaries, layers $0$--$4$) keeps the rotary
+rate between $21.3\%$ and $27.5\%$, with the total rate below it at every layer
+(Table~\ref{tab:qk-depth}). One layer of one $70$M-parameter checkpoint is an
+existence proof, not a population estimate; five layers are a depth check, not a
+survey.
 
 \subsection{What context extension fixes, and what it does not}
 \label{sec:context}
@@ -663,30 +654,29 @@ use; we do not measure that trade-off.
 
 \begin{remark}
 Context extension changes \emph{which} channels admit a linearization and
-\emph{when}, but not the fact that the worst channel is out of range --- and no
-amount of angle damping rescues position-free attribution, whose failure is in
-R2.
+\emph{when}, but not the fact that the worst channel is out of range. Nor do the
+schedules tested here rescue position-free attribution: \yarn, interpolation and
+a raised base all leave large angles at long distances, so the failure is the
+one in R2. A scheme that damped every angle far enough would make the constant
+exact, but it would have removed the position dependence as well.
 \end{remark}
-
-Two further findings are in the appendices, neither part of R1--R3:
-Appendix~\ref{sec:partial} (partial RoPE yields an \emph{exactly} position-free
-sub-score) and Appendix~\ref{sec:mscale} (\yarn's magnitude factor acts as a
-temperature, monotone across $18$ scales in entropy).
 
 \section{Limitations}
 
-\textbf{No downstream task, and one dictionary.} Most of the algebraic claims
+\textbf{No downstream task, and one model's dictionaries.} Most of the algebraic claims
 rest on synthetic vectors with fixed seeds. The $8$ directions our attribution
 runs over are random, and the synthetic result is a property of random directions
 in a $64$-dimensional head, not of real feature geometry. Section~\ref{sec:trained} uses the three checkpoints and their
 content-pair draws at $135$--$160$M parameters, and Section~\ref{sec:features}
-runs the attribution on one public dictionary. Section~\ref{sec:trained}
+runs the attribution on the public dictionaries of one model: five
+dictionaries, one per attributable layer, sharing one passage and one seed.
+Section~\ref{sec:trained}
 confirms the identities on their activations; the checkpoints are measurement
 instruments, but are not evaluated on a task. Neither connects to a task: no
-retrieval benchmark, no language-modelling evaluation, no causal patching. One
-layer of one checkpoint is a description of that layer --- none of its content is
-evaluated on a downstream task. One passage and $24$ content pairs per head is
-an existence proof about real features, not a population estimate.
+retrieval benchmark, no language-modelling evaluation, no causal patching. Five
+layers of one checkpoint describe that checkpoint's depth --- none of its
+content is evaluated on a downstream task. One passage and $24$ content pairs per
+head is an existence proof about real features, not a population estimate.
 
 \textbf{Single synthetic configuration.} The main synthetic experiments use
 $d = 64$, $\mathrm{base} = 10000$, $s = 32$, pre-extension context $2048$,
@@ -695,6 +685,13 @@ Appendix~\ref{app:provenance} varies the base and the head dimension, and
 Section~\ref{sec:trained} uses three checkpoints at $135$--$160$M parameters;
 neither resolves how the dominant channels depend on $d$ through $\half$, and we
 do not claim that dependence.
+
+\textbf{Sensitivity to the rotary base.} The headline synthetic rate is stable
+in head dimension, at $25.6\%$ to $26.3\%$, but not in base: it falls from
+$32.0\%$ to $18.3\%$ as the base rises from $10^{3}$ to $5\times10^{5}$ at
+$d = 64$, and the published $10^{4}$ is mid-range rather than privileged. The
+grid-density drift is the other configuration dependence: the pooled rate moves
+from $24.4\%$ to $32.1\%$ over the three grids actually run.
 
 \textbf{Approximation choices.} The linearization threshold is not swept;
 Appendix~\ref{app:scope} records what a different truncation would move.
@@ -706,8 +703,9 @@ boundary.
 \section{Related Work}
 \label{sec:related}
 
-Appendix~\ref{app:related} gives the full positioning. No positional extension
-keeps the fastest channel within $0.1\rad$ for more than three tokens; the
+Appendix~\ref{app:related} gives the full positioning. Among the four schemes
+tested at $s = 32$, only position interpolation keeps the fastest channel within
+$0.1\rad$, and only for three tokens; the
 per-pair algebra is known
 \citep{chachamovits2026phase,liang2026roaware}; the QK-attribution method paper
 states that RoPE breaks its premise and defers it \citep{kamath2025tracing}; the
@@ -722,24 +720,25 @@ reversal within it, which we measure---including on a trained dictionary
 % =====================================================================
 \section{Conclusion}
 
-RoPE's effect on feature-level attention attribution is exactly characterizable
+RoPE's effect on the score-level decomposition is exactly characterizable
 in the relative frame: the score is $q^{\!\top}\R_{\delta}k$, and each of the
 $\half$ rotary pairs contributes a sinusoid with a position-independent amplitude
 and a linear phase. Score attribution is exact for a fixed position pair, to
 $3.9\times10^{-14}$, the query and key magnitudes are exactly
 position-independent, and position-conditionality rather than bilinearity is the
 obstruction: a feature's contribution reverses sign across distance while the
-total stays additive to $5.0\times10^{-14}$. Context extension changes which
+total stays additive to $5.0\times10^{-14}$. The feature-level attribution of
+attention \emph{weights} inherits neither exactness nor additivity: the softmax
+is a second obstruction. Context extension changes which
 channels can be linearized without touching the worst one: \yarn\ buys a
 larger linearizable majority at an amplitude-weighted error ratio of only
 $0.996840$, not a safe global linearization. Partial RoPE is the clean
 exception: its unrotated sub-score is exactly position-free, and the rotated
 block remains orthogonal and preserves the norm exactly.
-On a trained dictionary the rotary subspace reproduces the synthetic
-sign-reversal rate while the total profile hides it. There is no downstream
-task, no retrieval benchmark, no accuracy figure; one dictionary at one layer is
-an existence proof, not a population claim. Appendix~\ref{app:note} corrects
-two informal statements.
+On a trained dictionary the rotary subspace reverses sign on one cell in five
+while the total profile hides it. There is no downstream task, no retrieval
+benchmark, no accuracy figure; one dictionary at one layer is an existence
+proof, not a population claim. Appendix~\ref{app:note} corrects two informal statements.
 
 % =====================================================================
 % Force the appendix onto a fresh page, so the page-limit check measures the
@@ -756,9 +755,9 @@ two informal statements.
 \section{Provenance of every number}
 \label{app:provenance}
 
-Every quantitative claim in this paper is either a literal in the table below,
-or a value derived from it by an arithmetic operation stated where it is used.
-No number was typed from memory.
+Every literal in the main results tables, and every number quoted in the
+running text, is either in the table below or derived from it by an arithmetic
+operation stated where it is used. No number was typed from memory.
 
 \paragraph{Configuration.} $d = 64$, $\mathrm{base} = 10000$, extension factor
 $s = 32$, pre-extension context $2048$, $T = 256$ keys; from
@@ -767,12 +766,13 @@ $s = 32$, pre-extension context $2048$, $T = 256$ keys; from
 \texttt{mscale\_entropy.n\_keys}, and the shared-configuration section of
 \texttt{figures/README.md}.
 
-\paragraph{Robustness to the configuration.} The rate does not hinge on the
-published choice. Sweeping the synthetic construction of
+\paragraph{Robustness to the configuration.} The rate is stable in head
+dimension but not in the rotary base. Sweeping the synthetic construction of
 Section~\ref{app:method} over the rotary base, from $10^{3}$ to $5\times10^{5}$
 at head dimension $64$, moves the pooled rate monotonically from $32.0\%$ down
-to $18.3\%$ --- slower rotation fits the constant better --- and sweeping head
-dimension $32$ to $128$ at base $10^{4}$ leaves it at $25.6\%$ to $26.3\%$. The
+to $18.3\%$ --- slower rotation fits the constant better --- and the published
+base sits mid-range. Sweeping head dimension $32$ to $128$ at base $10^{4}$
+leaves it at $25.6\%$ to $26.3\%$. The
 median relative error stays above $1.0$ everywhere, from $1.03$ to $1.18$; the
 artifact is \texttt{results/sensitivity.json}, plotted in
 Figure~\ref{app:fig:sensitivity} with the published configuration marked.
@@ -813,12 +813,15 @@ Sec.~\ref{sec:mscale} & $1.3465736$ & \texttt{measurements.json :: mscale\_entro
  & $0.6792$, $1.4852$ & \texttt{fig08} CSV at $\mathrm{scale} = 128$ \\
 Sec.~\ref{sec:trained} & $27.0421 \pm 0.0046\%$ (seed s.d.) & \texttt{usefulness\_seeds.json :: mean, sd} \\
  & $26.90\%$, $[0.2676, 0.2704]$ & \texttt{usefulness.json}, \texttt{uncertainty.json :: pooled} \\
+ & $4.55\!\times\!10^{-13}$, $6.68\!\times\!10^{-8}$; $15$--$50\epsilon$ & \texttt{results/real\_model.json :: identities} \\
+ & $49.4$--$60.1\%$, chance $3.1$--$12.5\%$ & \texttt{results/agreement.json :: models} \\
 Sec.~\ref{sec:softmax} & $27.2$--$40.2\%$, $25.0$--$30.9\%$ & \texttt{results/attention\_cost.json} \\
  & $0.57$--$0.68$, $0.67$--$2.44$ & same, \texttt{top5\_overlap\_mean}, \texttt{kl} \\
  & $2.7\!\times\!10^{-6}$, $9.5\!\times\!10^{-3}$ & same, \texttt{max\_attention\_residual} \\
 Sec.~\ref{sec:features} & $3.1\!\times\!10^{-14}$, $2.7\!\times\!10^{-6}$ & \texttt{results/qk\_attribution.json} \\
  & $4.7\%$, $10.0\%$, $0.03\%$, $22.4\%$ & same, \texttt{aggregate.*.sign\_flip\_fraction} \\
  & $1.46\times$, $3.71\times$ & same, \texttt{base\_share\_mean}, \texttt{top\_k\_share\_mean} \\
+App.~\ref{app:qkcase} & $21.3$--$27.5\%$ rotary; total $\le 6.75\%$ & \texttt{results/qk\_depth.json :: layers} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -959,6 +962,22 @@ drawn from different grids are never compared as though they were the same.
     factors.
 \end{itemize}
 
+\paragraph{How two of the structural tests are built.} The obvious test is the
+wrong one. The relative-position property is \emph{not} tested by comparing
+$s(i,j)$ against $s(i + c, j + c)$ with independent content vectors at each
+position; that asks whether the score depends on absolute position at all, which
+is stronger and false. We test that shifting a \emph{fixed} pair of content
+vectors together by $7$ positions leaves its score unchanged, over $42$ pairs
+spanning $7$ distances and $6$ base positions. Bilinearity is tested by
+rescaling one side by $\{0, 1, 2, -3, 7.5, 10^{-3}, 10^{3}\}$ at $5$ distances,
+giving the $35$ score checks in Table~\ref{tab:exact}.
+
+\paragraph{Ceilings, not digits.} Each of these is the residual of subtracting
+two analytically equal expressions, so its value is whatever the host's
+summation order produces: the same computation yields $3.6\times10^{-14}$ on one
+platform and $3.9\times10^{-14}$ on another. The claim that carries meaning is
+the bound, and it is checked at test time rather than asserted here.
+
 \paragraph{Reproducibility.} Every figure ships the array it plotted as a CSV
 sidecar, so no claim in this paper is read off a pixel, and the appendix records
 which file and key every quoted number came from. The audit is mechanical: each
@@ -995,10 +1014,12 @@ score of $0.076$ (JSON grid) and $0.231$ (figure grid): a genuinely
 position-free bilinear term, though a smaller part of the score than the
 rotated one at these distances.
 
-This is the one setting in which a position-free additive attribution is exactly
-correct, and it is correct because three quarters of the channels carry no
-position at all. That makes \pip\ the natural recommendation for feature-level
-attribution in a model that has it.
+This is the one setting tested in which a position-free additive attribution is
+exactly correct, and it is correct only for the unrotated three quarters of the
+channels, which carry no position at all. The rotated quarter still needs
+per-distance terms. Whether that split improves feature-level attribution is a
+downstream question we have not tested, so we stop at the exactness statement
+rather than recommend \pip\ for it.
 
 \begin{remark}[$\pip$ preserves the norm too]
 There is a subtlety here that a natural implementation gets wrong. Partial
@@ -1022,7 +1043,8 @@ suggestion that partial rotation damages the magnitude gate.
 $\sin$ tables, which RoPE applies to both the query and the key, so every logit
 carries $\mathrm{mscale}^2$ --- precisely a temperature on the attention
 distribution. At $s = 32$ we measure $\mathrm{mscale} = 1.3465736$, matching the
-closed form $0.1\ln 32 + 1$ to all printed digits.
+closed form $0.1\ln 32 + 1$ to all printed digits. The effect is monotone
+across $18$ scales in entropy.
 
 The temperature reading is not ours alone. Attention-entropy stability is
 already the stated design target of logit-scaling context extensions
@@ -1651,7 +1673,7 @@ contributions are identically zero cast no vote, and their count is recorded in
 the artefact.
 
 \paragraph{The grid, and the seed draw.} A denser grid misses fewer cells near
-the zero crossings, so the statistic is mildly sensitive to it: the drift is
+the zero crossings, so the statistic is materially sensitive to it: the drift is
 $0.2389$ across the sweep actually run, whose requested densities $9$, $17$ and
 $65$ do not all survive integer rounding, so the realized span is below the
 nominal $7\times$. An earlier version claimed a $14\times$ span. The seed draw
@@ -1694,6 +1716,33 @@ lives. A reader who wants to know whether the decomposition is stable across
 distance should look at the left panel of Figure~\ref{fig:qkcase}; a reader who
 wants to know what a position-free summary loses should look at the right one.
 
+Table~\ref{tab:qk-depth} is the same measurement repeated for every dictionary in
+the profile. The rotary rate stays in the low twenties at every depth and
+the total rate stays below it; the gap widens with depth and is largest at the
+last block, where the unrotated tail carries less of the score.
+
+\begin{table*}[t]
+  \centering
+  \caption{The depth profile behind Section~\ref{sec:features}: the same sweep
+    with the dictionary trained on each block, applied to the attention of the
+    next block (five dictionaries, layers $0$--$4$). ``Rotary'', ``total'' and
+    ``pairs'' are sign-flip fractions of the sweep in percent; the total rate is
+    given to two decimals because it is small. Source:
+    \texttt{results/qk\_depth.json}.}
+  \label{tab:qk-depth}
+  \begin{tabular}{rrrrr}
+    \toprule
+    dictionary & attention layer & rotary & total & feature pairs \\
+    \midrule
+    0 & 1 & $22.0$ & $6.67$ & $9.6$ \\
+    1 & 2 & $23.5$ & $6.75$ & $10.2$ \\
+    2 & 3 & $21.3$ & $1.90$ & $9.2$ \\
+    3 & 4 & $22.4$ & $0.03$ & $10.5$ \\
+    4 & 5 & $27.5$ & $0.05$ & $18.1$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
 \section{The attention-level cost, in full}
 \label{app:attention}
 
@@ -1730,8 +1779,10 @@ aggregate can be re-derived rather than trusted.
 
 \paragraph{What the number means.} The surrogate is fitted with knowledge of the
 exact profile, so no content-only method can do better on this metric. The
-measured damage is therefore a lower bound on the damage of any position-free
-score, and the bound is realised by a method that is allowed to cheat. It is a
+measured damage is therefore a lower bound on the least-squares damage of any
+position-free score, and the bound is realised by a method that is allowed to
+cheat; for argmax, total variation and KL it is the best attainable baseline,
+not a bound. It is a
 statement about the score-to-weights step, not about per-feature attribution;
 the per-feature cost is Section~\ref{sec:worth}.
 
