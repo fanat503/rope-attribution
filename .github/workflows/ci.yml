@@ -34,17 +34,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           # Pin the cache key to the file this workflow actually installs.
-          # Left to its default **/requirements.txt glob, setup-python would
-          # match projects/requirements.txt (the GPU pins) instead, keying the
-          # cache on a file CI never installs.
+          # setup-python's default **/requirements.txt glob is broader than
+          # this project's dependency set.
           cache-dependency-path: requirements-dev.txt
 
       - name: Install
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
-          # Installs the package and its numpy dependency. projects/requirements.txt
-          # (torch, transformer-lens, nnsight, ...) is intentionally NOT installed:
+          # Installs the package and its numpy dependency. The GPU/model
+          # stacks are opt-in via real_model_requirements.txt and
+          # train_requirements.txt and are intentionally NOT installed here:
           # no GPU, no model downloads, no multi-gigabyte wheels in CI.
           python -m pip install -e .
 
@@ -55,20 +55,37 @@ jobs:
 
       - name: Lint
         # Scoped by [tool.ruff] include to projects/rope_attribution/ and
-        # tests/. The projects/frontier-01-*.py archive is deliberately outside
-        # that scope; do not widen it here to make a red build green.
+        # tests/. Do not widen it here to make a red build green.
         run: python -m ruff check .
 
-      - name: Makefile targets exist and `results` reproduces the committed artefact
+      - name: Makefile targets exist and `results` regenerates the committed artifacts
         # The README tells a reader that `make all` reproduces the repository. That
         # promise is checked here rather than asserted in prose, because the
         # machine this was written on has no make and the claim would otherwise be
         # unfalsifiable. `results` is the cheapest target that proves the Makefile
-        # works and that the committed JSON is still what the code produces; the
-        # diff is allowed to be empty and is reported either way, since a non-empty
-        # diff on a seeded run would mean the seeds moved, which the tests catch
-        # more precisely.
+        # works and that the committed JSON is still what the code produces.
+        #
+        # The check is on *values and shape*, not on bytes. The README does not
+        # claim byte identity across platforms, and cannot: the JSON writer emits
+        # the platform's float repr, so a Linux rerun of the same seeded float64
+        # code differs from the Windows-generated committed file in the last bits
+        # of a few values (measured: 9 lines in measurements.json, 4 in
+        # sensitivity.json). Asserting bytes here failed both matrix jobs on the
+        # same commit whose values the suite had just verified.
+        #
+        # What this step still checks, and the suite cannot: `make results` runs,
+        # writes where it says it writes, and neither adds nor deletes files.
+        # Value freshness is owned by the per-leaf tolerance gates in the suite
+        # above (`test_the_committed_statistics_json_is_current` and the
+        # measurements.json freshness tests in test_paper_claims.py and
+        # test_readme_claims.py), which compare every float at a relative 1e-12.
         run: |
           make help
           make results
-          git diff --stat -- results/ | tail -n 5
+          git status --porcelain -- results/
+          bad=$(git status --porcelain -- results/ | grep -vE '^( M|M )' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::make results created or deleted files under results/"
+            echo "$bad"
+            exit 1
+          fi

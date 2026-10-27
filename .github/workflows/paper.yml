@@ -85,10 +85,11 @@ jobs:
 
           # One raster image per figure; allow slack for any logo or rule.
           # The figure count is read from the LaTeX rather than typed in, so
-          # adding fig11 cannot leave these gates silently under-counting the
-          # way they did when fig10 was added.
+          # adding a figure cannot leave these gates silently under-counting.
+          # The optional width argument is matched too: fig09/fig10 use
+          # \paperfigure[<width>]{...}, which a `\{`-only pattern missed.
           tex = pathlib.Path("paper/main.tex").read_text(encoding="utf-8")
-          figures = len(re.findall(r"(?m)^\\paperfigure\{", tex))
+          figures = len(re.findall(r"(?m)^\\paperfigure(?:\[|\{)", tex))
           assert figures > 0, "no paperfigure calls found in paper/main.tex"
 
           # One raster image per figure; allow slack for any logo or rule.
@@ -112,8 +113,12 @@ jobs:
       # against this same built artifact. Running them here means a format
       # regression fails CI on the exact push that introduced it.
       - name: Run the venue compliance gate
+        env:
+          # The workflow just built the PDF, so a skip here would be a silent
+          # pass: the step exists to certify this exact artifact.
+          ROPE_PAPER_STRICT: "1"
         run: |
-          pip install --quiet pytest
+          pip install --quiet pytest pypdf
           python -m pytest tests/test_venue_compliance.py -q
 
       - uses: actions/upload-artifact@v4

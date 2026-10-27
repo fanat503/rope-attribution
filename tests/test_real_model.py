@@ -57,6 +57,36 @@ _TEST_MODEL_ID = RM.DEFAULT_MODEL_IDS[0]
 
 _JSON_PATH = _REPO / "results" / "real_model.json"
 
+#: The Gemma 4 text-tower fields that break this adapter's assumptions,
+#: transcribed from the public ``config.json`` of ``google/gemma-4-E4B-it``
+#: (fetched 2026-10-23). Kept as a literal so the refusal is tested without a
+#: network call or a 4B-parameter download.
+_GEMMA4_E4B_TEXT = {
+    "model_type": "gemma4_text",
+    "head_dim": 256,
+    "global_head_dim": 512,
+    "attention_k_eq_v": False,
+    "num_kv_shared_layers": 18,
+    "rope_parameters": {
+        "full_attention": {
+            "partial_rotary_factor": 0.25,
+            "rope_theta": 1_000_000.0,
+            "rope_type": "proportional",
+        },
+        "sliding_attention": {"rope_theta": 10_000.0, "rope_type": "default"},
+    },
+    "layer_types": ["sliding_attention"] * 5 + ["full_attention"],
+}
+
+#: The 31B variant differs in exactly two of those fields: it ties k and v and
+#: shares no KV state. Both are recorded because a guard that only recognises
+#: one checkpoint's numbers is a lookup, not a check.
+_GEMMA4_31B_TEXT = {
+    **_GEMMA4_E4B_TEXT,
+    "attention_k_eq_v": True,
+    "num_kv_shared_layers": 0,
+}
+
 
 # --------------------------------------------------------------------------
 # Independent references: no rope.py inside
@@ -507,6 +537,12 @@ def test_measured_position_channels_are_self_consistent(vectors) -> None:
     assert qv["values"] == sorted(qv["values"]), "quantiles must be non-decreasing"
     assert all(0.0 <= v <= 1.0 for v in qv["values"])
     assert 0.0 <= out["frac_position_blind_overall"] <= 1.0
+    # n_blind and n_samples are the numerator and denominator of the rate.
+    # Keeping both in the payload makes a stale artifact detectable: a rate
+    # computed over dead channels cannot satisfy this identity.
+    assert out["n_blind"] / out["n_samples"] == pytest.approx(
+        out["frac_position_blind_overall"], rel=0.0, abs=1e-15
+    )
     hist = out["share_histogram_0_to_1"]
     assert sum(hist["counts"]) == out["n_samples"]
     assert len(hist["counts"]) == len(hist["bin_edges"]) - 1
@@ -514,8 +550,67 @@ def test_measured_position_channels_are_self_consistent(vectors) -> None:
     for key in ("median_share_across_heads", "frac_position_blind_across_heads"):
         _assert_spread_well_formed(out[key])
     # The threshold is reported, not just applied.
-    assert str(RM.BLIND_RATIO) in out["position_blind_threshold"]["statement"]
+    assert out["position_blind_threshold"]["statement"] == (
+        f"|B_k| < {RM.BLIND_RATIO} * |A_k|"
+    )
     assert out["position_blind_threshold"]["ratio"] == RM.BLIND_RATIO
+
+
+def test_degenerate_pairs_are_excluded_from_the_blind_fraction(monkeypatch) -> None:
+    """A dead pair has no phase; it must not count as “not blind” in the mean.
+
+    Mutation verdict: reverting to ``blind.mean()`` over every rotary channel of
+    a live content pair makes this fail: the dead channel contributes a zero, so
+    the reported fraction becomes 0.5 instead of 1.0. ``n_samples`` already
+    counts only live channels, and the artifact labels the dead ones
+    ``n_degenerate_pairs_excluded``; this test keeps the denominator consistent
+    with both.
+    """
+    q = np.zeros((1, 1, 4, 4), dtype=np.float64)
+    # Content pair (0, 2): rotary channel 0 is dead, channel 1 is live and
+    # aligned. Content pair (2, 3) is entirely dead and is skipped.
+    q[0, 0, 0] = (0.0, 1.0, 0.0, 0.0)
+    k = np.tile(np.array([1.0, 1.0, 1.0, 0.0]), (1, 1, 4, 1))
+    hv = RM.HeadVectors(q, k, head_dim=4, n_layers=1, n_heads=1)
+    monkeypatch.setattr(
+        RM, "_content_pairs", lambda seq_len, n_pairs, rng: [(0, 2), (2, 3)]
+    )
+    out = RM.measure_position_channels(
+        hv, np.array([1.0, 0.5]), rope_dim=4, n_pairs=2
+    )
+    assert out["n_samples"] == 1
+    assert out["n_blind"] == 1
+    assert out["n_degenerate_pairs_excluded"] == 3
+    assert out["frac_position_blind_overall"] == 1.0
+    # The per-head summary must use the same denominator, not just the pooled one.
+    assert out["per_head"]["0.0"]["frac_position_blind"] == 1.0
+
+
+def test_the_blind_convention_is_the_documented_inequality() -> None:
+    """Boundary behaviour of ``|B_k| < BLIND_RATIO * |A_k|``, not prose.
+
+    Mutation verdict: flipping ``<`` to ``<=``, changing the threshold, or
+    dropping the ``|A_k|`` factor changes at least one of these three outcomes.
+    A one-pair, one-head fixture makes the convention testable without a
+    checkpoint. The deliberately equal-ratio case is *not* blind under the
+    documented strict inequality.
+    """
+
+    def measured(b_over_a: float) -> float:
+        # A = 1, B = b_over_a for the single rotary pair.
+        q = np.tile(np.array([1.0, 0.0]), (1, 1, 4, 1))
+        k = np.tile(np.array([1.0, b_over_a]), (1, 1, 4, 1))
+        hv = RM.HeadVectors(q, k, head_dim=2, n_layers=1, n_heads=1)
+        out = RM.measure_position_channels(
+            hv, np.array([1.0]), rope_dim=2, n_pairs=4
+        )
+        return out["frac_position_blind_overall"]
+
+    assert measured(0.0) == 1.0
+    assert measured(0.0099) == 1.0
+    assert measured(0.01) == 0.0
+    assert measured(0.0101) == 0.0
+    assert measured(1.0) == 0.0
 
 
 def test_measure_position_channels_rejects_an_inconsistent_rope_dim(vectors) -> None:
@@ -694,6 +789,9 @@ def test_payload_fractions_are_fractions(payload) -> None:
             pos = pp["position_channels"]
             assert pp["n_tokens"] >= 2
             assert 0.0 <= pos["frac_position_blind_overall"] <= 1.0
+            assert pos["n_blind"] / pos["n_samples"] == pytest.approx(
+                pos["frac_position_blind_overall"], rel=0.0, abs=1e-15
+            )
             qv = pos["share_quantiles"]
             assert qv["values"] == sorted(qv["values"])
             assert all(0.0 <= v <= 1.0 for v in qv["values"])
@@ -742,9 +840,18 @@ def test_payload_aggregates_agree_with_the_per_prompt_measurements(payload) -> N
         assert agg["n_samples"] == sum(
             pp["position_channels"]["n_samples"] for pp in model["per_prompt"]
         )
+        assert agg["n_blind"] == sum(
+            pp["position_channels"]["n_blind"] for pp in model["per_prompt"]
+        )
         assert agg["n_degenerate_pairs_excluded"] == sum(
             pp["position_channels"]["n_degenerate_pairs_excluded"]
             for pp in model["per_prompt"]
+        )
+        # The pooled rate is not the unweighted mean of per-prompt rates when
+        # prompts have different lengths; it is the pooled count over the
+        # pooled live denominator.
+        assert agg["frac_position_blind_pooled"] == pytest.approx(
+            agg["n_blind"] / agg["n_samples"], rel=0.0, abs=1e-15
         )
         _assert_spread_well_formed(agg["median_share_across_heads"])
         _assert_spread_well_formed(agg["frac_position_blind_across_heads"])
@@ -853,3 +960,266 @@ def test_the_report_prints_no_measured_literals() -> None:
     text = raw.decode("utf-8").replace("\r\n", "\n")
     for literal in ('"3.6e-15"', '"3.4e-14"', '"7.4e-16"', '"1.8e-15"'):
         assert literal not in text, f"{literal} re-entered the printer"
+
+
+def test_kv_layout_is_checked_across_all_layers() -> None:
+    """A later layer with a different GQA layout must not be reported as layer 0."""
+    assert RM._check_kv_layout(0, 4, 8, None) == (4, 2)
+    assert RM._check_kv_layout(1, 4, 8, (4, 2)) == (4, 2)
+    with pytest.raises(RuntimeError, match="disagree"):
+        RM._check_kv_layout(5, 2, 8, (4, 2))
+
+
+def test_gpt2_has_rope_reports_a_known_load_failure(monkeypatch) -> None:
+    def fail(*args, **kwargs):
+        raise OSError("no network")
+
+    monkeypatch.setattr(RM, "load_model", fail)
+    report = RM.gpt2_has_rope("not-a-model")
+    assert report["error"].startswith("OSError")
+
+
+def test_gpt2_has_rope_does_not_hide_a_programming_error(monkeypatch) -> None:
+    """An AttributeError is this code's bug, not a fact about the checkpoint."""
+    def bug(*args, **kwargs):
+        raise AttributeError("loader bug")
+
+    monkeypatch.setattr(RM, "load_model", bug)
+    with pytest.raises(AttributeError):
+        RM.gpt2_has_rope("not-a-model")
+
+
+def test_the_cli_can_name_an_open_checkpoint() -> None:
+    args = RM._parse_args(
+        [
+            "--model",
+            "google/gemma-2b",
+            "--model",
+            "google/gemma-2-2b",
+            "--no-write",
+            "--no-gpt2-check",
+            "--seed",
+            "3",
+            "--out",
+            "gemma.json",
+        ]
+    )
+    assert args.models == ["google/gemma-2b", "google/gemma-2-2b"]
+    assert args.no_write is True
+    assert args.no_gpt2_check is True
+    assert args.seed == 3
+    assert args.out == Path("gemma.json")
+
+
+def test_the_cli_defaults_to_the_paper_checkpoints() -> None:
+    args = RM._parse_args([])
+    assert args.models is None
+    assert args.seed == RM.DEFAULT_SEED
+    assert args.no_write is False
+    assert args.no_gpt2_check is False
+
+
+def test_main_passes_the_requested_models_to_run_all(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_run_all(**kwargs):
+        captured.update(kwargs)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(RM, "run_all", fake_run_all)
+    with pytest.raises(SystemExit):
+        RM.main(["--model", "a", "--model", "b", "--no-gpt2-check"])
+    assert captured["model_ids"] == ("a", "b")
+    assert captured["with_gpt2_check"] is False
+
+
+def test_main_defaults_to_the_three_checkpoints(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_run_all(**kwargs):
+        captured.update(kwargs)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(RM, "run_all", fake_run_all)
+    with pytest.raises(SystemExit):
+        RM.main([])
+    assert captured["model_ids"] == RM.DEFAULT_MODEL_IDS
+    assert captured["with_gpt2_check"] is True
+
+
+def test_fused_qkv_is_split_per_head_not_in_contiguous_thirds() -> None:
+    """GPT-NeoX packs ``(q, k, v)`` inside each head.
+
+    The old code split the flat projection output into three equal chunks. That
+    is correct for head 0 and wrong for every later head, which silently made
+    the Pythia measurements a mixture of different heads. This test compares
+    every head against the layout the model itself uses.
+    """
+    transformers = pytest.importorskip("transformers")
+    torch = pytest.importorskip("torch")
+    cfg = transformers.GPTNeoXConfig(
+        vocab_size=64,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=1,
+        num_attention_heads=4,
+        max_position_embeddings=64,
+        rotary_pct=1.0,
+        rotary_emb_base=10000.0,
+    )
+    model = transformers.GPTNeoXForCausalLM(cfg).eval()
+    attn = model.gpt_neox.layers[0].attention
+    x = torch.randn(1, 5, 32)
+    qkv = attn.query_key_value(x)
+    q, k, v = RM.split_fused_qkv(attn, qkv)
+    view = qkv.view(1, 5, 4, 3, 8)
+    torch.testing.assert_close(q, view[..., 0, :].reshape(1, 5, 32))
+    torch.testing.assert_close(k, view[..., 1, :].reshape(1, 5, 32))
+    torch.testing.assert_close(v, view[..., 2, :].reshape(1, 5, 32))
+    torch.testing.assert_close(RM.join_fused_qkv(attn, q, k, v), qkv)
+
+    # The projector used by the real measurements must expose the same q/k.
+    q_hat, k_hat = RM._qkv_projector(attn)(x)
+    torch.testing.assert_close(q_hat, q)
+    torch.testing.assert_close(k_hat, k)
+
+
+def test_gemma4_is_refused_from_its_config_alone() -> None:
+    """The flat reader would quietly measure the wrong tensor.
+
+    ``validate_config`` reads one ``rope_theta`` and one partial factor and
+    rebuilds a single ladder. Gemma 4 has two ladders, two head dimensions and
+    no top-level text model, so every one of those readings would be wrong --
+    without an exception, the result would look like a measurement.
+
+    Mutation verdict: deleting the guard from ``validate_config`` makes the
+    stub fail with ``AttributeError`` from ``attention_modules`` rather than
+    the named refusal; deleting only the nested-``rope_parameters`` check makes
+    the ``full_attention`` assertion fail, and deleting only the head-dimension
+    check makes the ``global_head_dim`` assertion fail.
+    """
+    gemma_config = {"model_type": "gemma4", "text_config": _GEMMA4_E4B_TEXT}
+    reason = RM.unsupported_architecture(gemma_config)
+    assert reason is not None
+    assert reason.startswith("gemma4 cannot be measured")
+    for phrase in (
+        "text_config",
+        "gemma4_text",
+        "full_attention",
+        "sliding_attention",
+        "head_dim is 256",
+        "global_head_dim is 512",
+        "18 layer(s) share key/value state",
+    ):
+        assert phrase in reason, phrase
+    assert "attention_k_eq_v" not in reason, (
+        "E4B does not tie k and v; reporting that it does would be a false fact"
+    )
+
+    class _Stub:
+        config = gemma_config
+
+    with pytest.raises(NotImplementedError, match="cannot be measured"):
+        RM.validate_config(_Stub())
+    with pytest.raises(NotImplementedError, match="cannot be measured"):
+        RM.collect_head_vectors(_Stub(), object(), "ignored")
+
+
+def test_the_31b_gemma4_variant_ties_key_and_value() -> None:
+    """The two public variants differ; the guard names what this one does.
+
+    Mutation verdict: dropping the ``attention_k_eq_v`` clause leaves the
+    string absent while every other assertion in the sibling test still
+    passes, so this test is the only detector for that clause.
+    """
+    reason = RM.unsupported_architecture(
+        {"model_type": "gemma4", "text_config": _GEMMA4_31B_TEXT}
+    )
+    assert reason is not None
+    assert "key and value projections are tied" in reason
+    assert "share key/value state" not in reason
+
+
+def test_a_flat_rope_config_is_not_refused() -> None:
+    """The guard must not fire on the checkpoints the paper measures.
+
+    Mutation verdict: replacing the structural checks with a broad
+    ``text_config``/``rope_parameters`` presence test would refuse every
+    ordinary RoPE model, and this test would fail.
+    """
+    transformers = pytest.importorskip("transformers")
+    llama = transformers.LlamaConfig(
+        vocab_size=64,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=1,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        max_position_embeddings=64,
+    )
+    assert RM.unsupported_architecture(llama) is None
+    pythia_like = {
+        "model_type": "gpt_neox",
+        "head_dim": 64,
+        "rope_parameters": {
+            "partial_rotary_factor": 0.25,
+            "rope_theta": 10_000.0,
+        },
+    }
+    assert RM.unsupported_architecture(pythia_like) is None
+
+
+def test_load_model_refuses_gemma4_before_fetching_weights(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 60 GB download must not be the price of learning the adapter refuses.
+
+    Mutation verdict: removing the pre-flight ``AutoConfig`` check calls
+    ``AutoTokenizer.from_pretrained``, whose stub raises ``AssertionError``
+    instead of the expected ``NotImplementedError``.
+    """
+    pytest.importorskip("torch")
+    transformers = pytest.importorskip("transformers")
+    calls: list[str] = []
+
+    def fake_config(model_id, *args, **kwargs):
+        calls.append(str(model_id))
+        return {"model_type": "gemma4", "text_config": _GEMMA4_E4B_TEXT}
+
+    def refuse_weights(*args, **kwargs):
+        raise AssertionError("weights or tokenizer were fetched before the refusal")
+
+    monkeypatch.setattr(transformers.AutoConfig, "from_pretrained", fake_config)
+    monkeypatch.setattr(
+        transformers.AutoModelForCausalLM, "from_pretrained", refuse_weights
+    )
+    monkeypatch.setattr(
+        transformers.AutoTokenizer, "from_pretrained", refuse_weights
+    )
+    with pytest.raises(NotImplementedError, match="gemma4 cannot be measured"):
+        RM.load_model("google/gemma-4-31B-it")
+    assert calls == ["google/gemma-4-31B-it"]
+
+
+def test_qk_normalised_checkpoints_are_refused_before_the_forward_pass() -> None:
+    """A pre-norm hook would measure a vector the model never rotates."""
+    transformers = pytest.importorskip("transformers")
+    torch = pytest.importorskip("torch")
+    cfg = transformers.LlamaConfig(
+        vocab_size=64,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=1,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        max_position_embeddings=64,
+    )
+    model = transformers.LlamaForCausalLM(cfg).eval()
+    model.model.layers[0].self_attn.q_norm = torch.nn.Identity()
+
+    class _Tokenizer:
+        def __call__(self, _text, return_tensors=None):
+            return {"input_ids": torch.tensor([[1, 2, 3, 4]])}
+
+    with pytest.raises(NotImplementedError, match="QK-normalised"):
+        RM.collect_head_vectors(model, _Tokenizer(), "ignored")

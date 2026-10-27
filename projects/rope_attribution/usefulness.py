@@ -54,7 +54,6 @@ choice; it does not evaluate a method.
 from __future__ import annotations
 
 import json
-import math
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -143,14 +142,24 @@ def measure_pair_cost(
     live = peak > 0.0
     # Only judge the sign where the exact term carries real signal.
     material = np.abs(exact) > (0.05 * peak)[:, None]
-    sign_flip = material & live[:, None] & (
+    # A zero surrogate has no sign to get wrong. Counting it as a flip would
+    # turn "the summary predicts no contribution" into "the summary predicts
+    # the opposite contribution", which are different failures.
+    has_sign = surrogate != 0.0
+    sign_flip = material & live[:, None] & has_sign[:, None] & (
         np.sign(exact) != np.sign(surrogate)[:, None]
     )
 
-    denom = np.where(live, peak, np.nan)
-    rel_err = np.nanmax(np.abs(diff), axis=1) / denom
+    # A dead pair has no relative error. Computing ``nanmax`` over an all-NaN
+    # row would warn and then divide by NaN; initialise the result as NaN and
+    # fill only the live rows, so a caller can tell "undefined" from "zero".
+    rel_err = np.full(peak.shape, np.nan, dtype=np.float64)
+    if np.any(live):
+        rel_err[live] = np.abs(diff[live]).max(axis=1) / peak[live]
 
     return {
+        # Boolean mask: kept under the historical key for callers that sum it.
+        # It is not a fraction; the fraction is computed in ``_pooled``.
         "sign_flip_fraction": sign_flip,
         "rel_err": rel_err,
         "live": live,
@@ -175,14 +184,18 @@ def _pooled(cost: dict) -> dict:
     n_cells = int(material.sum())
     n_flips = int(flip.sum())
     rel = cost["rel_err"][live]
+    # ``None`` means the quantity is undefined, not zero. Returning zero for an
+    # empty pair would let a head with no material cells vote for a 0% sign
+    # error and silently pull the pooled rate down; that is exactly the kind of
+    # false measurement this audit is meant to remove.
     return {
         "n_pairs_measured": int(live.sum()),
         "n_material_cells": n_cells,
         "n_sign_flips": n_flips,
-        "sign_flip_fraction": n_flips / n_cells if n_cells else 0.0,
-        "rel_err_median": float(np.median(rel)) if rel.size else 0.0,
-        "rel_err_p90": float(np.quantile(rel, 0.90)) if rel.size else 0.0,
-        "rel_err_max": float(rel.max()) if rel.size else 0.0,
+        "sign_flip_fraction": (n_flips / n_cells) if n_cells else None,
+        "rel_err_median": float(np.median(rel)) if rel.size else None,
+        "rel_err_p90": float(np.quantile(rel, 0.90)) if rel.size else None,
+        "rel_err_max": float(rel.max()) if rel.size else None,
     }
 
 
@@ -209,21 +222,39 @@ def measure_head_cost(
     for m, nn in RM._content_pairs(hv.n_tokens, n_pairs, rng):
         cost = measure_pair_cost(q[m], k[nn], freqs, deltas)
         pooled = _pooled(cost)
-        flips.append(pooled["sign_flip_fraction"])
-        rels.append(pooled["rel_err_median"])
-        tot_cells += pooled["n_material_cells"]
-        tot_flips += pooled["n_sign_flips"]
+        # The two statistics have different domains. Relative error is defined
+        # whenever some cell is live; the sign rate additionally needs a
+        # material cell. Do not drop a pair from the relative-error aggregate
+        # merely because it has no material cells, and do not let a pair with
+        # no sign evidence contribute a zero to the sign aggregate.
+        has_rel = pooled["rel_err_median"] is not None
+        has_sign = pooled["sign_flip_fraction"] is not None
+        if not has_rel and not has_sign:
+            continue
         n += 1
-    if not flips:
+        if has_rel:
+            rels.append(pooled["rel_err_median"])
+        if has_sign:
+            flips.append(pooled["sign_flip_fraction"])
+            tot_cells += pooled["n_material_cells"]
+            tot_flips += pooled["n_sign_flips"]
+    if not rels and not flips:
         return {}
     return {
         "layer": layer,
         "head": head,
         "n_content_pairs": n,
-        "sign_flip_fraction_pooled": tot_flips / tot_cells if tot_cells else 0.0,
-        "sign_flip_fraction_per_pair_median": float(np.median(flips)),
-        "rel_err_median_of_medians": float(np.median(rels)),
-        "rel_err_p90_of_medians": float(np.quantile(rels, 0.90)),
+        "n_sign_pairs": len(flips),
+        "sign_flip_fraction_pooled": (
+            tot_flips / tot_cells if tot_cells else None
+        ),
+        "sign_flip_fraction_per_pair_median": (
+            float(np.median(flips)) if flips else None
+        ),
+        "rel_err_median_of_medians": float(np.median(rels)) if rels else None,
+        "rel_err_p90_of_medians": (
+            float(np.quantile(rels, 0.90)) if rels else None
+        ),
     }
 
 
@@ -268,34 +299,145 @@ def measure_model(
     return _summarise(model_id, rope_dim, deltas, per_prompt)
 
 
+def _cluster_heads(per_prompt: list[dict]) -> list[dict]:
+    """Collapse the five prompt-level records of a head into one head record.
+
+    The measurement unit that varies independently is the **layer-head**, not
+    the head-prompt instance: the five prompts are five looks at the same
+    weights. The earlier schema counted all 2790 instances as heads, which
+    inflated ``n`` five-fold and made every interval on the headline about
+    ``sqrt(5)`` too narrow. A head's rate here is the unweighted mean of its
+    per-prompt rates; ``n_prompts`` records how many contributed, so a missing
+    prompt is visible rather than silently averaged away.
+    """
+    grouped: dict[tuple[int, int], dict[str, list[float]]] = {}
+    for entry in per_prompt:
+        for h in entry["heads"]:
+            key = (int(h["layer"]), int(h["head"]))
+            rec = grouped.setdefault(key, {"sign": [], "rel": []})
+            if h["sign_flip_fraction_pooled"] is not None:
+                rec["sign"].append(float(h["sign_flip_fraction_pooled"]))
+            if h["rel_err_median_of_medians"] is not None:
+                rec["rel"].append(float(h["rel_err_median_of_medians"]))
+
+    heads = []
+    for (layer, head), rec in sorted(grouped.items()):
+        sign = np.asarray(rec["sign"], dtype=np.float64)
+        rel = np.asarray(rec["rel"], dtype=np.float64)
+        heads.append(
+            {
+                "layer": layer,
+                "head": head,
+                "n_prompts": int(sign.size),
+                "sign_flip_fraction": float(sign.mean()) if sign.size else None,
+                "sign_flip_fraction_sd": (
+                    float(sign.std(ddof=1)) if sign.size > 1 else 0.0
+                ),
+                "rel_err_median": float(rel.mean()) if rel.size else None,
+            }
+        )
+    return heads
+
+
 def _summarise(
     model_id: str, rope_dim: int, deltas: np.ndarray, per_prompt: list[dict]
 ) -> dict:
-    pooled_flip = []
-    pooled_rel = []
-    for entry in per_prompt:
-        for h in entry["heads"]:
-            pooled_flip.append(h["sign_flip_fraction_pooled"])
-            pooled_rel.append(h["rel_err_median_of_medians"])
-    arr = np.array(pooled_flip, dtype=np.float64)
-    rel = np.array(pooled_rel, dtype=np.float64)
+    heads = _cluster_heads(per_prompt)
+    sign = np.array(
+        [h["sign_flip_fraction"] for h in heads if h["sign_flip_fraction"] is not None],
+        dtype=np.float64,
+    )
+    rel = np.array(
+        [h["rel_err_median"] for h in heads if h["rel_err_median"] is not None],
+        dtype=np.float64,
+    )
+    if not sign.size or not rel.size:
+        # Do not publish a model-level zero when no head produced a defined
+        # measurement. The absence is the result, and it must be visible.
+        raise ValueError(
+            f"{model_id}: no head produced a defined sign-error rate and "
+            "relative error"
+        )
     return {
         "model_id": model_id,
         "rope_dim": rope_dim,
         "n_rotary_pairs": rope_dim // 2,
         "n_deltas": int(deltas.size),
         "deltas": [int(d) for d in deltas],
-        "n_heads": int(arr.size),
-        "sign_flip_fraction_pooled": float(arr.mean()) if arr.size else 0.0,
-        "sign_flip_fraction_min_head": float(arr.min()) if arr.size else 0.0,
-        "sign_flip_fraction_max_head": float(arr.max()) if arr.size else 0.0,
-        "sign_flip_across_head_ratio": (
-            float(arr.max() / arr.min()) if arr.size and arr.min() > 0 else math.inf
+        "n_heads": len(heads),
+        "n_head_prompt_instances": int(
+            sum(len(entry["heads"]) for entry in per_prompt)
         ),
-        "rel_err_median": float(np.median(rel)) if rel.size else 0.0,
-        "rel_err_p90": float(np.quantile(rel, 0.90)) if rel.size else 0.0,
+        "n_prompts": len(per_prompt),
+        "n_heads_with_sign": int(sign.size),
+        "n_heads_with_rel_err": int(rel.size),
+        "sign_flip_fraction_pooled": float(sign.mean()),
+        "sign_flip_fraction_min_head": float(sign.min()),
+        "sign_flip_fraction_max_head": float(sign.max()),
+        "sign_flip_fraction_sd_head": float(sign.std(ddof=1)),
+        # Undefined when any head has a zero rate: a max/min ratio with a zero
+        # denominator is not a large number, it is not a number. JSON ``null``
+        # is honest and keeps the artifact strict-JSON serialisable.
+        "sign_flip_across_head_ratio": (
+            float(sign.max() / sign.min()) if sign.min() > 0 else None
+        ),
+        "rel_err_median": float(np.median(rel)),
+        "rel_err_p90": float(np.quantile(rel, 0.90)),
+        "head_rates": heads,
         "per_prompt": per_prompt,
     }
+
+
+def _pool(models: Sequence[dict]) -> dict:
+    """Top-level summaries, with the unit of replication stated explicitly.
+
+    ``sign_flip_fraction`` remains the **equal-weight mean of the per-model
+    means**: that is the paper's headline, and it does not change when the
+    clustering does. ``sign_flip_fraction_head_pooled`` is the mean over all
+    unique heads; it differs only because SmolLM contributes 270 heads against
+    144 each for the other two checkpoints. Both are reported so a reader can
+    never mistake one for the other.
+    """
+    heads = [h for m in models for h in m["head_rates"]]
+    sign = np.array(
+        [h["sign_flip_fraction"] for h in heads if h["sign_flip_fraction"] is not None],
+        dtype=np.float64,
+    )
+    rel = np.array(
+        [h["rel_err_median"] for h in heads if h["rel_err_median"] is not None],
+        dtype=np.float64,
+    )
+    return {
+        "n_heads": len(heads),
+        "n_head_prompt_instances": int(
+            sum(m["n_head_prompt_instances"] for m in models)
+        ),
+        "sign_flip_fraction": float(
+            np.mean([m["sign_flip_fraction_pooled"] for m in models])
+        ),
+        "sign_flip_fraction_head_pooled": float(sign.mean()),
+        "sign_flip_fraction_min_head": float(sign.min()),
+        "sign_flip_fraction_max_head": float(sign.max()),
+        "sign_flip_fraction_sd_head": float(sign.std(ddof=1)),
+        "rel_err_median": float(np.median(rel)),
+        "rel_err_p90": float(np.quantile(rel, 0.90)),
+    }
+
+
+def _relative_spread(values: Sequence[float], what: str) -> float:
+    """``(max - min) / max``, defined only for a finite, positive maximum.
+
+    A zero maximum means every row measured zero; the relative spread is then
+    undefined, not zero and not infinite. Raising here stops the artifact
+    writer before it can publish a number that no reader could reproduce.
+    """
+    arr = np.asarray(values, dtype=np.float64)
+    if arr.size == 0 or not np.all(np.isfinite(arr)):
+        raise ValueError(f"{what}: cannot take a relative spread of {arr.tolist()}")
+    hi = float(arr.max())
+    if hi <= 0.0:
+        raise ValueError(f"{what}: relative spread needs a positive maximum, got {hi}")
+    return float((hi - float(arr.min())) / hi)
 
 
 def grid_independence(
@@ -325,8 +467,8 @@ def grid_independence(
         "model_id": model_id,
         "densities": list(GRID_DENSITIES),
         "per_density": out,
-        "sign_flip_drift": float((max(rates) - min(rates)) / max(rates)),
-        "rel_err_drift": float((max(errs) - min(errs)) / max(errs)),
+        "sign_flip_drift": _relative_spread(rates, "sign-flip drift"),
+        "rel_err_drift": _relative_spread(errs, "relative-error drift"),
     }
 
 
@@ -341,24 +483,12 @@ def run_all(model_ids: Sequence[str] = DEFAULT_MODEL_IDS, seed: int = DEFAULT_SE
     """
     models = [measure_model(m, seed=seed) for m in model_ids]
     return {
-        "schema": "rope_attribution/usefulness/v1",
+        "schema": "rope_attribution/usefulness/v2",
         "distance_grid": list(DISTANCE_GRID),
         "grid_densities": list(GRID_DENSITIES),
         "seed": seed,
         "models": models,
-        "pooled": {
-            "sign_flip_fraction": float(
-                np.mean([m["sign_flip_fraction_pooled"] for m in models])
-            ),
-            "sign_flip_fraction_min_head": float(
-                np.min([m["sign_flip_fraction_min_head"] for m in models])
-            ),
-            "sign_flip_fraction_max_head": float(
-                np.max([m["sign_flip_fraction_max_head"] for m in models])
-            ),
-            "rel_err_median": float(np.median([m["rel_err_median"] for m in models])),
-            "rel_err_p90": float(np.median([m["rel_err_p90"] for m in models])),
-        },
+        "pooled": _pool(models),
     }
 
 
@@ -379,14 +509,14 @@ def main() -> None:
         f"rel err median {p['rel_err_median']:.4f}, p90 {p['rel_err_p90']:.4f}"
     )
     out = Path(__file__).resolve().parents[2] / "results" / "usefulness.json"
-    out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(data, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     print("wrote", out)
 
     gi = grid_independence()
     gi_out = (
         Path(__file__).resolve().parents[2] / "results" / "usefulness_grid_independence.json"
     )
-    gi_out.write_text(json.dumps(gi, indent=2) + "\n", encoding="utf-8")
+    gi_out.write_text(json.dumps(gi, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     print(
         f"grid independence on {gi['model_id']}: sign-flip drift "
         f"{gi['sign_flip_drift']:.4f} across densities {gi['densities']}"

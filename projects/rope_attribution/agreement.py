@@ -448,3 +448,7 @@ def main() -> None:
     out = Path(__file__).resolve().parents[2] / "results" / "agreement.json"
     out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print("wrote", out)
+
+
+if __name__ == "__main__":
+    main()

@@ -469,3 +469,127 @@
   archivePrefix = {arXiv},
   primaryClass  = {cs.LG}
 }
+
+% Behavioral evidence that positional-encoding choice changes the mechanism a
+% model uses for in-context retrieval, across 22 open-weight models. It is the
+% kind of downstream claim this paper deliberately does not make; cited as the
+% boundary between a structural attribution result and a behavioral one.
+% Verified against the arXiv API on 2026-10-21 (v1, 29 Sep 2026).
+@article{enouen2026shifting,
+  title   = {Shifting Mechanisms: How Positional Encoding Choice Shapes
+             In-Context Retrieval},
+  author  = {Enouen, Eric and Galhotra, Sainyam},
+  journal = {arXiv preprint arXiv:2609.38530},
+  year    = {2026},
+  eprint  = {2609.38530},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL}
+}
+
+% Circuit evaluation can reproduce a model's successes while missing most of
+% its errors. Cited only to keep the paper's exactness claim separate from a
+% validated circuit explanation; no circuit is evaluated here.
+% Verified against the arXiv API on 2026-10-21 (v1, 28 Sep 2026).
+@article{zhang2026circuiteval,
+  title   = {Rethinking Circuit Evaluation: Do Circuits Explain Model Errors?},
+  author  = {Zhang, Li and Geng, Chuqin and Zhang, Mark and Yang, Chen and
+             Zhang, Luke and Ye, Haolin and Si, Xujie},
+  journal = {arXiv preprint arXiv:2609.35686},
+  year    = {2026},
+  eprint  = {2609.35686},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% The method paper for query-key attribution over learned features. It states
+% explicitly that RoPE is out of scope because rotation makes the linear map
+% depend on position, and defers it; this paper is the deferred case. No arXiv
+% ID exists; the author list is the one on the published page, truncated to the
+% first author because the page returns 403 to non-browser clients.
+@misc{kamath2025tracing,
+  title        = {Tracing Attention Computation Through Feature Interactions},
+  author       = {{Kamath et al.}},
+  year         = {2025},
+  howpublished = {Transformer Circuits Thread},
+  note         = {\url{https://transformer-circuits.pub/2025/attention-features/index.html}}
+}
+
+% Separates feature from position attributions with a perturbation-based
+% estimator; the nearest concurrent work on the "position-free attribution is
+% lossy" claim, which is why this paper does not claim that general statement.
+% No arXiv ID exists; family names are from the published author list.
+@inproceedings{kim2026pax,
+  title     = {PaX},
+  author    = {Kim and Weissman and Wong},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2026}
+}
+
+% Decomposes the QK space into low-rank content subspaces. Closest feature-level
+% QK attribution work, and it has no positional term at all: cited to establish
+% that the per-distance table is not already published there.
+% Verified against the arXiv API on 2026-10-25 (v1, 4 Feb 2026).
+@article{lee2026contrastive,
+  title   = {Decomposing Query-Key Feature Interactions Using Contrastive
+             Covariances},
+  author  = {Lee, Andrew and Belinkov, Yonatan and Vi{\'e}gas, Fernanda and
+             Wattenberg, Martin},
+  journal = {arXiv preprint arXiv:2602.04752},
+  year    = {2026},
+  eprint  = {2602.04752},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% RoPE as phase modulation, with a Nyquist-type bound on the base. Cited for the
+% spectral reading of the frequency ladder, not for reconstruction: the bound is
+% about choosing a base, not about recovering a profile from samples.
+% Verified against the arXiv API on 2026-10-25 (v1, 11 Feb 2026).
+@article{liu2026oscillator,
+  title   = {Rotary Positional Embeddings as Phase Modulation: Theoretical
+             Bounds on the {RoPE} Base for Long-Context Transformers},
+  author  = {Liu, Feilong},
+  journal = {arXiv preprint arXiv:2602.10959},
+  year    = {2026},
+  eprint  = {2602.10959},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+% The public dictionary used in Section 5.7, and the training library it comes
+% from. The checkpoint is identified by its full repository name in the text so
+% that the exact weights are unambiguous.
+@misc{bloom2024saelens,
+  title        = {{SAELens}: Training Sparse Autoencoders for Mechanistic
+                  Interpretability},
+  author       = {Bloom, Joseph and Tigges, Curt},
+  year         = {2024},
+  howpublished = {\url{https://github.com/decoderesearch/SAELens}}
+}
+
+@article{biderman2023pythia,
+  title   = {Pythia: A Suite for Analyzing Large Language Models Across Training
+             and Scaling},
+  author  = {Biderman, Stella and Schoelkopf, Hailey and Anthony, Quentin and
+             Bradley, Herbie and O'Brien, Kyle and Hallahan, Eric and Khan,
+             Mohammad Aflah and Purohit, Shivanshu and Prashanth, USVSN Sai and
+             Raff, Edward and Skowron, Aviya and Sutawika, Lintang and van der
+             Wal, Oskar},
+  journal = {International Conference on Machine Learning (ICML)},
+  year    = {2023},
+  eprint  = {2304.01373},
+  archivePrefix = {arXiv}
+}
+
+@article{touvron2023llama,
+  title   = {{LLaMA}: Open and Efficient Foundation Language Models},
+  author  = {Touvron, Hugo and Lavril, Thibaut and Izacard, Gautier and
+             Martinet, Xavier and Lachaux, Marie-Anne and Lacroix, Timoth{\'e}e
+             and Rozi{\`e}re, Baptiste and Goyal, Naman and Hambro, Eric and
+             Azhar, Faisal and Rodriguez, Aurelien and Joulin, Armand and
+             Grave, Edouard and Lample, Guillaume},
+  journal = {arXiv preprint arXiv:2302.13971},
+  year    = {2023},
+  eprint  = {2302.13971},
+  archivePrefix = {arXiv}
+}

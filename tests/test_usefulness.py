@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -238,12 +239,52 @@ def committed() -> dict:
 
 
 def test_the_committed_json_has_the_expected_shape(committed: dict) -> None:
-    assert committed["schema"] == "rope_attribution/usefulness/v1"
+    assert committed["schema"] == "rope_attribution/usefulness/v2"
     assert committed["distance_grid"] == list(U.DISTANCE_GRID)
     assert len(committed["models"]) >= 3, committed["models"]
     for model in committed["models"]:
-        assert model["n_heads"] > 0
+        assert model["n_heads"] == len(model["head_rates"]) > 0
+        assert model["n_prompts"] == len(model["per_prompt"])
+        assert (
+            model["n_head_prompt_instances"] == model["n_heads"] * model["n_prompts"]
+        ), model["model_id"]
         assert model["n_deltas"] == len(U.DISTANCE_GRID)
+
+
+def test_the_summary_counts_heads_not_prompt_instances() -> None:
+    """The unit fix, on an input whose answer is countable by hand.
+
+    Two heads observed under two prompts are two heads, not four. Mutation
+    verdict: reverting ``_cluster_heads`` to a flat loop over ``per_prompt``
+    makes ``n_heads`` 4 and the pooled rate the unweighted cell mean; both
+    assertions below fail.
+    """
+    def head(layer: int, idx: int, rate: float) -> dict:
+        return {
+            "layer": layer,
+            "head": idx,
+            "n_content_pairs": 1,
+            "n_sign_pairs": 1,
+            "sign_flip_fraction_pooled": rate,
+            "sign_flip_fraction_per_pair_median": rate,
+            "rel_err_median_of_medians": 1.0,
+        }
+
+    per_prompt = [
+        {
+            "prompt_index": i,
+            "n_tokens": 2,
+            "heads": [head(0, 0, 0.2 + 0.1 * i), head(0, 1, 0.4 + 0.1 * i)],
+        }
+        for i in range(2)
+    ]
+    rec = U._summarise("toy", 64, np.array([1, 2], dtype=np.int64), per_prompt)
+    assert rec["n_heads"] == 2
+    assert rec["n_head_prompt_instances"] == 4
+    assert rec["head_rates"][0]["n_prompts"] == 2
+    assert rec["head_rates"][0]["sign_flip_fraction"] == pytest.approx(0.25)
+    assert rec["head_rates"][1]["sign_flip_fraction"] == pytest.approx(0.45)
+    assert rec["sign_flip_fraction_pooled"] == pytest.approx(0.35)
 
 
 def test_the_committed_rate_is_substantial_and_bounded(committed: dict) -> None:
@@ -386,3 +427,73 @@ def test_the_sign_flip_rate_itself_is_stable_across_densities(
     ]
     assert len(rates) == 3, rates
     assert all(0.15 < r < 0.45 for r in rates), rates
+
+
+def test_a_zero_surrogate_is_not_counted_as_a_sign_flip(
+    monkeypatch: pytest.MonkeyPatch, grid: np.ndarray, freqs: np.ndarray
+) -> None:
+    """A zero surrogate has no sign; it is not evidence of the opposite sign.
+
+    ``np.sign(0.0)`` is 0, so the old mask counted every material cell against
+    a zero surrogate as a sign disagreement. That inflates exactly the number
+    the paper leads with, so the distinction is load-bearing.
+    """
+    q, k = _content_pair(23)
+    zeros = np.zeros_like(freqs)
+    monkeypatch.setattr(U, "cos_sin_means", lambda *args, **kwargs: (zeros, zeros))
+    cost = U.measure_pair_cost(q, k, freqs, grid)
+    assert int(cost["n_material"].sum()) > 0, "the test needs material cells"
+    assert int(cost["sign_flip_fraction"].sum()) == 0
+
+
+def test_an_empty_pair_is_undefined_not_a_zero_rate(
+    grid: np.ndarray, freqs: np.ndarray
+) -> None:
+    """No material cells means no measurement, not a 0% sign-error rate.
+
+    Emitting zero here would let empty content pairs vote in the head and model
+    averages, lowering the headline without any measurement behind the vote.
+    """
+    q = np.zeros(64)
+    k = np.zeros(64)
+    pooled = U._pooled(U.measure_pair_cost(q, k, freqs, grid))
+    assert pooled["n_pairs_measured"] == 0
+    assert pooled["n_material_cells"] == 0
+    assert pooled["sign_flip_fraction"] is None
+    assert pooled["rel_err_median"] is None
+    assert pooled["rel_err_p90"] is None
+    assert pooled["rel_err_max"] is None
+
+
+def test_a_head_with_no_material_cells_is_not_reported(
+    grid: np.ndarray, freqs: np.ndarray
+) -> None:
+    """An all-zero head must be omitted, not averaged in as a 0% head.
+
+    This is the mutation detector for the skip in ``measure_head_cost``:
+    restoring the old unconditional append makes this return a record whose
+    ``sign_flip_fraction_pooled`` is 0.0.
+    """
+    hv = SimpleNamespace(
+        q_hat=np.zeros((1, 1, 4, 64)),
+        k_hat=np.zeros((1, 1, 4, 64)),
+        n_tokens=4,
+    )
+    rec = U.measure_head_cost(
+        hv, freqs, 64, grid, n_pairs=4, seed=0, layer=0, head=0
+    )
+    assert rec == {}
+
+
+def test_relative_spread_refuses_a_zero_maximum() -> None:
+    """A relative spread with a zero denominator is undefined, not zero."""
+    with pytest.raises(ValueError, match="positive maximum"):
+        U._relative_spread([0.0, 0.0], "test statistic")
+    with pytest.raises(ValueError, match="cannot take"):
+        U._relative_spread([float("nan"), 1.0], "test statistic")
+
+
+def test_a_model_with_no_measured_heads_is_refused(grid: np.ndarray) -> None:
+    """Publishing a model-level zero for an empty sweep would be fabrication."""
+    with pytest.raises(ValueError, match="no head produced"):
+        U._summarise("empty-model", 64, grid, [])

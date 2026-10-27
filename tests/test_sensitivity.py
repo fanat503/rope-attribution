@@ -27,7 +27,9 @@ if str(_REPO / "projects") not in sys.path:
 from rope_attribution import sensitivity as S  # noqa: E402
 from rope_attribution import usefulness as U  # noqa: E402
 from test_paper_claims import (  # noqa: E402
+    TEX_FLAT,
     assert_paper_number_matches,
+    groups,
     literal,
 )
 
@@ -208,6 +210,40 @@ def test_the_rel_err_claim_is_re_derived() -> None:
     # The claim of the sentence's first half: every configuration's median
     # relative error clears the signal, no matter the base or the dimension.
     assert min(medians) > float(literal("sensitivity_relerr", 1))
+
+
+def test_the_limitations_paragraph_restates_the_same_bands() -> None:
+    """The limitations copy must not drift from the appendix copy.
+
+    Mutation verdict: changing the limitations paragraph alone (32.0 to 31.0,
+    or swapping the base endpoints) fails one of the band comparisons while the
+    appendix claim still matches.
+    """
+    data = _committed()
+    (
+        dim_low,
+        dim_high,
+        base_high,
+        base_low,
+        base_first,
+        base_last,
+        head_dim,
+        published,
+    ) = groups("limitations_base_sensitivity")[0]
+    dim_band = data["dim_band_at_base_10000"]
+    base_band = data["base_band_at_dim_64"]
+    assert_paper_number_matches(100.0 * dim_band[0], dim_low, "limitations dim low")
+    assert_paper_number_matches(100.0 * dim_band[1], dim_high, "limitations dim high")
+    assert_paper_number_matches(100.0 * base_band[1], base_high, "limitations base high")
+    assert_paper_number_matches(100.0 * base_band[0], base_low, "limitations base low")
+    assert base_first == "10^{3}"
+    assert base_last == "5\\times10^{5}"
+    assert int(head_dim) == 64
+    assert published == "10^{4}"
+    # The appendix now says the rate is stable in dimension but not in base, so
+    # the old "does not hinge" sentence must be gone from the paper.
+    assert "does not hinge" not in TEX_FLAT
+    assert "not in the rotary base" in TEX_FLAT
 
 
 def test_the_synthetic_construction_is_calibrated() -> None:

@@ -9,20 +9,20 @@
   "per_density": {
     "9": {
       "n_deltas": 9,
-      "sign_flip_fraction_pooled": 0.24679259359504951,
-      "rel_err_median": 1.1429675576356073
+      "sign_flip_fraction_pooled": 0.24414270482015069,
+      "rel_err_median": 1.1437061599728477
     },
     "17": {
       "n_deltas": 17,
-      "sign_flip_fraction_pooled": 0.2751205895155978,
-      "rel_err_median": 1.1883575918631348
+      "sign_flip_fraction_pooled": 0.28804977703344353,
+      "rel_err_median": 1.1542925026093438
     },
     "65": {
       "n_deltas": 56,
-      "sign_flip_fraction_pooled": 0.3001831845812816,
-      "rel_err_median": 1.1660147101884482
+      "sign_flip_fraction_pooled": 0.32075876972452405,
+      "rel_err_median": 1.1238543140088
     }
   },
-  "sign_flip_drift": 0.17786003256879754,
-  "rel_err_drift": 0.03819560251755868
+  "sign_flip_drift": 0.23885883142080022,
+  "rel_err_drift": 0.026369562768307476
 }
