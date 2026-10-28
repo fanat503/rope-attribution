@@ -59,7 +59,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1653 tests (CPU-only install)
+pytest -q                                        # 1665 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -111,14 +111,19 @@ channels in full-attention layers but all 256 in sliding ones, and in the 31B
 variant ties the key and value projections. The adapter reads one theta, one
 partial factor and one head dimension, so a Gemma 4 number from it would
 describe neither layer type. No Gemma checkpoint is part of the committed
-evidence.
+evidence. `gemma4.py --config <config.json>` reads only the config and prints
+the per-family plan --- head dimensions, thetas, rotated widths and the
+proportional ladder --- together with the blockers above; `docs/GEMMA4.md`
+records the boundary. The planner produces no numbers, and no Gemma 4 result is
+part of the paper.
 
 ## Training your own models
 
 The measurement suite runs on checkpoints others trained. `train.py` trains the
 same object -- a bias-free RMSNorm decoder with a tied head and full RoPE at
 head dimension 64 -- and logs every metric, including the attribution
-diagnostics, at each evaluation:
+diagnostics, at each evaluation. The loader contract --- pre-tokenized shards,
+atomic writes, SHA-256, resume and a `uint16` memmap --- is in `docs/DATA.md`:
 
 ```bash
 pip install -r train_requirements.txt
@@ -238,7 +243,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1653 tests (CPU-only install)
+tests/            1665 tests (CPU-only install)
 figures/          twelve figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
@@ -404,6 +409,19 @@ matters for the mechanism:
   9 of 32 pairs are bit-for-bit unchanged and 21 of 32 differ from uniform
   interpolation. Both `yarn` and `position_interpolation` are computed in
   `experiments.method_spectrum` so the two can be compared directly.
+- **The fixed-content QK sweep rotated the key the wrong way.** The earlier
+  drafts evaluated the profile at angle `+delta`; a key sits *behind* its query,
+  so the checkpoint rotates by `n - m = -delta`. The error flips the sign of
+  every sine term, and it is not cosmetic: on `pythia-70m` the rotary sign-flip
+  rate moves from `22.4%` to `21.4%`, the total rate from `0.03%` to `0.02%`,
+  and the per-layer depth profile from `22.0/23.5/21.3/22.4/27.5%` to
+  `27.4/27.2/21.9/21.4/22.0%`. The qualitative contrast survives — the rotary
+  subspace reverses roughly three orders of magnitude more often than the total
+  — but the earlier layer ordering, and the sentence that tied the layer-4
+  trajectory outlier to the highest rotary rate, were wrong and have been
+  removed. `qk_attribution.json`, `qk_depth.json` and `qk_trajectory.json` were
+  regenerated, and three tests now pin the convention against the checkpoint's
+  own `apply_rotary_pos_emb`.
 
 ## Figures
 

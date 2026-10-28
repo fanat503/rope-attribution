@@ -560,8 +560,12 @@ def _sweep_profiles(
         if m == n:
             continue
         for delta_index, delta in enumerate(sweep_deltas):
+            # ``delta`` is a distance, and the key sits *behind* the query, so
+            # the angle the model rotates by is ``n - m = -delta``. Feeding
+            # ``+delta`` would sweep the anti-causal rotation and mirror every
+            # sine term of the profile.
             terms = attribution_terms(
-                buckets[int(m)], buckets[int(n)], int(delta), freqs, rotary_dim
+                buckets[int(m)], buckets[int(n)], -int(delta), freqs, rotary_dim
             )
             feature_units = content_index * d_sae + terms.indices_m
             add("feature", delta_index, feature_units, terms.query_features)
@@ -622,8 +626,10 @@ def measure_head(
     for delta_index, delta in enumerate(deltas):
         pairs = sample_pairs(n_tokens, int(delta), n_pairs, rng)
         for m, n in pairs:
+            # The pair is (query, key) with the key ``delta`` positions behind
+            # it, so the model's rotation angle is ``n - m = -delta``.
             terms = attribution_terms(
-                buckets[m], buckets[n], int(delta), freqs, rotary_dim
+                buckets[m], buckets[n], int(n - m), freqs, rotary_dim
             )
             exactness = max(
                 exactness,

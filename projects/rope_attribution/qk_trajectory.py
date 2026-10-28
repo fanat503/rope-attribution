@@ -161,10 +161,13 @@ def trajectory_matrices(
 
     ``buckets_m`` and ``buckets_n`` are fixed content; only the rotation angle
     changes.  That is the content-fixed sweep the paper uses, applied to the
-    matrix rather than to one feature's scalar profile.
+    matrix rather than to one feature's scalar profile.  ``deltas`` are
+    distances, and the key sits behind the query, so the angle is ``-delta``
+    --- the same convention ``measure_head`` uses.  Passing ``+delta`` would
+    compute the anti-causal rotation.
     """
     terms = [
-        QK.attribution_terms(buckets_m, buckets_n, int(delta), freqs, rotary_dim)
+        QK.attribution_terms(buckets_m, buckets_n, -int(delta), freqs, rotary_dim)
         for delta in deltas
     ]
     shapes = {term.pairs.shape for term in terms}

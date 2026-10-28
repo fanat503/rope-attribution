@@ -131,9 +131,13 @@ def test_trajectory_matrices_are_the_decomposition_it_names() -> None:
     stack = QT.trajectory_matrices(
         buckets_m, buckets_n, deltas, freqs, rotary_dim
     )
-    direct = QK.attribution_terms(buckets_m, buckets_n, 5, freqs, rotary_dim).pairs
+    # ``deltas`` are distances and the key sits behind the query, so the
+    # model's angle is the negative of the distance.
+    direct = QK.attribution_terms(buckets_m, buckets_n, -5, freqs, rotary_dim).pairs
     assert stack.shape == (3, 3, 3)
     np.testing.assert_allclose(stack[1], direct)
+    wrong = QK.attribution_terms(buckets_m, buckets_n, +5, freqs, rotary_dim).pairs
+    assert np.abs(stack[1] - wrong).max() > 1e-3
 
 
 def _fake_dataset(layer: int, value: float, *, n_tokens: int = 32) -> dict:

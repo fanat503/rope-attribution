@@ -357,6 +357,106 @@ def test_the_unrotated_tail_is_exactly_distance_independent() -> None:
     assert np.abs(gaps - gaps[0]).max() < TOL
 
 
+class _FixedDraws:
+    """The two draws ``_sweep_profiles`` makes, pinned to one content pair."""
+
+    def __init__(self, queries, keys) -> None:
+        self.queries = np.asarray(queries, dtype=np.int64)
+        self.keys = np.asarray(keys, dtype=np.int64)
+
+    def integers(self, low, high, size=None):
+        assert size == self.queries.size
+        return self.queries.copy()
+
+    def random(self, size=None):
+        assert size == self.keys.size
+        # ``_sweep_profiles`` does ``(random * queries).astype(int64)``; the
+        # quarter keeps the product off an integer boundary.
+        return (self.keys + 0.25) / self.queries
+
+
+def _feature_profile(queries, keys, deltas, buckets, k_full, freqs, rotary_dim, sign):
+    """Mean per-feature contribution, computed outside the sweep's own grouping."""
+    ids = np.unique(np.concatenate([buckets[m].indices for m in queries]))
+    values = np.zeros((ids.size, len(deltas)))
+    counts = np.zeros((ids.size, len(deltas)))
+    for column, delta in enumerate(deltas):
+        for m, n in zip(queries, keys, strict=True):
+            angle = sign * int(delta)
+            term = Q.rotated_dot(
+                buckets[m].feature_q, k_full[n][None, :], angle, freqs, rotary_dim
+            )[:, 0]
+            for row, feature in enumerate(ids):
+                hit = np.flatnonzero(buckets[m].indices == feature)
+                if hit.size:
+                    values[row, column] += term[hit[0]]
+                    counts[row, column] += 1
+    assert np.all(counts > 0)
+    return ids, values / counts
+
+
+def test_measure_head_uses_the_models_rotation_angle() -> None:
+    """A causal pair is rotated by ``n - m``, not by the distance.
+
+    Mutation verdict: replacing ``int(n - m)`` with ``int(delta)`` in
+    ``measure_head`` makes every cell of the returned profile differ from the
+    independently rotated score. The comparison does not reuse the
+    decomposition's convention: it rebuilds the score from the unrotated
+    projections and rotates them at their two positions.
+    """
+    buckets, _, k_full, freqs = _buckets_and_full(seed=12)
+    n_tokens = len(buckets)
+    delta = 3
+    queries = np.arange(delta, n_tokens)
+    keys = queries - delta
+    measured = Q.measure_head(
+        buckets,
+        freqs,
+        8,
+        np.array([delta]),
+        n_pairs=n_tokens,
+        rng=np.random.default_rng(0),
+        d_sae=24,
+        sweep_deltas=None,
+    )
+    ids, expected = _feature_profile(
+        queries, keys, [delta], buckets, k_full, freqs, 8, -1
+    )
+    assert np.array_equal(ids, measured["feature_ids"])
+    assert np.abs(measured["feature_profile"] - expected).max() < 1e-10
+
+    _, wrong = _feature_profile(queries, keys, [delta], buckets, k_full, freqs, 8, +1)
+    assert np.abs(expected - wrong).max() > 1e-3
+
+
+def test_the_content_fixed_sweep_rotates_keys_backwards() -> None:
+    """The sweep's ``delta`` is a distance; the key is behind the query.
+
+    Mutation verdict: passing ``+delta`` instead of ``-delta`` in
+    ``_sweep_profiles`` fails the comparison cell by cell. The materiality
+    assertion below shows the two conventions are not numerically identical on
+    this content.
+    """
+    buckets, _, k_full, freqs = _buckets_and_full(seed=13)
+    deltas = [1, 4]
+    sweep = Q._sweep_profiles(
+        buckets,
+        freqs,
+        8,
+        np.array(deltas),
+        n_content_pairs=1,
+        rng=_FixedDraws([5], [2]),
+        d_sae=24,
+    )
+    ids, expected = _feature_profile([5], [2], deltas, buckets, k_full, freqs, 8, -1)
+    got_ids, profiles = sweep["feature"]
+    assert np.array_equal(got_ids, ids)
+    assert np.abs(profiles - expected).max() < 1e-10
+
+    _, wrong = _feature_profile([5], [2], deltas, buckets, k_full, freqs, 8, +1)
+    assert np.abs(expected - wrong).max() > 1e-3
+
+
 # --------------------------------------------------------------------------
 # Sampling and grids
 # --------------------------------------------------------------------------
@@ -712,7 +812,7 @@ def test_every_depth_row_is_a_real_forward_pass(depth: dict) -> None:
 
 
 def test_the_rotary_rate_is_not_a_property_of_one_layer(depth: dict) -> None:
-    """Layer 3's 22.4% must not be the maximum, or a lucky block.
+    """Layer 3's 21.4% must not be the maximum, or a lucky block.
 
     Every attributable layer is in the same 21--28% band, and at every layer
     the rotary sub-score flips sign more often than the total profile does.

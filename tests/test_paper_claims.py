@@ -4004,7 +4004,7 @@ def test_the_fixed_content_sweep_reverses_where_the_total_profile_does_not() -> 
     assert_paper_number_matches(per_head[-1], rates[3], "per-head rotary max")
 
     # The sweep and the headline are deliberately not compared: 27.0% is per
-    # rotary pair on trained checkpoints, 22.4% is per SAE feature on one
+    # rotary pair on trained checkpoints, 21.4% is per SAE feature on one
     # dictionary. The paper must say so rather than imply a shared scale.
     assert groups("feat_sweep_units") == [()]
     assert "not directly comparable" in TEX_FLAT
