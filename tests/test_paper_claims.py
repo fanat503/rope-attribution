@@ -1194,6 +1194,81 @@ CLAIMS += (
         r"App\.~\\ref\{app:qkcase\} & \$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$ rotary; total "
         r"\$\\le (\d+\.\d+)\\%\$ & \\texttt\{results/qk\\_depth\.json :: layers\}",
     ),
+    Claim(
+        "prov_qk_trajectory_row",
+        r"&\s*\$(\d+)\$, \$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\\%\$ & "
+        r"\\texttt\{results/qk\\_trajectory\.json :: pooled\}",
+    ),
+    # ---- the distance trajectory of the feature-pair block --------------------
+    #
+    # The table itself is covered wholesale by VERIFIED_TABLES; the prose quotes
+    # the pooled summaries, the layer split and the pair count, and each capture
+    # is recomputed from results/qk_trajectory.json in the tests below.
+    Claim(
+        "qk_traj_bound",
+        r"subspace of dimension at most \$1\+(\d+)=(\d+)\$",
+    ),
+    Claim(
+        "qk_traj_block",
+        r"the \$(\d+)\\times(\d+)\$ feature-pair block traces a curve",
+    ),
+    Claim(
+        "qk_traj_rank_heads",
+        r"numerical rank is exactly \$(\d+)\$ for all \$(\d+)\$ layer-heads",
+    ),
+    Claim(
+        "qk_traj_rank_app",
+        r"trajectory matrix is exactly \$(\d+)\$ for all \$(\d+)\$ layer-heads",
+    ),
+    Claim(
+        "qk_traj_energy",
+        r"leading direction carries \$(\d+\.\d+)\\%\$ of it on average",
+    ),
+    Claim(
+        "qk_traj_flatten",
+        r"loses \$(\d+\.\d+)\\%\$ of the Frobenius norm",
+    ),
+    Claim(
+        "qk_traj_block_app",
+        r"returns the \$(\d+)\\times(\d+)\$ block of feature-pair terms",
+    ),
+    Claim(
+        "qk_traj_bound_app",
+        r"span of at most \$1\+2\\cdot(\d+)=(\d+)\$ fixed",
+    ),
+    Claim(
+        "qk_traj_matrix",
+        r"numerical rank of the \$(\d+)\\times(\d+)\$ trajectory matrix",
+    ),
+    Claim(
+        "qk_traj_dims",
+        r"Distance enters through all \$(\d+)\$ dimensions",
+    ),
+    Claim(
+        "qk_traj_energy_app",
+        r"leading singular direction carries \$(\d+\.\d+)\\%\$ of the squared "
+        r"singular-value mass, the top four carry \$(\d+\.\d+)\\%\$, and the "
+        r"participation ratio of the trajectory's singular values is \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "qk_traj_heads_pooled",
+        r"Across the \$(\d+)\$ layer-heads the leading singular direction",
+    ),
+    Claim(
+        "qk_traj_flatten_app",
+        r"trajectory to its own mean averages \$(\d+\.\d+)\\%\$, and is between "
+        r"\$(\d+\.\d+)\\%\$ and \$(\d+\.\d+)\\%\$ per head",
+    ),
+    Claim(
+        "qk_traj_layer_curve",
+        r"participation ratio stays below \$(\d+\.\d+)\$ and the flatten error below "
+        r"\$(\d+\.\d+)\$; at the last attributable block they rise to \$(\d+\.\d+)\$ "
+        r"and \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "qk_traj_pairs",
+        r"one passage, \$(\d+)\$ content pairs per head and one checkpoint",
+    ),
     # ---- the same statistics, restated in App.~\ref{app:stats} ----------------
     Claim(
         "stats_between_head_sd_app",
@@ -3493,7 +3568,7 @@ def test_no_model_or_activation_is_reported_anywhere_outside_a_denial() -> None:
 EXEMPT_ALGEBRA: frozenset[str] = frozenset()
 
 # `tabular` blocks whose every cell is verified by a dedicated test.
-VERIFIED_TABLES = ("tab:spectrum", "tab:exact", "tab:qk-depth")
+VERIFIED_TABLES = ("tab:spectrum", "tab:exact", "tab:qk-depth", "tab:qk-trajectory")
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 
@@ -3632,6 +3707,7 @@ def unaccounted_numbers() -> set[str]:
 ATTENTION_COST_PATH = _REPO / "results" / "attention_cost.json"
 QK_PATH = _REPO / "results" / "qk_attribution.json"
 DEPTH_PATH = _REPO / "results" / "qk_depth.json"
+QK_TRAJECTORY_PATH = _REPO / "results" / "qk_trajectory.json"
 USEFULNESS_PATH = _REPO / "results" / "usefulness.json"
 UNCERTAINTY_PATH = _REPO / "results" / "uncertainty.json"
 AGREEMENT_PATH = _REPO / "results" / "agreement.json"
@@ -4022,6 +4098,137 @@ def test_the_depth_table_restates_the_depth_artifact() -> None:
             row["sweep_rotary_sign_flip_fraction"]
             > row["sweep_feature_sign_flip_fraction"]
         ), row
+
+
+def test_the_trajectory_table_restates_the_trajectory_artifact() -> None:
+    """Every cell of Table~\\ref{tab:qk-trajectory} is recomputed from its layer.
+
+    Mutation verdict: swapping two rows, or replacing the top-1 column with the
+    flatten column beside it, fails the per-row comparison; so does a stale
+    artifact after a re-run, because each cell is compared at its own layer. The
+    pooled prose, the layer split and the provenance row are compared against
+    the same artifact, so editing any one of them alone fails here.
+    """
+    data = _artifact(QK_TRAJECTORY_PATH)
+    layers = data["layers"]
+    rows = []
+    for chunk in table_block("tab:qk-trajectory").split(r"\\"):
+        cells = chunk.split("&")
+        if len(cells) != 7:
+            continue
+        plain = [_tex_plain(cell) for cell in cells]
+        if not (plain[0].isdigit() and plain[1].isdigit()):
+            continue
+        rows.append(plain)
+    assert len(rows) == len(layers) == 5, rows
+
+    for plain, layer in zip(rows, layers, strict=True):
+        where = f"trajectory layer {plain[0]}"
+        assert int(plain[0]) == layer["sae_layer"], where
+        assert int(plain[1]) == layer["attention_layer"], where
+        pr = layer["trajectory_participation_ratio"]
+        assert_paper_number_matches(pr["mean"], plain[2], f"{where} PR")
+        assert_paper_number_matches(pr["min"], plain[3], f"{where} PR min")
+        assert_paper_number_matches(pr["max"], plain[4], f"{where} PR max")
+        assert_paper_number_matches(
+            layer["trajectory_energy_top1"]["mean"] * 100, plain[5], f"{where} top-1"
+        )
+        assert_paper_number_matches(
+            layer["flatten_relative_error"]["mean"] * 100, plain[6], f"{where} flatten"
+        )
+
+    # The bound is an identity about the family, and every layer attains it.
+    assert data["rank_bound"] == 1 + data["rotary_dim"]
+    for layer in layers:
+        assert int(layer["trajectory_rank_numerical"]["mean"]) == data["rank_bound"]
+
+    bound_channels, bound_total = groups("qk_traj_bound")[0]
+    assert int(bound_channels) == data["rotary_dim"]
+    assert int(bound_total) == data["rank_bound"]
+    pairs, bound_app = groups("qk_traj_bound_app")[0]
+    assert int(pairs) == data["rotary_dim"] // 2
+    assert int(bound_app) == data["rank_bound"]
+    rank, heads = groups("qk_traj_rank_heads")[0]
+    assert int(rank) == int(data["pooled"]["trajectory_rank_numerical"]["mean"])
+    assert int(heads) == data["n_heads"]
+    rank_app, heads_app = groups("qk_traj_rank_app")[0]
+    assert int(rank_app) == int(data["pooled"]["trajectory_rank_numerical"]["mean"])
+    assert int(heads_app) == data["n_heads"]
+    dims = groups("qk_traj_dims")[0]
+    assert int(dims[0]) == data["rank_bound"]
+
+    matrix_rows, matrix_columns = groups("qk_traj_matrix")[0]
+    assert int(matrix_rows) == len(data["deltas"])
+    assert int(matrix_columns) == data["top_k"] ** 2
+    for chunk in groups("qk_traj_block")[0] + groups("qk_traj_block_app")[0]:
+        assert int(chunk) == data["top_k"]
+
+    pooled = data["pooled"]
+    assert_paper_number_matches(
+        pooled["trajectory_energy_top1"]["mean"] * 100,
+        groups("qk_traj_energy")[0][0],
+        "main top-1 energy",
+    )
+    assert_paper_number_matches(
+        pooled["flatten_relative_error"]["mean"] * 100,
+        groups("qk_traj_flatten")[0][0],
+        "main flatten",
+    )
+    app_energy = groups("qk_traj_energy_app")[0]
+    assert int(groups("qk_traj_heads_pooled")[0][0]) == data["n_heads"]
+    assert_paper_number_matches(
+        pooled["trajectory_energy_top1"]["mean"] * 100,
+        app_energy[0],
+        "appendix top-1 energy",
+    )
+    assert_paper_number_matches(
+        pooled["trajectory_energy_top4"]["mean"] * 100,
+        app_energy[1],
+        "appendix top-4 energy",
+    )
+    assert_paper_number_matches(
+        pooled["trajectory_participation_ratio"]["mean"],
+        app_energy[2],
+        "appendix participation ratio",
+    )
+    app_flatten = groups("qk_traj_flatten_app")[0]
+    for key, written, what in (
+        ("mean", app_flatten[0], "appendix flatten mean"),
+        ("min", app_flatten[1], "appendix flatten min"),
+        ("max", app_flatten[2], "appendix flatten max"),
+    ):
+        assert_paper_number_matches(
+            pooled["flatten_relative_error"][key] * 100, written, what
+        )
+
+    below_pr, below_flat, last_pr, last_flat = groups("qk_traj_layer_curve")[0]
+    assert max(
+        layer["trajectory_participation_ratio"]["mean"] for layer in layers[:4]
+    ) < float(below_pr)
+    assert max(
+        layer["flatten_relative_error"]["mean"] for layer in layers[:4]
+    ) < float(below_flat)
+    assert_paper_number_matches(
+        layers[-1]["trajectory_participation_ratio"]["mean"], last_pr, "last-layer PR"
+    )
+    assert_paper_number_matches(
+        layers[-1]["flatten_relative_error"]["mean"], last_flat, "last-layer flatten"
+    )
+
+    content_pairs = groups("qk_traj_pairs")[0]
+    assert int(content_pairs[0]) == data["pairs_per_head"]
+    for layer in layers:
+        for head in layer["heads"]:
+            assert head["n_content_pairs"] == data["pairs_per_head"]
+
+    prov = groups("prov_qk_trajectory_row")[0]
+    assert int(prov[0]) == data["rank_bound"]
+    assert_paper_number_matches(
+        pooled["trajectory_energy_top1"]["mean"] * 100, prov[1], "provenance top-1"
+    )
+    assert_paper_number_matches(
+        pooled["flatten_relative_error"]["mean"] * 100, prov[2], "provenance flatten"
+    )
 
 
 def test_the_attention_provenance_rows_name_the_measured_values() -> None:

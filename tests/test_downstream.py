@@ -101,7 +101,7 @@ def _tiny_llama():
     return transformers.LlamaForCausalLM(cfg).eval(), cfg
 
 
-def _tiny_gpt_neox():
+def _tiny_gpt_neox(rotary_pct: float = 1.0):
     transformers = pytest.importorskip("transformers")
     cfg = transformers.GPTNeoXConfig(
         vocab_size=64,
@@ -110,7 +110,7 @@ def _tiny_gpt_neox():
         num_hidden_layers=1,
         num_attention_heads=4,
         max_position_embeddings=64,
-        rotary_pct=1.0,
+        rotary_pct=rotary_pct,
         rotary_emb_base=10000.0,
     )
     return transformers.GPTNeoXForCausalLM(cfg).eval(), cfg
@@ -167,22 +167,47 @@ def test_qk_normalised_attention_is_refused() -> None:
     ],
     ids=["rope_parameters", "rotary_pct", "top_level"],
 )
-def test_partial_rotation_is_refused_wherever_the_config_declares_it(setter) -> None:
+def test_partial_rotation_rotates_only_the_declared_prefix(setter) -> None:
     """pythia-160m keeps its 0.25 inside ``rope_parameters``.
 
-    Reading only the top-level field let exactly the checkpoint the paper
-    measures through the guard, where the hook would have rotated all 64
-    channels instead of the 16 the model rotates.
+    The surrogate must rotate the 16 of 64 channels the model actually
+    rotates and pass the other 48 through untouched.  The same test pins all
+    three config shapes the two families use.
 
-    Mutation verdict: reverting ``_partial_rotary_factor`` to
-    ``getattr(cfg, "partial_rotary_factor", 1.0)`` makes the first case
-    construct the surrogate without raising; the other two cases still pass,
-    so the parametrisation is what pins the real config shape.
+    Mutation verdict: rotating the whole head fails the tail equality;
+    taking the frequency ladder from ``head_dim`` instead of ``rotary_dim``
+    makes ``rotary_dim`` two but builds a 32-pair kernel, so the transform
+    raises a shape error.
     """
     model, cfg = _tiny_llama()
     setter(cfg)
-    with pytest.raises(NotImplementedError, match="partial rotation"):
-        D.SurrogateAttention(model)
+    surrogate = D.SurrogateAttention(model)
+    assert surrogate.rotary_dim == 2
+    assert surrogate._freqs.shape == (1,)
+
+    q = torch.randn(1, 5, 4, 8)
+    transformed = surrogate._transform_q(q.reshape(1, 5, 32)).reshape(1, 5, 4, 8)
+    # The 2 rotated channels move; the 6 unrotated channels are byte-identical.
+    assert not torch.equal(transformed[..., :2], q[..., :2])
+    torch.testing.assert_close(transformed[..., 2:], q[..., 2:])
+    # The prefix is exactly the inverse rotation the hook promises.
+    cos, sin = surrogate._cos_sin_neg(5, q.device, q.dtype)
+    torch.testing.assert_close(
+        transformed[..., :2], D.apply_rope_torch(q[..., :2], cos, sin)
+    )
+
+
+def test_a_partial_rotation_fused_model_uses_the_same_path() -> None:
+    """GPT-NeoX packs q/k/v and declares the factor as ``rotary_pct``."""
+    model, cfg = _tiny_gpt_neox(rotary_pct=0.25)
+    ids = torch.randint(0, 64, (1, 16))
+    exact = D.nll(model, ids)
+    assert math.isfinite(exact)
+    with D.SurrogateAttention(model, deltas=D.observed_distances(16)):
+        surrogate = D.nll(model, ids)
+    assert math.isfinite(surrogate)
+    assert surrogate != exact
+    assert D.SurrogateAttention(model).rotary_dim == 2
 
 
 def test_the_rotary_base_is_read_from_the_parameter_block() -> None:

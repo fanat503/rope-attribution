@@ -35,11 +35,15 @@ loss sees the surrogate through the model's ordinary attention path.
 
 Scope and honesty
 -----------------
-Supported: full-rotation attention with separate ``q_proj``/``k_proj`` or a
-fused ``query_key_value``, and no QK-normalisation. Models with QK-norm or
-partial rotation are refused rather than measured incorrectly. The live run
-needs torch, transformers and the checkpoints; the unit tests use a randomly
-initialised tiny model, so the mathematics is checked without a download.
+Supported: full- and partial-rotation attention with separate
+``q_proj``/``k_proj`` or a fused ``query_key_value``, and no QK-normalisation.
+Under partial rotation the surrogate acts on the rotated prefix only; the
+unrotated tail is passed through untouched, so a model such as
+``EleutherAI/pythia-160m`` (``partial_rotary_factor = 0.25``) is measured on
+the tensor it actually rotates. Models with QK-norm are refused rather than
+measured incorrectly. The live run needs torch, transformers and the
+checkpoints; the unit tests use a randomly initialised tiny model, so the
+mathematics is checked without a download.
 """
 
 from __future__ import annotations
@@ -239,10 +243,16 @@ class SurrogateAttention(AbstractContextManager):
             raise ValueError("RoPE needs an even head dimension")
         self.theta = float(theta if theta is not None else _rope_theta(self.cfg))
         factor = _partial_rotary_factor(self.cfg)
-        if factor != 1.0:
-            raise NotImplementedError(
-                "partial rotation is not supported by the downstream surrogate; "
-                f"config says partial_rotary_factor={factor}"
+        self.rotary_dim = int(round(self.head_dim * factor))
+        if self.rotary_dim <= 0 or self.rotary_dim > self.head_dim:
+            raise ValueError(
+                "partial_rotary_factor must rotate a non-empty prefix of the "
+                f"head: head_dim={self.head_dim}, factor={factor}"
+            )
+        if self.rotary_dim % 2:
+            raise ValueError(
+                "RoPE needs an even rotated width: "
+                f"head_dim={self.head_dim}, factor={factor}"
             )
         for attn in self.attns:
             if hasattr(attn, "q_norm") or hasattr(attn, "k_norm"):
@@ -259,7 +269,13 @@ class SurrogateAttention(AbstractContextManager):
         self._handles: list[Any] = []
         self._tables: dict[tuple[int, str, Any], tuple[Any, Any]] = {}
         self._kernel: dict[tuple[str, Any], tuple[Any, Any]] = {}
-        self._freqs = np.asarray(inv_freq(self.head_dim, self.theta), dtype=np.float64)
+        # The frequency ladder belongs to the rotated prefix only.  Using the
+        # full head width here would rotate the unrotated tail with a ladder
+        # the model never applies, which is the exact failure the old refusal
+        # was protecting against.
+        self._freqs = np.asarray(
+            inv_freq(self.rotary_dim, self.theta), dtype=np.float64
+        )
 
     # -- kernels ---------------------------------------------------------
 
@@ -301,6 +317,15 @@ class SurrogateAttention(AbstractContextManager):
 
     # -- hooks -----------------------------------------------------------
 
+    def _rotated_prefix(self, shaped: Any) -> tuple[Any, Any]:
+        """Split ``(B, T, H, D)`` into the rotated prefix and the untouched tail."""
+        return shaped[..., : self.rotary_dim], shaped[..., self.rotary_dim :]
+
+    def _join_prefix(self, rotated: Any, tail: Any) -> Any:
+        if self.rotary_dim == self.head_dim:
+            return rotated
+        return torch_cat((rotated, tail))
+
     def _transform_q(self, x: Any) -> Any:
         batch, n_tokens, inner = x.shape
         if inner % self.head_dim:
@@ -308,7 +333,9 @@ class SurrogateAttention(AbstractContextManager):
         heads = inner // self.head_dim
         cos, sin = self._cos_sin_neg(n_tokens, x.device, x.dtype)
         shaped = x.reshape(batch, n_tokens, heads, self.head_dim)
-        return apply_rope_torch(shaped, cos, sin).reshape(batch, n_tokens, inner)
+        rotary, tail = self._rotated_prefix(shaped)
+        rotated = apply_rope_torch(rotary, cos, sin)
+        return self._join_prefix(rotated, tail).reshape(batch, n_tokens, inner)
 
     def _transform_k(self, x: Any) -> Any:
         batch, n_tokens, inner = x.shape
@@ -318,8 +345,10 @@ class SurrogateAttention(AbstractContextManager):
         cos_mean, sin_mean = self._surrogate_kernel(n_tokens, x.device, x.dtype)
         cos, sin = self._cos_sin_neg(n_tokens, x.device, x.dtype)
         shaped = x.reshape(batch, n_tokens, heads, self.head_dim)
-        surrogate = apply_surrogate_torch(shaped, cos_mean, sin_mean)
-        return apply_rope_torch(surrogate, cos, sin).reshape(batch, n_tokens, inner)
+        rotary, tail = self._rotated_prefix(shaped)
+        surrogate = apply_surrogate_torch(rotary, cos_mean, sin_mean)
+        rotated = apply_rope_torch(surrogate, cos, sin)
+        return self._join_prefix(rotated, tail).reshape(batch, n_tokens, inner)
 
     def _hook_q(self, _module: Any, _inputs: Any, output: Any) -> Any:
         return self._transform_q(output)

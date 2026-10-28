@@ -630,8 +630,15 @@ same sweep with the matching dictionary at every layer that still has an
 attention block after it (five dictionaries, layers $0$--$4$) keeps the rotary
 rate between $21.3\%$ and $27.5\%$, with the total rate below it at every layer
 (Table~\ref{tab:qk-depth}). One layer of one $70$M-parameter checkpoint is an
-existence proof, not a population estimate; five layers are a depth check, not a
-survey.
+existence proof; five layers are a depth check, not a survey.
+
+The distance dependence has a shape. Sweeping $\delta$ over the same
+grid, the $32\times32$ feature-pair block traces a curve in a
+subspace of dimension at most $1+16=17$ --- one constant plus a cosine and a
+sine per rotary pair --- and its numerical rank is exactly $17$ for all $40$
+layer-heads. Yet energy is concentrated: the leading direction carries
+$79.7\%$ of it on average, and replacing the trajectory by its distance mean
+loses $43.9\%$ of the Frobenius norm (Appendix~\ref{app:qktraj}).
 
 \subsection{What context extension fixes, and what it does not}
 \label{sec:context}
@@ -669,14 +676,14 @@ runs over are random, and the synthetic result is a property of random direction
 in a $64$-dimensional head, not of real feature geometry. Section~\ref{sec:trained} uses the three checkpoints and their
 content-pair draws at $135$--$160$M parameters, and Section~\ref{sec:features}
 runs the attribution on the public dictionaries of one model: five
-dictionaries, one per attributable layer, sharing one passage and one seed.
+dictionaries, one per attributable layer, with one passage and one seed.
 Section~\ref{sec:trained}
 confirms the identities on their activations; the checkpoints are measurement
 instruments, but are not evaluated on a task. Neither connects to a task: no
-retrieval benchmark, no language-modelling evaluation, no causal patching. Five
-layers of one checkpoint describe that checkpoint's depth --- none of its
-content is evaluated on a downstream task. One passage and $24$ content pairs per
-head is an existence proof about real features, not a population estimate.
+retrieval benchmark, no language-modelling evaluation, no causal patching. The
+five layers describe that one checkpoint's depth, and none of its
+content is evaluated downstream. One passage and $24$ content pairs per head
+remain an existence proof, not a population estimate.
 
 \textbf{Single synthetic configuration.} The main synthetic experiments use
 $d = 64$, $\mathrm{base} = 10000$, $s = 32$, pre-extension context $2048$,
@@ -693,12 +700,10 @@ $d = 64$, and the published $10^{4}$ is mid-range rather than privileged. The
 grid-density drift is the other configuration dependence: the pooled rate moves
 from $24.4\%$ to $32.1\%$ over the three grids actually run.
 
-\textbf{Approximation choices.} The linearization threshold is not swept;
-Appendix~\ref{app:scope} records what a different truncation would move.
-
-\textbf{Scope of the exactness claim.} Exactness removes one objection to
-RoPE-based attribution, not all of them; Appendix~\ref{app:scope} states the
-boundary.
+\textbf{Approximation choices and the scope of exactness.} The linearization
+threshold is not swept; Appendix~\ref{app:scope} records what a different
+truncation would move, and states the boundary of the exactness claim: it
+removes one objection to RoPE-based attribution, not all of them.
 
 \section{Related Work}
 \label{sec:related}
@@ -727,7 +732,7 @@ and a linear phase. Score attribution is exact for a fixed position pair, to
 $3.9\times10^{-14}$, the query and key magnitudes are exactly
 position-independent, and position-conditionality rather than bilinearity is the
 obstruction: a feature's contribution reverses sign across distance while the
-total stays additive to $5.0\times10^{-14}$. The feature-level attribution of
+total stays additive to $5.0\times10^{-14}$. Feature-level attribution of
 attention \emph{weights} inherits neither exactness nor additivity: the softmax
 is a second obstruction. Context extension changes which
 channels can be linearized without touching the worst one: \yarn\ buys a
@@ -736,9 +741,8 @@ $0.996840$, not a safe global linearization. Partial RoPE is the clean
 exception: its unrotated sub-score is exactly position-free, and the rotated
 block remains orthogonal and preserves the norm exactly.
 On a trained dictionary the rotary subspace reverses sign on one cell in five
-while the total profile hides it. There is no downstream task, no retrieval
-benchmark, no accuracy figure; one dictionary at one layer is an existence
-proof, not a population claim. Appendix~\ref{app:note} corrects two informal statements.
+while the total profile hides it. There is no retrieval benchmark, no accuracy
+figure.
 
 % =====================================================================
 % Force the appendix onto a fresh page, so the page-limit check measures the
@@ -822,6 +826,7 @@ Sec.~\ref{sec:features} & $3.1\!\times\!10^{-14}$, $2.7\!\times\!10^{-6}$ & \tex
  & $4.7\%$, $10.0\%$, $0.03\%$, $22.4\%$ & same, \texttt{aggregate.*.sign\_flip\_fraction} \\
  & $1.46\times$, $3.71\times$ & same, \texttt{base\_share\_mean}, \texttt{top\_k\_share\_mean} \\
 App.~\ref{app:qkcase} & $21.3$--$27.5\%$ rotary; total $\le 6.75\%$ & \texttt{results/qk\_depth.json :: layers} \\
+ & $17$, $79.7\%$, $43.9\%$ & \texttt{results/qk\_trajectory.json :: pooled} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1742,6 +1747,79 @@ last block, where the unrotated tail carries less of the score.
     \bottomrule
   \end{tabular}
 \end{table*}
+
+\subsection{The trajectory of the feature-pair block}
+\label{app:qktraj}
+
+Section~\ref{sec:features} fixes a distance and asks what the decomposition says
+there; the complementary question is what it does as the distance moves, which
+the method paper leaves to future work. We measure that exactly, without a fit,
+on the same head, passage, dictionary and seed.
+
+For a fixed content pair $(m,n)$ and distance $\delta$,
+\texttt{attribution\_terms} returns the $32\times32$ block of feature-pair terms
+$C_{ij}(\delta)=\langle a_i(m),R_\delta b_j(n)\rangle$. Under RoPE each entry is
+a constant plus one cosine and one sine per rotary frequency pair,
+\begin{equation}
+  C_{ij}(\delta) = A_{ij} + \sum_{k=1}^{8}
+  \bigl[X_{ij,k}\cos(\delta\,\invf_k) + Y_{ij,k}\sin(\delta\,\invf_k)\bigr],
+\end{equation}
+so the vectorised curve lies in the span of at most $1+2\cdot8=17$ fixed
+matrices, whatever the dictionary width. That is an identity about the family,
+not a rank estimate. The numerical rank of the $48\times1024$ trajectory matrix
+is exactly $17$ for all $40$ layer-heads: the bound is attained, so no smaller
+constant would do. Distance enters through all $17$ dimensions; the question is
+how the energy is distributed over them.
+
+Unevenly. Across the $40$ layer-heads the leading singular direction carries
+$79.7\%$ of the squared singular-value mass, the top four carry $92.7\%$, and
+the participation ratio of the trajectory's singular values is $1.64$. Each
+$C(\delta)$ is dense, but the curve it traces is effectively one-dimensional.
+A position-free summary --- the distance mean --- therefore keeps the leading
+direction and drops the rest: the relative Frobenius distance from the
+trajectory to its own mean averages $43.9\%$, and is between $20.6\%$ and
+$72.5\%$ per head (Table~\ref{tab:qk-trajectory}). This is the matrix form of
+the scalar result in Section~\ref{sec:features}: the mean is not wrong about the
+leading term, and it is wrong about the part that changes.
+
+The depth profile has one clear outlier. In the first four rows of
+Table~\ref{tab:qk-trajectory} the participation ratio stays below $1.5$ and the
+flatten error below $0.41$; at the last attributable block they rise to $2.46$
+and $0.635$. That is the opposite of what a reader might expect from the depth
+table: where the rotary rate is highest, the trajectory is least compressible.
+The two measurements agree, because a larger rotary share means the
+distance-varying part is a larger share of the matrix.
+
+\begin{table*}[t]
+  \centering
+  \caption{The QK trajectory behind Appendix~\ref{app:qktraj}: the feature-pair
+    block swept over the paper's full distance grid, for eight content pairs per
+    head. ``PR'' is the participation ratio of the trajectory's singular values,
+    ``top-1'' the share of squared singular-value mass in the leading direction,
+    and ``flatten'' the relative Frobenius distance from the trajectory to its
+    own distance mean; the last two are in percent. Each cell is the mean over
+    the eight heads of that layer; the two PR columns beside it give the head
+    range. Source: \texttt{results/qk\_trajectory.json}.}
+  \label{tab:qk-trajectory}
+  \begin{tabular}{rrrrrrr}
+    \toprule
+    dictionary & attention layer & PR & PR min & PR max & top-1 energy & flatten \\
+    \midrule
+    0 & 1 & $1.42$ & $1.15$ & $1.96$ & $84.3$ & $39.2$ \\
+    1 & 2 & $1.47$ & $1.09$ & $1.82$ & $82.9$ & $40.4$ \\
+    2 & 3 & $1.42$ & $1.09$ & $2.09$ & $85.3$ & $36.5$ \\
+    3 & 4 & $1.42$ & $1.18$ & $1.65$ & $84.1$ & $39.9$ \\
+    4 & 5 & $2.46$ & $1.65$ & $3.25$ & $62.0$ & $63.5$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\paragraph{What this does not say.} The trajectory is the feature-pair block
+alone; the base bucket and the query-feature terms are separate scalars and are
+not part of the matrix. It covers one passage, $8$ content pairs per head and
+one checkpoint, so the layer profile describes that checkpoint, not a
+population. And it stops at the score: the softmax is a second obstruction, so
+nothing here is a claim about attention patterns.
 
 \section{The attention-level cost, in full}
 \label{app:attention}

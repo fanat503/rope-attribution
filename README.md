@@ -59,7 +59,7 @@ paper without a test for it fails the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1639 tests (CPU-only install)
+pytest -q                                        # 1653 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -238,7 +238,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1639 tests (CPU-only install)
+tests/            1653 tests (CPU-only install)
 figures/          twelve figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
