@@ -1531,6 +1531,267 @@ def fig12_qk_case_study() -> FigureRecord:
     )
 
 
+def _load_json_artifact(name: str, schema: str) -> dict:
+    """Read a committed artifact, refusing a different schema.
+
+    The figures must plot the numbers the claim gates read, so a stale or
+    renamed artifact is an error rather than a silent re-derivation.
+    """
+    path = REPO_ROOT / "results" / name
+    if not path.exists():
+        raise FileNotFoundError(f"{path} is missing; run its producer module first")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != schema:
+        raise ValueError(f"{path}: schema {data.get('schema')!r}, expected {schema!r}")
+    return data
+
+
+def _band(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Proposition 5(3): the attainable range of the minimax relative error."""
+    lower = (1.0 - np.cos(x / 2.0)) / 2.0
+    upper = np.sin(np.minimum(x, np.pi) / 2.0)
+    return lower, upper
+
+
+def fig13_collapse_law() -> FigureRecord:
+    """The sign-error rate is a value of a function, not a constant.
+
+    Left: the measured minimax relative error per pair, binned by the phase the
+    window sweeps, against the exact attainable band of Proposition 5(3) and the
+    threshold at ``theta L = 2 pi``. Every model's curve saturates at exactly 1
+    when it reaches the threshold.
+
+    Right: the dilution of Corollary 7. The pair-level error and the score-level
+    error are plotted against window length for the same three checkpoints. On
+    pythia-160m, which rotates 16 of 64 channels, the score-level error stays an
+    order of magnitude below the pair-level one; on the two full-RoPE
+    checkpoints the two curves coincide, because there is no unrotated tail to
+    hide behind.
+    """
+    data = _load_json_artifact("collapse.json", "rope-collapse/v1")
+    models = list(data["models"])
+    fig, (ax_band, ax_ladder) = plt.subplots(
+        1, 2, figsize=(10.6, 4.2), gridspec_kw={"width_ratios": [1.0, 1.0]}
+    )
+
+    grid = np.geomspace(1e-3, 1e4, 400)
+    lower, upper = _band(grid)
+    ax_band.fill_between(
+        grid, lower, upper, color="#E8E8E8", zorder=0,
+        label="attainable range",
+    )
+    ax_band.plot(grid, lower, color="#8A8A8A", lw=0.9, ls="--", zorder=1)
+    ax_band.plot(grid, upper, color="#8A8A8A", lw=0.9, ls="--", zorder=1)
+    ax_band.axvline(2.0 * np.pi, color=PALETTE[1], lw=1.2, ls=":", zorder=1)
+    ax_band.axhline(UNIT_RELATIVE_ERROR, color="#444444", lw=0.8, ls=":", zorder=1)
+    ax_band.text(
+        2.0 * np.pi * 1.12, 0.62, r"$\theta L = 2\pi$", color=PALETTE[1],
+        fontsize=8, rotation=90, va="center",
+    )
+
+    rows: list[list[object]] = []
+    for index, model in enumerate(models):
+        bins = sorted(model["bins"], key=lambda b: b["x_lo"])
+        centres = np.sqrt(np.asarray([b["x_lo"] for b in bins]) * np.asarray([b["x_hi"] for b in bins]))
+        y = np.asarray([b["rel_minimax_median"] for b in bins])
+        ax_band.plot(
+            centres, y, color=_colour(index), marker="o", ms=3.0,
+            label=model["model_id"], zorder=3,
+        )
+        for b, cxx, yy in zip(bins, centres, y, strict=True):
+            rows.append(
+                [
+                    model["model_id"], float(b["x_lo"]), float(b["x_hi"]), float(cxx),
+                    int(b["n"]), float(b["rel_minimax_median"]),
+                    float(b["rel_minimax_min"]), float(b["rel_minimax_max"]),
+                    float(b["rel_mean_median"]), float(b["past_threshold_fraction"]),
+                ]
+            )
+    ax_band.set_xscale("log")
+    ax_band.set_xlim(1e-3, 1e4)
+    ax_band.set_ylim(0.0, 1.06)
+    ax_band.set_xlabel(r"phase swept by the window, $x=\theta L$ (rad)")
+    ax_band.set_ylabel("minimax relative error")
+    ax_band.set_title("The rate is a value of this function", fontsize=9)
+    ax_band.legend(fontsize=7, loc="lower right")
+
+    for index, model in enumerate(models):
+        spans = [int(r["span"]) for r in model["by_window"]]
+        channel = [float(r["channel_rel_minimax_median"]) for r in model["by_window"]]
+        score = [float(r["score_rel_median"]) for r in model["by_window"]]
+        tail = [float(r["tail_share_median"]) for r in model["by_window"]]
+        ax_ladder.plot(
+            spans, channel, color=_colour(index), ls="--", marker="o", ms=2.5,
+            label=f"{model['model_id']} (pair)",
+        )
+        ax_ladder.plot(
+            spans, score, color=_colour(index), ls="-", marker="s", ms=2.5,
+            label=f"{model['model_id']} (score)",
+        )
+        for span, ch, sc, tl in zip(spans, channel, score, tail, strict=True):
+            rows.append([model["model_id"], "ladder", span, "", "", ch, "", "", sc, tl])
+    ax_ladder.set_xscale("log", base=2)
+    ax_ladder.set_xlabel("window length $L$ (tokens)")
+    ax_ladder.set_ylabel("median relative error")
+    ax_ladder.set_ylim(0.0, 1.06)
+    ax_ladder.set_title("Partial RoPE hides it; full RoPE does not", fontsize=9)
+    ax_ladder.legend(fontsize=5.6, ncol=1, loc="upper left")
+
+    stem = "fig13_collapse_law"
+    png = _save(fig, stem, "A position-free summary collapses at $\\theta L = 2\\pi$")
+    csv_path = _write_csv(
+        stem,
+        [
+            "model_id", "x_lo", "x_hi", "x_centre", "n", "rel_minimax_median",
+            "rel_minimax_min", "rel_minimax_max", "rel_mean_median", "score_or_tail",
+        ],
+        rows,
+    )
+    pythia = next(m for m in models if m["model_id"].startswith("EleutherAI"))
+    full = next(m for m in models if m["model_id"].startswith("JackFram"))
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/collapse.json (three checkpoints, 32 content pairs per head, "
+            "windows 8..4096); the band is Proposition 5(3), drawn from the formula"
+        ),
+        headline=(
+            f"every checkpoint reaches a pair-level error of exactly 1.000 at the "
+            f"threshold and stays there; at L=4096 the score-level error is "
+            f"{pythia['by_window'][-1]['score_rel_median']:.3f} on partial-RoPE "
+            f"pythia-160m against {full['by_window'][-1]['score_rel_median']:.3f} on "
+            f"full-RoPE llama-160m"
+        ),
+        extra=(
+            f"png={png.name} csv={csv_path.name} "
+            f"threshold_span_pythia="
+            f"{pythia['threshold_span_per_pair'][0]:.1f}"
+        ),
+    )
+
+
+def fig14_intervention() -> FigureRecord:
+    """What the attribution is worth when you act on it.
+
+    Left: for each cell, the achieved-over-intended suppression of the pair the
+    position-free table ranks first. ``1`` is a faithful summary; values below
+    zero are cells where the edit *amplified* the score it was meant to suppress.
+    The exact rule is not plotted as a competitor --- it is 1 by construction ---
+    so the panel is the measured cost of the surrogate alone.
+
+    Right: the closed-form prediction of the post-softmax change against the
+    measured change for the same cells. This is a harness identity, and it is the
+    evidence that the per-pair decomposition plus softmax is the whole mechanism.
+    """
+    data = _load_json_artifact("intervention.json", "rope-intervention/v1")
+    models = list(data["models"])
+    fig, (ax_ratio, ax_identity) = plt.subplots(
+        1, 2, figsize=(10.6, 4.2), gridspec_kw={"width_ratios": [1.15, 1.0]}
+    )
+
+    rows: list[list[object]] = []
+    for index, model in enumerate(models):
+        cells = [c for c in model["cells"] if c["surrogate"]["suppression_ratio"] is not None]
+        ratios = np.asarray([c["surrogate"]["suppression_ratio"] for c in cells])
+        order = np.argsort(ratios)
+        xs = np.arange(order.size, dtype=np.float64)
+        colours = [
+            PALETTE[1] if ratios[i] < 0.0 else _colour(index) for i in order
+        ]
+        ax_ratio.bar(xs, ratios[order], color=colours, width=0.8)
+        ax_ratio.axhline(0.0, color="#333333", lw=0.9)
+        ax_ratio.axhline(1.0, color="#333333", lw=0.9, ls="--")
+        ax_ratio.set_yscale("symlog", linthresh=0.1)
+        ax_ratio.set_xlabel("cells, sorted within checkpoint")
+        ax_ratio.set_ylabel("achieved / intended suppression")
+        ax_ratio.set_title(
+            f"{model['model_id']}: {100 * model['pooled']['surrogate_sign_reversal_fraction']:.0f}% "
+            f"of edits move the score the wrong way",
+            fontsize=8,
+        )
+        for c in cells:
+            rows.append(
+                [
+                    model["model_id"], c["layer"], c["head"], c["query"], c["delta"],
+                    c["surrogate"]["suppression_ratio"],
+                    c["surrogate"]["predicted_delta_attention"],
+                    c["surrogate"]["delta_attention"],
+                    c["surrogate"]["prediction_error"], int(c["same_pair"]),
+                ]
+            )
+        del index
+
+    ax_ratio.text(
+        0.02, 0.04, "red = sign reversed\n(dashed line = faithful)",
+        transform=ax_ratio.transAxes, fontsize=7,
+        bbox={"facecolor": "white", "edgecolor": "#BBBBBB", "pad": 3.0},
+    )
+
+    predicted: list[float] = []
+    measured: list[float] = []
+    for model in models:
+        for c in model["cells"]:
+            predicted.append(abs(float(c["exact"]["predicted_delta_attention"])))
+            measured.append(abs(float(c["exact"]["delta_attention"])))
+    predicted_arr = np.asarray(predicted)
+    measured_arr = np.asarray(measured)
+    keep = (predicted_arr > 0.0) & (measured_arr > 0.0)
+    ax_identity.loglog(
+        measured_arr[keep], predicted_arr[keep], "o", ms=3.0,
+        color=PALETTE[0], alpha=0.8,
+    )
+    limits = [
+        max(1e-12, float(min(measured_arr[keep].min(), predicted_arr[keep].min())) / 4.0),
+        float(max(measured_arr[keep].max(), predicted_arr[keep].max())) * 4.0,
+    ]
+    ax_identity.plot(limits, limits, color="#333333", lw=0.9, ls="--")
+    ax_identity.set_xlim(limits)
+    ax_identity.set_ylim(limits)
+    ax_identity.set_xlabel("measured $|\\Delta$ attention$|$")
+    ax_identity.set_ylabel("closed-form prediction")
+    ax_identity.set_title("The closed form is the mechanism", fontsize=9)
+    worst = max(
+        max(float(c["exact"]["prediction_error"]) for c in model["cells"])
+        for model in models
+    )
+    ax_identity.text(
+        0.02, 0.96, f"worst |predicted - measured|={worst:.1e}",
+        transform=ax_identity.transAxes, va="top", fontsize=7,
+        bbox={"facecolor": "white", "edgecolor": "#BBBBBB", "pad": 3.0},
+    )
+
+    stem = "fig14_intervention"
+    png = _save(fig, stem, "The price of a position-free summary, measured")
+    csv_path = _write_csv(
+        stem,
+        [
+            "model_id", "layer", "head", "query", "delta", "suppression_ratio",
+            "predicted_delta_attention", "measured_delta_attention",
+            "prediction_error", "same_pair",
+        ],
+        rows,
+    )
+    total_cells = sum(m["n_cells"] for m in models)
+    total_reversed = sum(
+        round(m["pooled"]["surrogate_sign_reversal_fraction"] * m["n_cells"]) for m in models
+    )
+    differing = sum(m["n_selection_differs"] for m in models)
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/intervention.json (three checkpoints, one 320-token passage, "
+            "32 heads per checkpoint, one pair ablated in q_proj only)"
+        ),
+        headline=(
+            f"{total_reversed} of {total_cells} edits suppress the score with the "
+            f"wrong sign; the exact and surrogate selections differ in {differing} "
+            f"cells, and the closed form reproduces every intervened forward pass "
+            f"to {worst:.0e}"
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
+
+
 def _method_rows() -> dict[str, list[dict]]:
     """Call ``experiments.method_spectrum`` once and group it by method."""
     rows = method_spectrum(
@@ -1646,6 +1907,8 @@ def main() -> int:
         fig10_seed_variance(),
         fig11_sensitivity_sweep(),
         fig12_qk_case_study(),
+        fig13_collapse_law(),
+        fig14_intervention(),
     ]
     readme = _write_readme(records)
 

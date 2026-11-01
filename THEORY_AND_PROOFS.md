@@ -255,7 +255,186 @@ in `results/usefulness.json`: the numerator is a sum of per-pair errors, while
 the denominator is the signed total, and the total can be small exactly where the
 pairs disagree.
 
-## 6. What the measurements check, and what they do not
+## 6. Position-free summaries collapse at `theta * L = 2*pi`
+
+Section 5 prices the best position-free scalar on a *fixed* grid and reports one
+number. This section replaces the number with the function it is a value of, so
+that the rate can be predicted rather than tabulated.
+
+Fix one rotary pair. Its contribution is
+
+```text
+c(delta) = rho cos(theta delta - psi),   rho > 0, theta > 0,
+```
+
+with `rho` and `psi` fixed by the content (Section 2). Let `W = [a, a + L]` be a
+window of distances and put `x = theta L`, the number of radians the pair sweeps
+across it. Define the minimax error of a position-free summary as
+
+```text
+E(W)   = min_{c0 in R} max_{delta in W} |c(delta) - c0|,
+E_rel  = E(W) / rho.
+```
+
+`E` is the error of the *best possible* constant, so every particular choice of
+summary --- the per-feature mean, the least-squares fit, the value at one chosen
+distance --- is at least this wrong.
+
+The window is treated as an interval of distances. The model realizes integer
+distances only; the interval is the range the summary is fitted over, which is
+what a practitioner chooses. This is stated because it is a modelling choice, not
+an identity.
+
+**Proposition 5 (threshold).**
+
+1. If `x >= 2 pi`, then `E_rel = 1` exactly.
+2. If `x < 2 pi`, then `E_rel >= (1 - cos(x/2)) / 2`, with equality when `W` is
+   centred on a maximum or a minimum of `c`.
+3. As the placement of `W` varies, the achievable values of `E_rel` fill exactly
+   the interval
+
+   ```text
+   [ (1 - cos(x/2)) / 2 ,  sin(min(x, pi)/2) ].
+   ```
+
+   So (1) and (2) are the two ends of one interval: for `x < 2 pi` the best
+   placement is strictly better than the worst, and at `x = 2 pi` the interval
+   collapses to the single point `1`, where *every* placement is equally bad.
+
+**Proof of (1).** The phase map `delta -> theta delta - psi` sends `W` onto an
+interval of length `x >= 2 pi`. Any interval of that length contains a phase
+congruent to `0` and a phase congruent to `pi` modulo `2 pi`, so `c` attains both
+`rho` and `-rho` on `W`. For any `c0`,
+
+```text
+max(|rho - c0|, |-rho - c0|) = rho + |c0| >= rho,
+```
+
+with equality at `c0 = 0`. Hence `E = rho`. QED.
+
+**Proof of (2).** Scale `rho = 1`. Let `I` be the phase interval, of length
+`x < 2 pi`, and let `R(I) = max_I cos - min_I cos`, so that `E = R(I)/2`. It
+suffices to show `R(I) >= 1 - cos(x/2)`.
+
+*Case (a): `I` contains a phase congruent to `0`.* Then `max_I cos = 1`. Let
+`d` be the larger of the two distances from that phase to the endpoints of `I`;
+since the two distances sum to `x`, `d >= x/2`. If `d <= pi`, the endpoint at
+distance `d` has value `cos d <= cos(x/2)`, because `cos` is decreasing on
+`[0, pi]` and `x/2 <= d <= pi`. If `d > pi`, then `I` also contains the phase at
+distance `pi`, where `cos = -1 <= cos(x/2)`. Either way `min_I cos <= cos(x/2)`,
+so `R(I) >= 1 - cos(x/2)`.
+
+*Case (b): `I` contains a phase congruent to `pi`.* Then `min_I cos = -1`. With
+`d >= x/2` the larger endpoint distance from that phase: if `d <= pi`, the
+endpoint value is `-cos d >= -cos(x/2)`, so `max_I cos >= -cos(x/2)` and
+`R(I) >= 1 - cos(x/2)`; if `d > pi`, `I` contains the adjacent peak, so
+`max_I cos = 1` and `R(I) = 2 >= 1 - cos(x/2)`.
+
+*Case (c): `I` contains neither.* Then `cos` is strictly monotone on `I`, so `I`
+lies inside a monotone branch, whose length is `pi`; in particular `x < pi`. Write
+`I = [u, u + x]` with `0 < u` and `u + x < pi`. Then
+
+```text
+R(I) = cos u - cos(u + x) = 2 sin(u + x/2) sin(x/2) >= 2 sin^2(x/2)
+     = 1 - cos x >= 1 - cos(x/2),
+```
+
+using `u + x/2 >= x/2` and `sin` increasing on `[0, pi/2]`, then `x > x/2` and
+`cos` decreasing on `[0, pi]`.
+
+Equality in case (a) requires `d = x/2`, i.e. both endpoints equidistant from the
+peak: `W` centred on a maximum. Symmetrically in case (b) for a minimum. QED.
+
+**Proof of (3).** Scale `rho = 1` and let `I = [a, a + x]` be the phase interval,
+so `E_rel = R(I)/2` with `R` the range of `cos` on `I`. The set of ranges
+attained as `a` varies is an interval because `a -> R(I_a)` is continuous, so it
+suffices to identify its endpoints.
+
+*Lower endpoint.* Proposition 5(2) gives `R >= 1 - cos(x/2)` for every `a`, and
+the centred placement attains it. Nothing more to show.
+
+*Upper endpoint, `x <= pi`.* Three cases.
+If `I` contains a phase congruent to `0`, then `max_I cos = 1`. Every point of
+`I` lies within `x` of that phase, and `x <= pi`, so `cos >= cos(x)` throughout
+and `R <= 1 - cos x = 2 sin^2(x/2) <= 2 sin(x/2)`.
+If `I` contains a phase congruent to `pi`, the same argument with the sign
+reversed gives `max_I cos <= -cos(x)` and again `R <= 1 - cos x`.
+If `I` contains neither, `cos` has no interior extremum on `I` and is therefore
+monotone there, so `R = |cos a - cos(a+x)| = 2 |sin(a + x/2)| sin(x/2) <= 2 sin(x/2)`.
+The bound is attained by `a + x/2 = pi/2`, i.e. by centring `I` on an
+inflection point of `cos`.
+
+*Upper endpoint, `pi <= x < 2 pi`.* `R <= 2` always, and `R = 2` is attained by
+any interval of length at least `pi`, which necessarily contains both a phase
+congruent to `0` and one congruent to `pi`. Since `sin(min(x, pi)/2) = sin(pi/2)
+= 1` in this range, the stated endpoint is `2` in units of `R`, i.e. `1` in
+units of `E_rel`.
+
+*`x >= 2 pi`.* Both endpoints are `1` by Proposition 5(1). QED.
+
+Two consequences are worth naming because the paper uses them. First, the ceiling
+is reached *only* at `x >= 2 pi` for the best placement, but the *worst* placement
+already reaches it at `x = pi`; a number reported without its window placement is
+therefore ambiguous below `2 pi` and unambiguous above it. Second, `E_rel` is
+continuous and non-decreasing in `x` at fixed placement, and attains every value
+in `[0, 1]` as `x` runs over `[0, 2 pi]`, so every intermediate rate is
+achievable by choosing a window --- which is why a rate quoted without its window
+is not a property of RoPE, only of the grid it was measured on.
+
+**Corollary 6 (the least-squares surrogate inherits the ceiling).** The mean of
+`c` over `W` is `c_bar = rho (sin b - sin a) / x`, where `[a, b]` is the phase
+interval, so
+
+```text
+|c_bar| <= 2 rho / x.
+```
+
+For `x >= 2 pi` the minimax constant is `0` by Proposition 5, hence
+
+```text
+|c_bar - c*| <= 2 rho / x  ->  0.
+```
+
+So the least-squares surrogate used by `usefulness.py` is not a poor choice of
+fitting criterion relative to the minimax one: past the threshold both are at the
+ceiling, and the ceiling is "this pair contributes nothing". The gap between them
+is the price of least squares, and it vanishes as the window grows.
+
+**Corollary 7 (why partial RoPE hides the collapse at score level).** Let a head
+have rotary pairs `K` and unrotated tail `t = q_tail . k_tail`, which does not
+depend on `delta`. Then
+
+```text
+score(delta) = sum_{k in K} c_k(delta) + t,
+error(delta) = sum_{k in K} (c_hat_k - c_k(delta)),
+```
+
+and the score-level relative error is `max_delta |error| / max_delta |score|`.
+The tail appears in the denominator and nowhere in the numerator. Adding a
+constant to the denominator leaves the numerator unchanged and therefore
+*reduces* the relative error, whatever the pairs are doing. At `t = 0` (full
+RoPE) there is no such constant: the denominator is the signed sum of the same
+sinusoids that appear in the numerator, so no dilution is available, and the two
+rates must agree up to cancellation between pairs.
+
+This is the p-dependence in one line: the gap between the pair-level rate
+(`21.4%` on `pythia-70m`) and the score-level rate (`0.017%` in the same
+artefact) is a property of the architecture's rotary fraction (`rotary_pct =
+0.25` there), not a contradiction between two measurements.
+`results/collapse.json` measures the dilution per checkpoint.
+
+**Status of these statements.** Parts (1) and (2) are the textbook fact that the
+best uniform approximation of a continuous function by a constant is its
+midrange, plus the elementary range of a cosine on an interval; see Rivlin,
+*An Introduction to the Approximation of Functions*, and Powell,
+*Approximation Theory and Methods*. They are **not** claimed as new results of
+this paper. What is claimed is the consequence: the sign-error rate reported in
+Section 5 is a value of this function, the threshold at `theta L = 2 pi` is
+where it saturates, and the ratio between the rotary-pair rate and the
+feature-level rate is the rotary fraction. Those are checkable statements about
+this object, and `results/collapse.json` checks them on three checkpoints.
+
+## 7. What the measurements check, and what they do not
 
 The paper's numerical checks instantiate the statements above:
 
@@ -267,6 +446,11 @@ The paper's numerical checks instantiate the statements above:
   checks that the rate is not an artefact of grid density.
 - `results/real_model.json` repeats the identities on trained activations and
   reports the dtype floor.
+- `results/collapse.json` checks Section 6 on three checkpoints: the channel-level
+  minimax error is exactly `1` for every pair past `theta L = 2 pi`, the
+  sub-threshold floor `(1 - cos(x/2))/2` is respected by every measured pair,
+  and the score-level rate is the channel-level rate diluted by the unrotated
+  tail share.
 
 What the theory does **not** establish:
 
@@ -281,7 +465,7 @@ What the theory does **not** establish:
 4. It does not turn a finite-grid measurement into a proof. The proofs are
    analytic; the numbers are measurements with their own artifacts and tests.
 
-## 7. Numerical conventions
+## 8. Numerical conventions
 
 The implementation evaluates in float64 for the synthetic identities and on
 float32 activations for the trained-checkpoint identities, widening to float64

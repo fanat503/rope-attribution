@@ -150,7 +150,7 @@ class Claim:
 CLAIMS: tuple[Claim, ...] = (
     # ---- configuration, stated in Method and repeated in the appendix -------
     Claim("cfg_dim", r"\$d = (\d+)\$"),
-    Claim("cfg_base", r"\$\\mathrm\{base\} = (\d+)\$"),
+    Claim("cfg_base", r"\$\\mathrm\{base\} = (\d+)\$, extension factor"),
     Claim("cfg_scale", r"extension factor \$s = (\d+)\$"),
     Claim("cfg_context", r"pre-extension context \$(\d+)\$"),
     Claim("cfg_nkeys", r"\$T = (\d+)\$ keys"),
@@ -1054,7 +1054,7 @@ CLAIMS += (
         "qk_scope_sizes",
         r"content-pair draws at \$(\d+)\$--\$(\d+)\$M parameters",
     ),
-    Claim("qk_scope_pairs", r"One passage and \$(\d+)\$ content pairs per head"),
+    Claim("qk_scope_pairs", r"One input and \$(\d+)\$ content pairs per head"),
     Claim(
         "feat_dictionary",
         r"\$(\d+)\{,\}(\d+)\$ ReLU units trained with SAE Lens",
@@ -1065,7 +1065,7 @@ CLAIMS += (
     ),
     Claim(
         "feat_exactness",
-        r"On a \$(\d+)\$-token passage the bucket sum reproduces the score to a relative "
+        r"On a \$(\d+)\$-token input the bucket sum reproduces the score to a relative "
         r"\$(\d+\.\d+)\\times10\^\{(-\d+)\}\$, and the residual fed to the dictionary is the "
         r"vector attention consumed to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$",
     ),
@@ -1267,7 +1267,7 @@ CLAIMS += (
     ),
     Claim(
         "qk_traj_pairs",
-        r"one passage, \$(\d+)\$ content pairs per head and one checkpoint",
+        r"one input, \$(\d+)\$ content pairs per head and one checkpoint",
     ),
     # ---- the same statistics, restated in App.~\ref{app:stats} ----------------
     Claim(
@@ -1283,6 +1283,296 @@ CLAIMS += (
         "stats_rank_range",
         r"same leading pair as the exact one on \$(\d+\.\d+)\\%\$--\$(\d+\.\d+)\\%\$ of triples, "
         r"against \$(\d+\.\d+)\\%\$--\$(\d+\.\d+)\\%\$ for chance",
+    ),
+    # ---- the threshold law and its measurement (Sec.~\ref{sec:worth}) --------
+    Claim(
+        "collapse_bins_abstract",
+        r"every one of \$(\d+)\$ measured bins lies inside the band",
+    ),
+    Claim(
+        "collapse_unit_abstract",
+        r"median per-pair error is \$(\d+\.\d+)\$ at \$L=(\d+)\$",
+    ),
+    Claim(
+        "collapse_past_abstract",
+        r"fraction of pairs past threshold there is \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ "
+        r"and \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_score_abstract",
+        r"score-level error is \$(\d+\.\d+)\$ on partial-RoPE "
+        r"\\texttt\{pythia-160m\} against \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_pairs",
+        r"\$(\d+)\$ content pairs per head, and windows \$L=8,16,\\dots,(\d+)\$",
+    ),
+    Claim("collapse_bins_body", r"That is \$(\d+)\$ non-empty log-spaced bins of \$x\$"),
+    Claim(
+        "collapse_exact_past",
+        r"minimum and the maximum are exactly \$(\d+)\$: the window then contains "
+        r"both a maximum and a minimum of the cosine, so its half-range is "
+        r"\$(\d+)\$ with no float64 slack",
+    ),
+    Claim(
+        "collapse_unit_body",
+        r"median per-pair error reaches \$(\d+\.\d+)\$ at \$L=(\d+)\$ on all three",
+    ),
+    Claim(
+        "collapse_past_body",
+        r"window spans a full period there is \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ "
+        r"and \$(\d+\.\d+)\$",
+    ),
+    Claim("collapse_tail", r"the tail carries \$(\d+\.\d+)\$ of the score"),
+    Claim(
+        "collapse_score_body",
+        r"median score-level error at \$L=(\d+)\$ is \$(\d+\.\d+)\$ against a "
+        r"pair-level \$(\d+\.\d+)\$; on the two full-RoPE checkpoints the tail is "
+        r"zero and the score-level error is \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_ls_median",
+        r"median is \$(\d+\.\d+)\$ at \$L=(\d+)\$ on \\texttt\{pythia-160m\}, "
+        r"against the optimiser's \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_bins_per_model",
+        r"the \$(\d+)\$ bins are \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ log-spaced "
+        r"bins of \$x=\\theta L\$ per checkpoint",
+    ),
+    Claim(
+        "collapse_bin_edges",
+        r"on the shared edges \$10\^\{(-?\d+)\},\\dots,10\^\{(-?\d+)\}\$, with "
+        r"empty bins omitted",
+    ),
+    # ---- the law itself: statements, proposition and proof -------------------
+    Claim(
+        "threshold_law_abstract",
+        r"the minimax relative error is exactly \$(\d+)\$ once \$x\\ge(\d+)\\pi\$, and "
+        r"below the threshold the attainable set is exactly "
+        r"\$\[\(1-\\cos\(x/(\d+)\)\)/(\d+),\\ \\sin\(\\min\(x,\\pi\)/(\d+)\)\]\$",
+    ),
+    Claim(
+        "threshold_law_intro",
+        r"The minimax relative error is exactly \$(\d+)\$ for \$x\\ge(\d+)\\pi\$, and "
+        r"below the threshold the attainable set is exactly "
+        r"\$\[\(1-\\cos\(x/(\d+)\)\)/(\d+),\\ \\sin\(\\min\(x,\\pi\)/(\d+)\)\]\$",
+    ),
+    Claim(
+        "threshold_prop_ceiling",
+        r"if \$x\\ge(\d+)\\pi\$, then \$E_\{\\mathrm\{rel\}\}=(\d+)\$ exactly",
+    ),
+    Claim(
+        "threshold_prop_floor",
+        r"if \$x<(\d+)\\pi\$, then \$E_\{\\mathrm\{rel\}\}\\ge\((\d+)-\\cos\(x/(\d+)\)\)/(\d+)\$",
+    ),
+    Claim(
+        "threshold_prop_band",
+        r"attainable values of \$E_\{\\mathrm\{rel\}\}\$ are exactly the interval "
+        r"\$\\bigl\[\((\d+)-\\cos\(x/(\d+)\)\)/(\d+),\\ \\sin\(\\min\(x,\\pi\)/(\d+)\)\\bigr\]\$",
+    ),
+    Claim(
+        "threshold_bounded",
+        r"It is a value of \$E_\{\\mathrm\{rel\}\}\$, it is bounded by \$(\d+)\$, "
+        r"and it reaches that bound exactly when the window sweeps a full period\. "
+        r"Every rate below \$(\d+)\$",
+    ),
+    Claim(
+        "threshold_proof_large",
+        r"If \$\\pi\\le x<(\d+)\\pi\$, \$R\\le(\d+)\$ always, and \$R=(\d+)\$ is attained",
+    ),
+    Claim(
+        "threshold_proof_collapse",
+        r"Translating \$R\$ back to \$E_\{\\mathrm\{rel\}\}=R/2\$ gives the stated "
+        r"band; at \$x=2\\pi\$ the band collapses to the single point \$(\d+)\$",
+    ),
+    Claim("threshold_r2_heading", r"phase swept, with a threshold at \$(\d+)\\pi\$"),
+    Claim(
+        "threshold_amplitude",
+        r"content amplitude \$\\rho\\ge(\d+)\$ and phase \$\\psi\$",
+    ),
+    Claim(
+        "threshold_midrange",
+        r"best such \$\\hat c\$ is the midrange \$\(\\max c\+\\min c\)/(\d+)\$",
+    ),
+    Claim(
+        "threshold_conclusion",
+        r"minimax error of the best position-free summary is exactly \$(\d+)\$ "
+        r"once the window sweeps \$(\d+)\\pi\$ of phase",
+    ),
+    Claim("threshold_related", r"it saturates at \$x=(\d+)\\pi\$"),
+    Claim(
+        "checkpoint_sizes_abstract",
+        r"On three \$(\d+)\$--\$(\d+)\$M checkpoints every one of",
+    ),
+    Claim(
+        "collapse_bins_intro",
+        r"On three trained checkpoints all \$(\d+)\$ measured bins lie inside that band",
+    ),
+    Claim(
+        "collapse_unit_intro",
+        r"at \$L=(\d+)\$ the median per-pair error is \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_bins_per_model_body",
+        r"--- \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ per checkpoint, because the bin grid",
+    ),
+    Claim(
+        "collapse_score_window_abstract",
+        r"at \$L=(\d+)\$ the score-level error is",
+    ),
+    Claim(
+        "figure_threshold_line",
+        r"the dotted line is \$\\theta L=(\d+)\\pi\$",
+    ),
+    Claim(
+        "collapse_ls_exceed",
+        r"so its error can slightly exceed \$(\d+)\$; the median is",
+    ),
+    Claim(
+        "collapse_sign_abstract",
+        r"The \$(\d+\.\d+)\\%\$ sign-error rate is a different functional",
+    ),
+    Claim(
+        "collapse_sign_intro",
+        r"The \$(\d+\.\d+)\\%\$ sign-error rate below is a different functional",
+    ),
+    Claim(
+        "collapse_sign_error_rate",
+        r"reports the wrong sign on \$(\d+\.\d+)\\%\$ of per-pair, per-distance cells",
+    ),
+    Claim(
+        "collapse_tail_channels_abstract",
+        r"the \$(\d+)\$ of \$(\d+)\$ channels that partial RoPE never rotates",
+    ),
+    Claim(
+        "collapse_tail_channels",
+        r"On partial-RoPE \\texttt\{pythia-160m\}, \$(\d+)\$ of \$(\d+)\$ channels "
+        r"never rotate",
+    ),
+    Claim(
+        "collapse_conclusion",
+        r"On three checkpoints all \$(\d+)\$ measured bins lie inside it, and the "
+        r"pair-level error is \$(\d+\.\d+)\$ at \$L=(\d+)\$",
+    ),
+    Claim(
+        "collapse_score_conclusion",
+        r"rotary fraction: \$(\d+\.\d+)\$ on partial-RoPE pythia against "
+        r"\$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ on full-RoPE models",
+    ),
+    Claim(
+        "yarn_ratio_abstract",
+        r"the amplitude-weighted error ratio is \$(\d+\.\d+)\$",
+    ),
+    # ---- the intervention (Sec.~\ref{sec:intervention}) ----------------------
+    Claim(
+        "intervention_abstract",
+        r"Over \$(\d+)\$ single-pair interventions the position-free table selects "
+        r"a different pair in \$(\d+)\$ cells and reverses the sign of the "
+        r"suppression in \$(\d+)\$",
+    ),
+    Claim("intervention_oracle_abstract", r"exact rule is a \$(\d+\.\d+)\$ oracle"),
+    Claim(
+        "intervention_intro",
+        r"over \$(\d+)\$ single-pair interventions the position-free selection "
+        r"differs from the exact one in \$(\d+)\$ cells and reverses the "
+        r"suppression in \$(\d+)\$",
+    ),
+    Claim(
+        "intervention_peak",
+        r"unsaturated \(\$\\text\{peak\}\\le(0\.9)\$",
+    ),
+    Claim(
+        "intervention_visible",
+        r"query must see at least \$(\d+)\$ keys",
+    ),
+    Claim(
+        "intervention_cells",
+        r"the \$(\d+)\$ cells are \$(\d+)\$ distinct heads per checkpoint",
+    ),
+    Claim(
+        "intervention_oracle",
+        r"exact rule scores \$(\d+\.\d+)\$ in all \$(\d+)\$ cells",
+    ),
+    Claim(
+        "intervention_counts",
+        r"selection differs from the exact one in \$(\d+)\$ of \$(\d+)\$ cells, "
+        r"and in \$(\d+)\$ of those",
+    ),
+    Claim(
+        "intervention_per_model",
+        r"with \$(\d+)\$ differing selections and \$(\d+)\$ reversals on "
+        r"\\texttt\{pythia-160m\}, against \$(\d+)\$/\$(\d+)\$ on "
+        r"\\texttt\{llama-160m\} and \$(\d+)\$/\$(\d+)\$ on "
+        r"\\texttt\{SmolLM-135M\}",
+    ),
+    Claim(
+        "intervention_medians",
+        r"median ratio is \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ "
+        r"respectively",
+    ),
+    Claim("intervention_min", r"minimum is \$(-?\d+\.\d+)\$"),
+    Claim(
+        "intervention_identity",
+        r"median absolute prediction error is \$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$ "
+        r"on \\texttt\{pythia-160m\} and \$(\d+\.\d+)\$--"
+        r"\$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$",
+    ),
+    Claim(
+        "intervention_control",
+        r"unedited forward pass \(\$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$, "
+        r"\$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$, "
+        r"\$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$\)",
+    ),
+    Claim(
+        "intervention_currency",
+        r"A value of \$(\d+)\$ is a faithful summary, \$(\d+)\$ removes nothing "
+        r"that mattered",
+    ),
+    Claim("intervention_window", r"causal window \$(\d+),\\dots,q\$"),
+    Claim("intervention_figure_oracle", r"it is \$(\d+)\$ by construction"),
+    Claim(
+        "intervention_saturation",
+        r"since a head already at \$(\d+)\$ cannot respond to a score edit",
+    ),
+    Claim(
+        "intervention_conclusion",
+        r"Acting on the attribution costs \$(\d+)\$ differing selections and "
+        r"\$(\d+)\$ sign reversals in \$(\d+)\$ interventions, and the exact rule "
+        r"remains a \$(\d+\.\d+)\$ oracle",
+    ),
+    # ---- provenance rows for the two new artifacts ---------------------------
+    Claim(
+        "prov_collapse_row",
+        r"Sec\.~\\ref\{sec:worth\} & \$(\d+)\$ bins; \$(\d+\.\d+)\$; exactly "
+        r"\$(\d+)\$ past threshold",
+    ),
+    Claim(
+        "prov_collapse_past_row",
+        r"& \$(\d+\.\d+)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & same, "
+        r"\\texttt\{by\\_window\[\]\.past\\_threshold\\_fraction\}",
+    ),
+    Claim(
+        "prov_collapse_score_row",
+        r"& \$(\d+\.\d+)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$; \$(\d+\.\d+)\$ & "
+        r"same, \\texttt\{score\\_rel\\_median\}",
+    ),
+    Claim(
+        "prov_intervention_row",
+        r"Sec\.~\\ref\{sec:intervention\} & \$(\d+)\$, \$(\d+)\$, \$(\d+)\$; "
+        r"\$(\d+)\$/\$(\d+)\$, \$(\d+)\$/\$(\d+)\$, \$(\d+)\$/\$(\d+)\$ & "
+        r"\\texttt\{results/intervention\.json\}",
+    ),
+    Claim(
+        "prov_intervention_medians_row",
+        r"& \$(\d+\.\d+)\$ oracle; \$(\d+\.\d+)\$, \$(\d+\.\d+)\$, "
+        r"\$(\d+\.\d+)\$ & same, \\texttt\{exact\}",
+    ),
+    Claim(
+        "prov_intervention_identity_row",
+        r"& \$(-?\d+\.\d+)\$; \$(\d+\.\d+)\\\!\\times\\\!10\^\{(-?\d+)\}\$, "
+        r"\$(\d+\.\d+)\\\!\\times\\\!10\^\{(-?\d+)\}\$ & same, "
+        r"\\texttt\{pooled\}",
     ),
 )
 
@@ -3711,6 +4001,8 @@ QK_TRAJECTORY_PATH = _REPO / "results" / "qk_trajectory.json"
 USEFULNESS_PATH = _REPO / "results" / "usefulness.json"
 UNCERTAINTY_PATH = _REPO / "results" / "uncertainty.json"
 AGREEMENT_PATH = _REPO / "results" / "agreement.json"
+COLLAPSE_PATH = _REPO / "results" / "collapse.json"
+INTERVENTION_PATH = _REPO / "results" / "intervention.json"
 
 
 def _artifact(path: Path) -> dict:
@@ -4316,6 +4608,343 @@ def test_the_compressed_statistics_restate_the_two_artifacts() -> None:
     assert_paper_number_matches(rates[-1], high, "ranking agreement max")
     assert_paper_number_matches(min(chance), chance_low, "chance agreement min")
     assert_paper_number_matches(max(chance), chance_high, "chance agreement max")
+
+
+def _window_row(model: dict, span: int) -> dict:
+    row = next(r for r in model["by_window"] if int(r["span"]) == span)
+    return row
+
+
+def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
+    """Every number the law section quotes is recomputed from ``collapse.json``.
+
+    Mutation verdict: changing 44 to 42 fails the bin count; changing any of the
+    three past-threshold fractions fails the per-model comparison; swapping the
+    partial-RoPE score-level error with a full-RoPE one fails the architecture
+    pairing; and moving the exact past-threshold minimum off 1 fails the
+    exactness assertion, which is the part float64 round-off once obscured.
+    """
+    artifact = _artifact(COLLAPSE_PATH)
+    models = artifact["models"]
+    counts = [len(model["bins"]) for model in models]
+    total = sum(counts)
+    assert total == 44
+
+    for name in ("collapse_bins_abstract", "collapse_bins_body", "collapse_bins_intro"):
+        assert int(literal(name)) == total, name
+
+    prov = groups("collapse_bins_per_model")[0]
+    assert int(prov[0]) == total
+    assert [int(value) for value in prov[1:]] == counts
+    assert [int(value) for value in groups("collapse_bins_per_model_body")[0]] == counts
+
+    conclusion_bins, conclusion_unit, conclusion_window = groups("collapse_conclusion")[0]
+    assert int(conclusion_bins) == total
+    assert int(conclusion_window) == 4096
+    for model in models:
+        assert_paper_number_matches(
+            _window_row(model, 4096)["channel_rel_minimax_median"],
+            conclusion_unit,
+            f"{model['model_id']}: conclusion pair-level error",
+        )
+
+    for name in ("collapse_unit_abstract", "collapse_unit_body", "collapse_unit_intro"):
+        captured = groups(name)[0]
+        if name == "collapse_unit_intro":
+            span, written = int(captured[0]), captured[1]
+        else:
+            written, span = captured[0], int(captured[1])
+        assert span == 4096
+        for model in models:
+            assert_paper_number_matches(
+                _window_row(model, span)["channel_rel_minimax_median"],
+                written,
+                f"{model['model_id']}: {name}",
+            )
+
+    for name in ("collapse_past_abstract", "collapse_past_body"):
+        written = groups(name)[0]
+        for model, value in zip(models, written):
+            assert_paper_number_matches(
+                _window_row(model, 4096)["past_threshold_fraction"],
+                value,
+                f"{model['model_id']}: {name}",
+            )
+
+    exact_written = {value for value in groups("collapse_exact_past")[0]}
+    assert exact_written == {"1"}
+    past = [
+        entry for model in models for entry in model["bins"]
+        if float(entry["x_lo"]) >= 2.0 * math.pi
+    ]
+    assert past, "no bin lies past the threshold; the claim is vacuous"
+    for entry in past:
+        assert entry["rel_minimax_min"] == 1.0
+        assert entry["rel_minimax_max"] == 1.0
+        assert entry["rel_minimax_median"] == 1.0
+        assert entry["past_threshold_fraction"] == 1.0
+
+    for name in (
+        "collapse_score_abstract",
+        "collapse_score_body",
+        "collapse_score_conclusion",
+    ):
+        captured = groups(name)[0]
+        if name == "collapse_score_body":
+            span, written = int(captured[0]), [captured[1], captured[3], captured[4]]
+            assert span == 4096
+        else:
+            written = captured
+        for model, value in zip(models, written):
+            assert_paper_number_matches(
+                _window_row(model, 4096)["score_rel_median"],
+                value,
+                f"{model['model_id']}: {name}",
+            )
+
+    pythia = models[0]
+    assert_paper_number_matches(
+        _window_row(pythia, 4096)["tail_share_median"],
+        literal("collapse_tail"),
+        "pythia tail share",
+    )
+    assert_paper_number_matches(
+        _window_row(pythia, 4096)["channel_rel_mean_median"],
+        literal("collapse_ls_median", 1),
+        "pythia least-squares median",
+    )
+    assert_paper_number_matches(
+        _window_row(pythia, 4096)["channel_rel_minimax_median"],
+        literal("collapse_ls_median", 3),
+        "pythia minimax median",
+    )
+    assert int(literal("collapse_ls_exceed")) == 1
+
+    for name in ("collapse_tail_channels_abstract", "collapse_tail_channels"):
+        unrotated, channels = (int(value) for value in groups(name)[0])
+        assert channels == MEASUREMENTS["structural_facts"]["dim"]
+        assert unrotated + pythia["rope_dim"] == channels
+        assert unrotated == 48
+
+    low, high = (int(value) for value in groups("collapse_bin_edges")[0])
+    from rope_attribution.position_free_collapse import X_BINS
+
+    assert X_BINS[0] == 10.0 ** low
+    assert X_BINS[-1] == 10.0 ** high
+    assert low == math.floor(math.log10(min(e["x_lo"] for m in models for e in m["bins"])))
+
+    rate = _artifact(USEFULNESS_PATH)["pooled"]["sign_flip_fraction"] * 100
+    for name in ("collapse_sign_abstract", "collapse_sign_intro", "collapse_sign_error_rate"):
+        assert_paper_number_matches(rate, literal(name), f"27.0% restatement ({name})")
+
+    # The proposition and its proof are symbols, not measurements, but their
+    # constants must still be the ones the closed form and the artifact use.
+    assert tuple(int(v) for v in groups("threshold_law_abstract")[0]) == (1, 2, 2, 2, 2)
+    assert tuple(int(v) for v in groups("threshold_law_intro")[0]) == (1, 2, 2, 2, 2)
+    assert tuple(int(v) for v in groups("threshold_prop_ceiling")[0]) == (2, 1)
+    assert tuple(int(v) for v in groups("threshold_prop_floor")[0]) == (2, 1, 2, 2)
+    assert tuple(int(v) for v in groups("threshold_prop_band")[0]) == (1, 2, 2, 2)
+    assert tuple(int(v) for v in groups("threshold_bounded")[0]) == (1, 1)
+    assert tuple(int(v) for v in groups("threshold_proof_large")[0]) == (2, 2, 2)
+    assert int(literal("threshold_proof_collapse")) == 1
+    assert int(literal("threshold_r2_heading")) == 2
+    assert int(literal("threshold_amplitude")) == 0
+    assert int(literal("threshold_midrange")) == 2
+    assert tuple(int(v) for v in groups("threshold_conclusion")[0]) == (1, 2)
+    assert int(literal("threshold_related")) == 2
+    assert int(literal("figure_threshold_line")) == 2
+    assert total == sum(len(model["bins"]) for model in models)
+
+    # The band drawn in the figure is the proposition's, evaluated exactly.
+    for x in (0.5, 1.0, 2.0, 5.0, 2.0 * math.pi):
+        if x >= 2.0 * math.pi:
+            assert (1.0 - math.cos(x / 2.0)) / 2.0 == pytest.approx(1.0)
+            assert math.sin(min(x, math.pi) / 2.0) == pytest.approx(1.0)
+            continue
+        lower = (1.0 - math.cos(x / 2.0)) / 2.0
+        upper = math.sin(min(x, math.pi) / 2.0)
+        assert lower <= upper + 1e-15
+
+
+def test_the_yarn_ratio_restated_in_the_abstract_is_the_measured_one() -> None:
+    ratios = [
+        row["amplitude_weighted_err"]
+        for row in csv_rows("fig05_linearization_error")
+        if row["method"] == "yarn" and int(row["delta"]) == 8192
+    ]
+    assert len(ratios) == 1
+    control = [
+        row["amplitude_weighted_err"]
+        for row in csv_rows("fig05_linearization_error")
+        if row["method"] == "rope_base_10k" and int(row["delta"]) == 8192
+    ]
+    assert len(control) == 1
+    assert_paper_number_matches(
+        float(ratios[0]) / float(control[0]),
+        literal("yarn_ratio_abstract"),
+        "abstract YaRN/RoPE amplitude-weighted ratio",
+    )
+
+
+def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
+    """The intervention section, abstract, conclusion and provenance are one run.
+
+    Mutation verdict: changing the number of interventions from 96 to 64 fails
+    the cell count; changing 25 or 7 fails the two totals; and replacing the
+    exact oracle's 1.000 with anything else fails because the artifact stores
+    ``achieved == intended`` bit-for-bit in every cell.
+    """
+    artifact = _artifact(INTERVENTION_PATH)
+    models = artifact["models"]
+    cells = [cell for model in models for cell in model["cells"]]
+    assert len(cells) == 96
+
+    for name in ("intervention_abstract", "intervention_intro"):
+        total, differ, reversed_count = (int(v) for v in groups(name)[0])
+        assert total == len(cells)
+        assert differ == sum(1 for cell in cells if not cell["same_pair"])
+        assert reversed_count == sum(
+            1 for cell in cells
+            if cell["surrogate"]["suppression_ratio"] is not None
+            and cell["surrogate"]["suppression_ratio"] < 0.0
+        )
+
+    exact_ratios = {cell["exact"]["suppression_ratio"] for cell in cells}
+    assert exact_ratios == {1.0}
+    assert_paper_number_matches(1.0, literal("intervention_oracle_abstract"), "abstract oracle")
+    oracle_value, oracle_cells = groups("intervention_oracle")[0]
+    assert int(oracle_cells) == len(cells)
+    assert_paper_number_matches(1.0, oracle_value, "body oracle")
+    assert int(literal("intervention_figure_oracle")) == 1
+
+    for model in models:
+        selection = model["cell_selection"]
+        assert_paper_number_matches(selection["max_peak"], literal("intervention_peak"), "max peak")
+        assert int(literal("intervention_visible")) == selection["min_visible_keys"]
+        assert int(literal("intervention_window")) == 1
+        assert int(literal("intervention_saturation")) == 1
+        assert selection["max_peak"] < 1.0
+
+    claimed_cells, claimed_heads = (int(v) for v in groups("intervention_cells")[0])
+    assert claimed_cells == len(cells)
+    assert claimed_heads == sum(
+        len({(cell["layer"], cell["head"]) for cell in model["cells"]}) for model in models
+    ) // len(models)
+    for model in models:
+        assert len({(cell["layer"], cell["head"]) for cell in model["cells"]}) == 32
+
+    claimed_differ, claimed_total, claimed_reversed = (
+        int(v) for v in groups("intervention_counts")[0]
+    )
+    assert claimed_total == len(cells)
+    assert claimed_differ == sum(1 for cell in cells if not cell["same_pair"])
+    assert claimed_reversed == sum(
+        1 for cell in cells
+        if cell["surrogate"]["suppression_ratio"] is not None
+        and cell["surrogate"]["suppression_ratio"] < 0.0
+    )
+
+    per_model = [int(v) for v in groups("intervention_per_model")[0]]
+    assert per_model == [13, 5, 9, 2, 3, 0]
+    for model, (differ, reversed_count) in zip(models, ((13, 5), (9, 2), (3, 0))):
+        assert model["n_selection_differs"] == differ
+        assert sum(
+            1 for cell in model["cells"]
+            if cell["surrogate"]["suppression_ratio"] is not None
+            and cell["surrogate"]["suppression_ratio"] < 0.0
+        ) == reversed_count
+
+    for model, written in zip(models, groups("intervention_medians")[0]):
+        assert_paper_number_matches(
+            model["pooled"]["surrogate_suppression_ratio_median"],
+            written,
+            f"{model['model_id']}: median suppression ratio",
+        )
+    assert_paper_number_matches(
+        min(
+            cell["surrogate"]["suppression_ratio"] for cell in cells
+            if cell["surrogate"]["suppression_ratio"] is not None
+        ),
+        literal("intervention_min"),
+        "minimum suppression ratio",
+    )
+
+    identity = groups("intervention_identity")[0]
+    assert_paper_sci_matches(
+        models[0]["pooled"]["exact_prediction_error_median"],
+        identity[0], int(identity[1]), "pythia identity error",
+    )
+    assert int(identity[4]) == -7
+    assert_paper_sci_matches(
+        models[1]["pooled"]["exact_prediction_error_median"],
+        identity[3], int(identity[4]), "llama identity error (upper end of the range)",
+    )
+    assert_paper_sci_matches(
+        models[2]["pooled"]["exact_prediction_error_median"],
+        identity[2], int(identity[4]), "SmolLM identity error (lower end of the range)",
+    )
+
+    control = groups("intervention_control")[0]
+    for model, (mantissa, exponent) in zip(
+        models, ((control[0], control[1]), (control[2], control[3]), (control[4], control[5]))
+    ):
+        assert_paper_sci_matches(
+            model["pooled"]["baseline_prediction_error_median"],
+            mantissa, int(exponent), f"{model['model_id']}: baseline error",
+        )
+
+    faithful, nothing = (int(v) for v in groups("intervention_currency")[0])
+    assert (faithful, nothing) == (1, 0)
+    assert all(
+        cell["surrogate"]["suppression_ratio"] not in (0.0, None) for cell in cells
+    ), "a zero ratio would be an arithmetic artifact, not a suppression measurement"
+
+    conclusion = [int(v) for v in groups("intervention_conclusion")[0][:3]]
+    assert conclusion == [25, 7, 96]
+    assert_paper_number_matches(1.0, groups("intervention_conclusion")[0][3], "conclusion oracle")
+
+    prov = groups("prov_collapse_row")[0]
+    assert int(prov[0]) == 44
+    assert_paper_number_matches(1.0, prov[1], "provenance pair-level error")
+    assert int(prov[2]) == 1
+    collapse = _artifact(COLLAPSE_PATH)
+    for model, value in zip(collapse["models"], groups("prov_collapse_past_row")[0]):
+        assert_paper_number_matches(
+            _window_row(model, 4096)["past_threshold_fraction"], value, "provenance past fraction"
+        )
+    score_row = groups("prov_collapse_score_row")[0]
+    for model, value in zip(collapse["models"], score_row[:3]):
+        assert_paper_number_matches(
+            _window_row(model, 4096)["score_rel_median"], value, "provenance score error"
+        )
+    assert_paper_number_matches(
+        _window_row(collapse["models"][0], 4096)["tail_share_median"], score_row[3],
+        "provenance tail",
+    )
+
+    prov = [int(v) for v in groups("prov_intervention_row")[0]]
+    assert prov[:3] == [96, 25, 7]
+    assert prov[3:] == [13, 5, 9, 2, 3, 0]
+    prov = groups("prov_intervention_medians_row")[0]
+    assert_paper_number_matches(1.0, prov[0], "provenance oracle")
+    for model, value in zip(models, prov[1:]):
+        assert_paper_number_matches(
+            model["pooled"]["surrogate_suppression_ratio_median"], value, "provenance median"
+        )
+    prov = groups("prov_intervention_identity_row")[0]
+    assert_paper_number_matches(
+        min(cell["surrogate"]["suppression_ratio"] for cell in cells
+            if cell["surrogate"]["suppression_ratio"] is not None),
+        prov[0], "provenance minimum ratio",
+    )
+    assert_paper_sci_matches(
+        models[0]["pooled"]["exact_prediction_error_median"], prov[1], int(prov[2]),
+        "provenance identity error",
+    )
+    assert_paper_sci_matches(
+        models[0]["pooled"]["baseline_prediction_error_median"], prov[3], int(prov[4]),
+        "provenance baseline error",
+    )
 
 
 def test_the_context_summary_restates_the_spectrum_table() -> None:

@@ -78,7 +78,7 @@ FIG_DELTA_POINTS = 61
 _WORD_NUMBERS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-    "eleven": 11, "twelve": 12,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
 }
 
 # README scheme label -> the `method` key measurements.json uses.
@@ -576,7 +576,7 @@ def test_yarn_retains_about_a_fifth_of_the_channels_at_4096() -> None:
 
 
 def test_amplitude_weighted_error_ratio_rope_to_yarn() -> None:
-    pattern = r"\(ratio RoPE:YaRN of `([\d.]+)` at `delta = (\d+)`\)"
+    pattern = r"\(ratio YaRN:RoPE of `([\d.]+)` at `delta = (\d+)`\)"
     literal, delta = re.search(pattern, README_TEXT, re.MULTILINE).groups()
     rope = spectrum_row("rope_base_10k", int(delta))["amplitude_weighted_err"]
     yarn = spectrum_row("yarn", int(delta))["amplitude_weighted_err"]

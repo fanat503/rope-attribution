@@ -1,0 +1,4148 @@
+{
+  "schema": "rope-intervention/v1",
+  "seed": 20260906,
+  "budgets": [
+    1
+  ],
+  "cells_per_prompt": 32,
+  "estimand": "achieved / intended suppression of the score at the head's own strongest unsaturated key, after removing the pair each attribution ranks first from the query projection only; the post-softmax change is predicted in closed form and confirmed against the real forward pass",
+  "models": [
+    {
+      "model_id": "EleutherAI/pythia-160m",
+      "rope_dim": 16,
+      "rope_theta": 10000.0,
+      "n_heads": 12,
+      "n_cells": 32,
+      "n_selection_differs": 13,
+      "budget": 1,
+      "cell_selection": {
+        "min_peak": 0.001,
+        "max_peak": 0.9,
+        "min_visible_keys": 32,
+        "rule": "one candidate per head: its strongest baseline attention row that is neither saturated nor shorter than min_visible_keys, diagonal excluded, chosen before any intervention"
+      },
+      "schema_note": "suppression_ratio = achieved / intended at the head's own strongest unsaturated key; prediction_error is a max over the query row of |predicted - measured| post-softmax attention from a float32 forward pass",
+      "pooled": {
+        "baseline_prediction_error_median": 2.4815295566082973e-05,
+        "exact_prediction_error_median": 1.5188436536694994e-05,
+        "exact_prediction_error_max": 0.000567882180104784,
+        "surrogate_prediction_error_median": 1.2198257683202623e-05,
+        "surrogate_prediction_error_max": 0.000567882180104784,
+        "exact_suppression_ratio_min": 1.0,
+        "exact_suppression_ratio_max": 1.0,
+        "surrogate_suppression_ratio_median": 0.9111540902745725,
+        "surrogate_suppression_ratio_min": -92.89980773565442,
+        "surrogate_sign_reversal_fraction": 0.15625,
+        "differing_suppression_ratio_median": 0.4911870719025544,
+        "differing_sign_reversal_fraction": 0.38461538461538464,
+        "exact_abs_delta_attention_median": 0.11556932330131531,
+        "surrogate_abs_delta_attention_median": 0.107535719871521,
+        "fraction_selection_differs": 0.40625
+      },
+      "cells": [
+        {
+          "layer": 0,
+          "head": 3,
+          "query": 279,
+          "target": 278,
+          "delta": 1,
+          "n_visible": 279,
+          "baseline_attention": 0.8999967575073242,
+          "baseline_prediction_error": 3.0435142972518037e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 56.905591993930024,
+            "achieved_suppression": 56.905591993930024,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.906094969112871e-07,
+            "predicted_at_target": 0.9069357588518678,
+            "measured_at_target": 0.9069360494613647,
+            "delta_attention": 0.006939291954040527,
+            "predicted_delta_attention": 0.006939001344543616
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 77.98453817204656,
+            "achieved_suppression": 56.905591993930024,
+            "suppression_ratio": 0.7297035197975661,
+            "prediction_error": 2.906094969112871e-07,
+            "predicted_at_target": 0.9069357588518678,
+            "measured_at_target": 0.9069360494613647,
+            "delta_attention": 0.006939291954040527,
+            "predicted_delta_attention": 0.006939001344543616
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 8,
+          "head": 4,
+          "query": 212,
+          "target": 211,
+          "delta": 1,
+          "n_visible": 212,
+          "baseline_attention": 0.8999786376953125,
+          "baseline_prediction_error": 1.3850779995161489e-06,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 57.857107748581164,
+            "achieved_suppression": 57.857107748581164,
+            "suppression_ratio": 1.0,
+            "prediction_error": 5.8725908247403424e-08,
+            "predicted_at_target": 0.9984292975221424,
+            "measured_at_target": 0.9984292387962341,
+            "delta_attention": 0.09845060110092163,
+            "predicted_delta_attention": 0.09845065982682988
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 54.054300639206474,
+            "achieved_suppression": 57.857107748581164,
+            "suppression_ratio": 1.0703516105916733,
+            "prediction_error": 5.8725908247403424e-08,
+            "predicted_at_target": 0.9984292975221424,
+            "measured_at_target": 0.9984292387962341,
+            "delta_attention": 0.09845060110092163,
+            "predicted_delta_attention": 0.09845065982682988
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 4,
+          "head": 10,
+          "query": 107,
+          "target": 16,
+          "delta": 91,
+          "n_visible": 107,
+          "baseline_attention": 0.8999758958816528,
+          "baseline_prediction_error": 5.791161208690276e-06,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 2.1087328993975283,
+            "achieved_suppression": 2.1087328993975283,
+            "suppression_ratio": 1.0,
+            "prediction_error": 5.010917150882754e-06,
+            "predicted_at_target": 0.8920392948842407,
+            "measured_at_target": 0.8920443058013916,
+            "delta_attention": -0.00793159008026123,
+            "predicted_delta_attention": -0.007936600997412113
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 2.12348418454123,
+            "achieved_suppression": 2.1087328993975283,
+            "suppression_ratio": 0.9930532634756173,
+            "prediction_error": 5.010917150882754e-06,
+            "predicted_at_target": 0.8920392948842407,
+            "measured_at_target": 0.8920443058013916,
+            "delta_attention": -0.00793159008026123,
+            "predicted_delta_attention": -0.007936600997412113
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 8,
+          "head": 11,
+          "query": 113,
+          "target": 16,
+          "delta": 97,
+          "n_visible": 113,
+          "baseline_attention": 0.8998982906341553,
+          "baseline_prediction_error": 2.281787213243014e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              1
+            ],
+            "intended_suppression": 0.02822845198739859,
+            "achieved_suppression": 0.02822845198739859,
+            "suppression_ratio": 1.0,
+            "prediction_error": 8.104527715524501e-05,
+            "predicted_at_target": 0.89925731932398,
+            "measured_at_target": 0.8993383646011353,
+            "delta_attention": -0.0005599260330200195,
+            "predicted_delta_attention": -0.0006409713101752645
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              2
+            ],
+            "intended_suppression": 0.0008212134543993147,
+            "achieved_suppression": 0.014458112843266329,
+            "suppression_ratio": 17.605791485530236,
+            "prediction_error": 4.810207038223602e-05,
+            "predicted_at_target": 0.890729787787247,
+            "measured_at_target": 0.8907749652862549,
+            "delta_attention": -0.00912332534790039,
+            "predicted_delta_attention": -0.009168502846908289
+          },
+          "same_pair": false,
+          "ratio": 0.5121822779981186,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 6,
+          "head": 9,
+          "query": 63,
+          "target": 16,
+          "delta": 47,
+          "n_visible": 63,
+          "baseline_attention": 0.8998973369598389,
+          "baseline_prediction_error": 2.985507282815547e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 2.067467983331678,
+            "achieved_suppression": 2.067467983331678,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.2051018449456274e-05,
+            "predicted_at_target": 0.7286947102663531,
+            "measured_at_target": 0.7286872863769531,
+            "delta_attention": -0.17121005058288574,
+            "predicted_delta_attention": -0.17120262669348574
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 2.069448769188591,
+            "achieved_suppression": 2.067467983331678,
+            "suppression_ratio": 0.9990428437338463,
+            "prediction_error": 1.2051018449456274e-05,
+            "predicted_at_target": 0.7286947102663531,
+            "measured_at_target": 0.7286872863769531,
+            "delta_attention": -0.17121005058288574,
+            "predicted_delta_attention": -0.17120262669348574
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 7,
+          "head": 9,
+          "query": 298,
+          "target": 0,
+          "delta": 298,
+          "n_visible": 298,
+          "baseline_attention": 0.8998822569847107,
+          "baseline_prediction_error": 1.5686221784317472e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              0
+            ],
+            "intended_suppression": 0.3628290545039188,
+            "achieved_suppression": 0.3628290545039188,
+            "suppression_ratio": 1.0,
+            "prediction_error": 0.00014452889471106012,
+            "predicted_at_target": 0.8642158384612089,
+            "measured_at_target": 0.8640713095664978,
+            "delta_attention": -0.03581094741821289,
+            "predicted_delta_attention": -0.03566641852350183
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 1.3076095438569153,
+            "achieved_suppression": -2.1671097637910597,
+            "suppression_ratio": -1.6573064749886797,
+            "prediction_error": 6.8892975934709e-05,
+            "predicted_at_target": 0.9487340946399057,
+            "measured_at_target": 0.948665201663971,
+            "delta_attention": 0.048782944679260254,
+            "predicted_delta_attention": 0.04885183765519496
+          },
+          "same_pair": false,
+          "ratio": -5.972812091231392,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 7,
+          "head": 1,
+          "query": 166,
+          "target": 16,
+          "delta": 150,
+          "n_visible": 166,
+          "baseline_attention": 0.8998656868934631,
+          "baseline_prediction_error": 3.8309161378036194e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 0.6861147627451119,
+            "achieved_suppression": 0.6861147627451119,
+            "suppression_ratio": 1.0,
+            "prediction_error": 6.253223831464982e-05,
+            "predicted_at_target": 0.08800142138045539,
+            "measured_at_target": 0.08798564225435257,
+            "delta_attention": -0.8118800446391106,
+            "predicted_delta_attention": -0.8118642655130077
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 0.7260601487228688,
+            "achieved_suppression": 0.6861147627451119,
+            "suppression_ratio": 0.9449833652927785,
+            "prediction_error": 6.253223831464982e-05,
+            "predicted_at_target": 0.08800142138045539,
+            "measured_at_target": 0.08798564225435257,
+            "delta_attention": -0.8118800446391106,
+            "predicted_delta_attention": -0.8118642655130077
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 9,
+          "head": 8,
+          "query": 154,
+          "target": 141,
+          "delta": 13,
+          "n_visible": 154,
+          "baseline_attention": 0.899817705154419,
+          "baseline_prediction_error": 0.00027322645778939114,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 21.203216578530075,
+            "achieved_suppression": 21.203216578530075,
+            "suppression_ratio": 1.0,
+            "prediction_error": 0.00019323808377658125,
+            "predicted_at_target": 0.8868440983933774,
+            "measured_at_target": 0.8866508603096008,
+            "delta_attention": -0.013166844844818115,
+            "predicted_delta_attention": -0.012973606761041534
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 15.256688984375263,
+            "achieved_suppression": 16.38008895876749,
+            "suppression_ratio": 1.0736332749224113,
+            "prediction_error": 0.0003889634807828779,
+            "predicted_at_target": 0.9016291930874113,
+            "measured_at_target": 0.9012402296066284,
+            "delta_attention": 0.0014225244522094727,
+            "predicted_delta_attention": 0.0018114879329923506
+          },
+          "same_pair": false,
+          "ratio": 0.772528493405742,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 8,
+          "head": 2,
+          "query": 96,
+          "target": 16,
+          "delta": 80,
+          "n_visible": 96,
+          "baseline_attention": 0.899802029132843,
+          "baseline_prediction_error": 5.7090178038496364e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 2.935357580509092,
+            "achieved_suppression": 2.935357580509092,
+            "suppression_ratio": 1.0,
+            "prediction_error": 6.526548312785208e-05,
+            "predicted_at_target": 0.6181809851304402,
+            "measured_at_target": 0.6181247234344482,
+            "delta_attention": -0.2816773056983948,
+            "predicted_delta_attention": -0.28162104400240284
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 3.1327680253597494,
+            "achieved_suppression": 2.935357580509092,
+            "suppression_ratio": 0.9369852975858346,
+            "prediction_error": 6.526548312785208e-05,
+            "predicted_at_target": 0.6181809851304402,
+            "measured_at_target": 0.6181247234344482,
+            "delta_attention": -0.2816773056983948,
+            "predicted_delta_attention": -0.28162104400240284
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 6,
+          "head": 2,
+          "query": 295,
+          "target": 16,
+          "delta": 279,
+          "n_visible": 295,
+          "baseline_attention": 0.8997708559036255,
+          "baseline_prediction_error": 9.527588718666324e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 2.6749601433249195,
+            "achieved_suppression": 2.6749601433249195,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.0198085917421125e-06,
+            "predicted_at_target": 0.8952328362453593,
+            "measured_at_target": 0.8952298164367676,
+            "delta_attention": -0.00454103946685791,
+            "predicted_delta_attention": -0.004538019658266168
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 2.492639346302434,
+            "achieved_suppression": 2.6749601433249195,
+            "suppression_ratio": 1.0731436729075705,
+            "prediction_error": 3.0198085917421125e-06,
+            "predicted_at_target": 0.8952328362453593,
+            "measured_at_target": 0.8952298164367676,
+            "delta_attention": -0.00454103946685791,
+            "predicted_delta_attention": -0.004538019658266168
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 9,
+          "head": 9,
+          "query": 41,
+          "target": 27,
+          "delta": 14,
+          "n_visible": 41,
+          "baseline_attention": 0.89974045753479,
+          "baseline_prediction_error": 5.463460920129837e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 11.608676119676465,
+            "achieved_suppression": 11.608676119676465,
+            "suppression_ratio": 1.0,
+            "prediction_error": 5.990633243775634e-05,
+            "predicted_at_target": 0.7831697800136487,
+            "measured_at_target": 0.7831196188926697,
+            "delta_attention": -0.11662083864212036,
+            "predicted_delta_attention": -0.11657067752114136
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 6.064982705924242,
+            "achieved_suppression": 11.608676119676465,
+            "suppression_ratio": 1.9140493357610358,
+            "prediction_error": 5.990633243775634e-05,
+            "predicted_at_target": 0.7831697800136487,
+            "measured_at_target": 0.7831196188926697,
+            "delta_attention": -0.11662083864212036,
+            "predicted_delta_attention": -0.11657067752114136
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 2,
+          "head": 2,
+          "query": 46,
+          "target": 43,
+          "delta": 3,
+          "n_visible": 46,
+          "baseline_attention": 0.8997249603271484,
+          "baseline_prediction_error": 1.5083592852516148e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 26.56943775220099,
+            "achieved_suppression": 26.56943775220099,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.7778383471520627e-07,
+            "predicted_at_target": 0.4789299868441222,
+            "measured_at_target": 0.4789296090602875,
+            "delta_attention": -0.42079535126686096,
+            "predicted_delta_attention": -0.42079497348302625
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 42.26301271164793,
+            "achieved_suppression": 26.56943775220099,
+            "suppression_ratio": 0.6286688063030182,
+            "prediction_error": 3.7778383471520627e-07,
+            "predicted_at_target": 0.4789299868441222,
+            "measured_at_target": 0.4789296090602875,
+            "delta_attention": -0.42079535126686096,
+            "predicted_delta_attention": -0.42079497348302625
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 9,
+          "head": 3,
+          "query": 53,
+          "target": 52,
+          "delta": 1,
+          "n_visible": 53,
+          "baseline_attention": 0.8997215628623962,
+          "baseline_prediction_error": 8.753980857623134e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 62.845185893568406,
+            "achieved_suppression": 62.845185893568406,
+            "suppression_ratio": 1.0,
+            "prediction_error": 0.00021038127216355118,
+            "predicted_at_target": 0.2802796061013874,
+            "measured_at_target": 0.2800997793674469,
+            "delta_attention": -0.6196217834949493,
+            "predicted_delta_attention": -0.6194419567610088
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 74.754658701479,
+            "achieved_suppression": 62.845185893568406,
+            "suppression_ratio": 0.8406858781140423,
+            "prediction_error": 0.00021038127216355118,
+            "predicted_at_target": 0.2802796061013874,
+            "measured_at_target": 0.2800997793674469,
+            "delta_attention": -0.6196217834949493,
+            "predicted_delta_attention": -0.6194419567610088
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 5,
+          "head": 9,
+          "query": 303,
+          "target": 302,
+          "delta": 1,
+          "n_visible": 303,
+          "baseline_attention": 0.8996315598487854,
+          "baseline_prediction_error": 5.536849780884978e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 20.15425831515451,
+            "achieved_suppression": 20.15425831515451,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.593088444582172e-07,
+            "predicted_at_target": 0.4785494681642238,
+            "measured_at_target": 0.47854992747306824,
+            "delta_attention": -0.42108163237571716,
+            "predicted_delta_attention": -0.4210820916845616
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 21.57139653620306,
+            "achieved_suppression": -2.0744979426669636,
+            "suppression_ratio": -0.09616892161735353,
+            "prediction_error": 8.06260562424832e-07,
+            "predicted_at_target": 0.7419761105294461,
+            "measured_at_target": 0.7419769167900085,
+            "delta_attention": -0.15765464305877686,
+            "predicted_delta_attention": -0.15765544931933928
+          },
+          "same_pair": false,
+          "ratio": -0.10293099900913222,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 3,
+          "head": 2,
+          "query": 209,
+          "target": 208,
+          "delta": 1,
+          "n_visible": 209,
+          "baseline_attention": 0.8995556235313416,
+          "baseline_prediction_error": 3.610050638425122e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              0
+            ],
+            "intended_suppression": 56.682912649856405,
+            "achieved_suppression": 56.682912649856405,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.769290958244298e-07,
+            "predicted_at_target": 0.22873210466975824,
+            "measured_at_target": 0.22873248159885406,
+            "delta_attention": -0.6708231419324875,
+            "predicted_delta_attention": -0.6708235188615833
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 28.115055888957297,
+            "achieved_suppression": 11.58111042972289,
+            "suppression_ratio": 0.41191845662563964,
+            "prediction_error": 4.6765887851130117e-07,
+            "predicted_at_target": 0.8462947698823202,
+            "measured_at_target": 0.8462952375411987,
+            "delta_attention": -0.05326038599014282,
+            "predicted_delta_attention": -0.053260853649021334
+          },
+          "same_pair": false,
+          "ratio": 0.20431396144482053,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 4,
+          "head": 6,
+          "query": 245,
+          "target": 207,
+          "delta": 38,
+          "n_visible": 245,
+          "baseline_attention": 0.8995056748390198,
+          "baseline_prediction_error": 2.6812718999735807e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 22.586939406191057,
+            "achieved_suppression": 22.586939406191057,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.339019977386613e-05,
+            "predicted_at_target": 0.9015099514380436,
+            "measured_at_target": 0.9015151262283325,
+            "delta_attention": 0.002009451389312744,
+            "predicted_delta_attention": 0.002004276599023802
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 18.04499687453951,
+            "achieved_suppression": 22.586939406191057,
+            "suppression_ratio": 1.2517009320217714,
+            "prediction_error": 1.339019977386613e-05,
+            "predicted_at_target": 0.9015099514380436,
+            "measured_at_target": 0.9015151262283325,
+            "delta_attention": 0.002009451389312744,
+            "predicted_delta_attention": 0.002004276599023802
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 8,
+          "head": 1,
+          "query": 156,
+          "target": 79,
+          "delta": 77,
+          "n_visible": 156,
+          "baseline_attention": 0.8994920253753662,
+          "baseline_prediction_error": 0.0004829500364615935,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 34.91217806299454,
+            "achieved_suppression": 34.91217806299454,
+            "suppression_ratio": 1.0,
+            "prediction_error": 0.00041101656667100195,
+            "predicted_at_target": 0.0869927725959648,
+            "measured_at_target": 0.0874037891626358,
+            "delta_attention": -0.8120882362127304,
+            "predicted_delta_attention": -0.8124992527794014
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 32.20512017449658,
+            "achieved_suppression": 34.91217806299454,
+            "suppression_ratio": 1.084056754759192,
+            "prediction_error": 0.00041101656667100195,
+            "predicted_at_target": 0.0869927725959648,
+            "measured_at_target": 0.0874037891626358,
+            "delta_attention": -0.8120882362127304,
+            "predicted_delta_attention": -0.8124992527794014
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 5,
+          "head": 10,
+          "query": 254,
+          "target": 16,
+          "delta": 238,
+          "n_visible": 254,
+          "baseline_attention": 0.8994720578193665,
+          "baseline_prediction_error": 8.524091900108388e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 1.4997033830629303,
+            "achieved_suppression": 1.4997033830629303,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.3861287875283068e-06,
+            "predicted_at_target": 0.784953199841403,
+            "measured_at_target": 0.7849542498588562,
+            "delta_attention": -0.11451780796051025,
+            "predicted_delta_attention": -0.11451885797796346
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 1.4905744564311614,
+            "achieved_suppression": 1.3972422260226014,
+            "suppression_ratio": 0.9373850598298709,
+            "prediction_error": 2.079097022877896e-07,
+            "predicted_at_target": 0.8849380263679067,
+            "measured_at_target": 0.8849378228187561,
+            "delta_attention": -0.014534235000610352,
+            "predicted_delta_attention": -0.014534031451459706
+          },
+          "same_pair": false,
+          "ratio": 0.9316790518728666,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 2,
+          "head": 3,
+          "query": 60,
+          "target": 59,
+          "delta": 1,
+          "n_visible": 60,
+          "baseline_attention": 0.8994458317756653,
+          "baseline_prediction_error": 1.6118509726936736e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              1
+            ],
+            "intended_suppression": 8.444182291548854,
+            "achieved_suppression": 8.444182291548854,
+            "suppression_ratio": 1.0,
+            "prediction_error": 8.882003255106241e-08,
+            "predicted_at_target": 0.7697949105592293,
+            "measured_at_target": 0.7697948217391968,
+            "delta_attention": -0.1296510100364685,
+            "predicted_delta_attention": -0.12965092121643595
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 13.55243966111222,
+            "achieved_suppression": 6.6567831542777585,
+            "suppression_ratio": 0.4911870719025544,
+            "prediction_error": 1.0809227912744745e-07,
+            "predicted_at_target": 0.7777374497957519,
+            "measured_at_target": 0.777737557888031,
+            "delta_attention": -0.12170827388763428,
+            "predicted_delta_attention": -0.1217083819799134
+          },
+          "same_pair": false,
+          "ratio": 0.7883277414486932,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 10,
+          "head": 7,
+          "query": 40,
+          "target": 24,
+          "delta": 16,
+          "n_visible": 40,
+          "baseline_attention": 0.8994132876396179,
+          "baseline_prediction_error": 7.764875275580174e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 36.966286593408725,
+            "achieved_suppression": 36.966286593408725,
+            "suppression_ratio": 1.0,
+            "prediction_error": 0.00020784591353689708,
+            "predicted_at_target": 0.08415180151379859,
+            "measured_at_target": 0.08394395560026169,
+            "delta_attention": -0.8154693320393562,
+            "predicted_delta_attention": -0.8152614861258194
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 43.474019520097904,
+            "achieved_suppression": 36.966286593408725,
+            "suppression_ratio": 0.8503075400313358,
+            "prediction_error": 0.00020784591353689708,
+            "predicted_at_target": 0.08415180151379859,
+            "measured_at_target": 0.08394395560026169,
+            "delta_attention": -0.8154693320393562,
+            "predicted_delta_attention": -0.8152614861258194
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 1,
+          "head": 2,
+          "query": 122,
+          "target": 121,
+          "delta": 1,
+          "n_visible": 122,
+          "baseline_attention": 0.899389922618866,
+          "baseline_prediction_error": 2.0515825460698522e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 41.28296131237836,
+            "achieved_suppression": 41.28296131237836,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.3498586493596605e-07,
+            "predicted_at_target": 0.9636481034678094,
+            "measured_at_target": 0.9636484384536743,
+            "delta_attention": 0.06425851583480835,
+            "predicted_delta_attention": 0.06425818084894341
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 47.38372550479397,
+            "achieved_suppression": 41.28296131237836,
+            "suppression_ratio": 0.8712476883693248,
+            "prediction_error": 3.3498586493596605e-07,
+            "predicted_at_target": 0.9636481034678094,
+            "measured_at_target": 0.9636484384536743,
+            "delta_attention": 0.06425851583480835,
+            "predicted_delta_attention": 0.06425818084894341
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 10,
+          "head": 3,
+          "query": 257,
+          "target": 16,
+          "delta": 241,
+          "n_visible": 257,
+          "baseline_attention": 0.8993868231773376,
+          "baseline_prediction_error": 2.730723404412161e-06,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 0.239228215084398,
+            "achieved_suppression": 0.239228215084398,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.407022141089678e-05,
+            "predicted_at_target": 0.8788792118452239,
+            "measured_at_target": 0.878835141658783,
+            "delta_attention": -0.020551681518554688,
+            "predicted_delta_attention": -0.020507611332113762
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              2
+            ],
+            "intended_suppression": 0.003608011329742354,
+            "achieved_suppression": 0.13678099098466234,
+            "suppression_ratio": 37.91035517464126,
+            "prediction_error": 2.8757618434460674e-05,
+            "predicted_at_target": 0.918618588016994,
+            "measured_at_target": 0.9185898303985596,
+            "delta_attention": 0.019203007221221924,
+            "predicted_delta_attention": 0.019231764839656385
+          },
+          "same_pair": false,
+          "ratio": 0.5717594429085506,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 9,
+          "head": 7,
+          "query": 139,
+          "target": 135,
+          "delta": 4,
+          "n_visible": 139,
+          "baseline_attention": 0.8992976546287537,
+          "baseline_prediction_error": 0.00037283801081211543,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 48.665824392480374,
+            "achieved_suppression": 48.665824392480374,
+            "suppression_ratio": 1.0,
+            "prediction_error": 0.000567882180104784,
+            "predicted_at_target": 0.30432635438431316,
+            "measured_at_target": 0.3037584722042084,
+            "delta_attention": -0.5955391824245453,
+            "predicted_delta_attention": -0.5949713002444406
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 93.59321268051158,
+            "achieved_suppression": 48.665824392480374,
+            "suppression_ratio": 0.5199717265674523,
+            "prediction_error": 0.000567882180104784,
+            "predicted_at_target": 0.30432635438431316,
+            "measured_at_target": 0.3037584722042084,
+            "delta_attention": -0.5955391824245453,
+            "predicted_delta_attention": -0.5949713002444406
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 7,
+          "head": 3,
+          "query": 284,
+          "target": 16,
+          "delta": 268,
+          "n_visible": 284,
+          "baseline_attention": 0.8992111086845398,
+          "baseline_prediction_error": 5.642574199549166e-06,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 3.4360837647780187,
+            "achieved_suppression": 3.4360837647780187,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.4003463291673586e-06,
+            "predicted_at_target": 0.06492579824137282,
+            "measured_at_target": 0.0649271234869957,
+            "delta_attention": -0.8342839851975441,
+            "predicted_delta_attention": -0.834285310443167
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 1.8184659081997312,
+            "achieved_suppression": 3.4360837647780187,
+            "suppression_ratio": 1.8895508292370014,
+            "prediction_error": 3.4003463291673586e-06,
+            "predicted_at_target": 0.06492579824137282,
+            "measured_at_target": 0.0649271234869957,
+            "delta_attention": -0.8342839851975441,
+            "predicted_delta_attention": -0.834285310443167
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 10,
+          "head": 5,
+          "query": 75,
+          "target": 73,
+          "delta": 2,
+          "n_visible": 75,
+          "baseline_attention": 0.8991910219192505,
+          "baseline_prediction_error": 0.00016676893122324898,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 52.18592482639465,
+            "achieved_suppression": 52.18592482639465,
+            "suppression_ratio": 1.0,
+            "prediction_error": 0.0002871901066253679,
+            "predicted_at_target": 0.8547425419361542,
+            "measured_at_target": 0.8544553518295288,
+            "delta_attention": -0.04473567008972168,
+            "predicted_delta_attention": -0.04444847998309631
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 46.20585141864653,
+            "achieved_suppression": 30.462780154904333,
+            "suppression_ratio": 0.659284034805405,
+            "prediction_error": 0.00044906993756843594,
+            "predicted_at_target": 0.7737015571201856,
+            "measured_at_target": 0.7732524871826172,
+            "delta_attention": -0.1259385347366333,
+            "predicted_delta_attention": -0.12548946479906486
+          },
+          "same_pair": false,
+          "ratio": 0.5837355619593588,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 11,
+          "head": 2,
+          "query": 316,
+          "target": 264,
+          "delta": 52,
+          "n_visible": 316,
+          "baseline_attention": 0.8991695642471313,
+          "baseline_prediction_error": 0.00012118062500410254,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 194.87306202339832,
+            "achieved_suppression": 194.87306202339832,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.1045131652620555e-06,
+            "predicted_at_target": 5.553584732100696e-07,
+            "measured_at_target": 5.554484232561663e-07,
+            "delta_attention": -0.8991690087987081,
+            "predicted_delta_attention": -0.8991690088886581
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 192.1430585330487,
+            "achieved_suppression": 194.87306202339832,
+            "suppression_ratio": 1.0142081817120656,
+            "prediction_error": 1.1045131652620555e-06,
+            "predicted_at_target": 5.553584732100696e-07,
+            "measured_at_target": 5.554484232561663e-07,
+            "delta_attention": -0.8991690087987081,
+            "predicted_delta_attention": -0.8991690088886581
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 11,
+          "head": 0,
+          "query": 269,
+          "target": 268,
+          "delta": 1,
+          "n_visible": 269,
+          "baseline_attention": 0.8991249203681946,
+          "baseline_prediction_error": 6.233464450355886e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              2
+            ],
+            "intended_suppression": 198.0595853707436,
+            "achieved_suppression": 198.0595853707436,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.908832203412203e-08,
+            "predicted_at_target": 1.2082805676419995e-07,
+            "measured_at_target": 1.2073252264599432e-07,
+            "delta_attention": -0.8991247996356719,
+            "predicted_delta_attention": -0.8991247995401378
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 93.62193579760934,
+            "achieved_suppression": 61.054676210573625,
+            "suppression_ratio": 0.6521407156391299,
+            "prediction_error": 9.404052196454807e-06,
+            "predicted_at_target": 0.008093635063470888,
+            "measured_at_target": 0.008103039115667343,
+            "delta_attention": -0.8910218812525272,
+            "predicted_delta_attention": -0.8910312853047236
+          },
+          "same_pair": false,
+          "ratio": 0.30826418270182,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 8,
+          "head": 0,
+          "query": 276,
+          "target": 16,
+          "delta": 260,
+          "n_visible": 276,
+          "baseline_attention": 0.8989523649215698,
+          "baseline_prediction_error": 6.805184980218648e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              1
+            ],
+            "intended_suppression": 0.1787700002773916,
+            "achieved_suppression": 0.1787700002773916,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.1197057032278375e-05,
+            "predicted_at_target": 0.9057715180580876,
+            "measured_at_target": 0.9057406187057495,
+            "delta_attention": 0.0067882537841796875,
+            "predicted_delta_attention": 0.006819153136517819
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              7
+            ],
+            "intended_suppression": 0.014969360558056515,
+            "achieved_suppression": -0.0211974529156311,
+            "suppression_ratio": -1.4160560054265394,
+            "prediction_error": 7.82184530005725e-06,
+            "predicted_at_target": 0.8963836392712631,
+            "measured_at_target": 0.8963808417320251,
+            "delta_attention": -0.0025715231895446777,
+            "predicted_delta_attention": -0.002568725650306747
+          },
+          "same_pair": false,
+          "ratio": -0.11857388198657326,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 6,
+          "head": 4,
+          "query": 291,
+          "target": 281,
+          "delta": 10,
+          "n_visible": 291,
+          "baseline_attention": 0.8989152908325195,
+          "baseline_prediction_error": 1.2354266603065156e-06,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 40.479127669642935,
+            "achieved_suppression": 40.479127669642935,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.9203797944900014e-06,
+            "predicted_at_target": 0.10928055297271035,
+            "measured_at_target": 0.1092810407280922,
+            "delta_attention": -0.7896342501044273,
+            "predicted_delta_attention": -0.7896347378598092
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              4
+            ],
+            "intended_suppression": 19.66806627457853,
+            "achieved_suppression": 40.479127669642935,
+            "suppression_ratio": 2.0581142601681806,
+            "prediction_error": 1.9203797944900014e-06,
+            "predicted_at_target": 0.10928055297271035,
+            "measured_at_target": 0.1092810407280922,
+            "delta_attention": -0.7896342501044273,
+            "predicted_delta_attention": -0.7896347378598092
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 8,
+          "head": 8,
+          "query": 180,
+          "target": 16,
+          "delta": 164,
+          "n_visible": 180,
+          "baseline_attention": 0.8988135457038879,
+          "baseline_prediction_error": 4.669356000330804e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 0.20695351904491846,
+            "achieved_suppression": 0.20695351904491846,
+            "suppression_ratio": 1.0,
+            "prediction_error": 9.76512339155855e-05,
+            "predicted_at_target": 0.8837604114916365,
+            "measured_at_target": 0.883662760257721,
+            "delta_attention": -0.015150785446166992,
+            "predicted_delta_attention": -0.015053134212251407
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              0
+            ],
+            "intended_suppression": 0.0018150501210401763,
+            "achieved_suppression": -0.16861780727520867,
+            "suppression_ratio": -92.89980773565442,
+            "prediction_error": 1.2345496916948973e-05,
+            "predicted_at_target": 0.8990678302546243,
+            "measured_at_target": 0.8990556597709656,
+            "delta_attention": 0.00024211406707763672,
+            "predicted_delta_attention": 0.00025428455073639444
+          },
+          "same_pair": false,
+          "ratio": -0.8147617303313931,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 9,
+          "head": 11,
+          "query": 49,
+          "target": 16,
+          "delta": 33,
+          "n_visible": 49,
+          "baseline_attention": 0.8987675905227661,
+          "baseline_prediction_error": 1.0349166342446536e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              1
+            ],
+            "intended_suppression": 0.06588598005687771,
+            "achieved_suppression": 0.06588598005687771,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.6986673299523858e-05,
+            "predicted_at_target": 0.9007244712658484,
+            "measured_at_target": 0.900741457939148,
+            "delta_attention": 0.001973867416381836,
+            "predicted_delta_attention": 0.001956880743082312
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 0.007272911323945509,
+            "achieved_suppression": -0.06759605543622048,
+            "suppression_ratio": -9.29422241319863,
+            "prediction_error": 1.5738578566015793e-05,
+            "predicted_at_target": 0.8988163182980615,
+            "measured_at_target": 0.8988319635391235,
+            "delta_attention": 6.437301635742188e-05,
+            "predicted_delta_attention": 4.8727775295409614e-05
+          },
+          "same_pair": false,
+          "ratio": -1.0259550723517583,
+          "prompt_index": 0,
+          "n_tokens": 320
+        },
+        {
+          "layer": 5,
+          "head": 6,
+          "query": 135,
+          "target": 16,
+          "delta": 119,
+          "n_visible": 135,
+          "baseline_attention": 0.8987240791320801,
+          "baseline_prediction_error": 3.3197025642417444e-05,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 3.6785994472227324,
+            "achieved_suppression": 3.6785994472227324,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.148911769870367e-05,
+            "predicted_at_target": 0.918663505344704,
+            "measured_at_target": 0.9186220765113831,
+            "delta_attention": 0.01989799737930298,
+            "predicted_delta_attention": 0.0199394262126239
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              6
+            ],
+            "intended_suppression": 4.155093602584744,
+            "achieved_suppression": 3.6785994472227324,
+            "suppression_ratio": 0.8853228829633103,
+            "prediction_error": 4.148911769870367e-05,
+            "predicted_at_target": 0.918663505344704,
+            "measured_at_target": 0.9186220765113831,
+            "delta_attention": 0.01989799737930298,
+            "predicted_delta_attention": 0.0199394262126239
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 320
+        }
+      ]
+    },
+    {
+      "model_id": "JackFram/llama-160m",
+      "rope_dim": 64,
+      "rope_theta": 10000.0,
+      "n_heads": 12,
+      "n_cells": 32,
+      "n_selection_differs": 9,
+      "budget": 1,
+      "cell_selection": {
+        "min_peak": 0.001,
+        "max_peak": 0.9,
+        "min_visible_keys": 32,
+        "rule": "one candidate per head: its strongest baseline attention row that is neither saturated nor shorter than min_visible_keys, diagonal excluded, chosen before any intervention"
+      },
+      "schema_note": "suppression_ratio = achieved / intended at the head's own strongest unsaturated key; prediction_error is a max over the query row of |predicted - measured| post-softmax attention from a float32 forward pass",
+      "pooled": {
+        "baseline_prediction_error_median": 1.0554798923756437e-07,
+        "exact_prediction_error_median": 1.2392344427014645e-07,
+        "exact_prediction_error_max": 2.581806037849077e-06,
+        "surrogate_prediction_error_median": 1.0735521208116161e-07,
+        "surrogate_prediction_error_max": 1.7310585520569077e-06,
+        "exact_suppression_ratio_min": 1.0,
+        "exact_suppression_ratio_max": 1.0,
+        "surrogate_suppression_ratio_median": 0.9967970579228187,
+        "surrogate_suppression_ratio_min": -0.452522575970428,
+        "surrogate_sign_reversal_fraction": 0.0625,
+        "differing_suppression_ratio_median": 0.7870848758760962,
+        "differing_sign_reversal_fraction": 0.2222222222222222,
+        "exact_abs_delta_attention_median": 0.34667494893074036,
+        "surrogate_abs_delta_attention_median": 0.32838746905326843,
+        "fraction_selection_differs": 0.28125
+      },
+      "cells": [
+        {
+          "layer": 9,
+          "head": 9,
+          "query": 285,
+          "target": 284,
+          "delta": 1,
+          "n_visible": 285,
+          "baseline_attention": 0.8998408317565918,
+          "baseline_prediction_error": 1.2822677641910474e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              8
+            ],
+            "intended_suppression": 12.445478648488171,
+            "achieved_suppression": 12.445478648488171,
+            "suppression_ratio": 1.0,
+            "prediction_error": 6.757878241447912e-07,
+            "predicted_at_target": 0.691833833584887,
+            "measured_at_target": 0.6918345093727112,
+            "delta_attention": -0.20800632238388062,
+            "predicted_delta_attention": -0.20800699817170476
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              21
+            ],
+            "intended_suppression": 14.602936244145031,
+            "achieved_suppression": -6.608158325932436,
+            "suppression_ratio": -0.452522575970428,
+            "prediction_error": 2.1806156302872637e-07,
+            "predicted_at_target": 0.9137973988970551,
+            "measured_at_target": 0.9137976169586182,
+            "delta_attention": 0.013956785202026367,
+            "predicted_delta_attention": 0.013956567140463338
+          },
+          "same_pair": false,
+          "ratio": -0.530968596112225,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 9,
+          "head": 8,
+          "query": 34,
+          "target": 1,
+          "delta": 33,
+          "n_visible": 34,
+          "baseline_attention": 0.8998234868049622,
+          "baseline_prediction_error": 1.4016180351766883e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              26
+            ],
+            "intended_suppression": 23.4274859203869,
+            "achieved_suppression": 23.4274859203869,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.1517347259237809e-07,
+            "predicted_at_target": 0.3434868495291336,
+            "measured_at_target": 0.3434869647026062,
+            "delta_attention": -0.556336522102356,
+            "predicted_delta_attention": -0.5563366372758285
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              26
+            ],
+            "intended_suppression": 23.759898690073882,
+            "achieved_suppression": 23.4274859203869,
+            "suppression_ratio": 0.9860095039114853,
+            "prediction_error": 1.1517347259237809e-07,
+            "predicted_at_target": 0.3434868495291336,
+            "measured_at_target": 0.3434869647026062,
+            "delta_attention": -0.556336522102356,
+            "predicted_delta_attention": -0.5563366372758285
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 3,
+          "head": 9,
+          "query": 164,
+          "target": 162,
+          "delta": 2,
+          "n_visible": 164,
+          "baseline_attention": 0.8997318744659424,
+          "baseline_prediction_error": 4.1484876489583655e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              20
+            ],
+            "intended_suppression": 13.799262105639343,
+            "achieved_suppression": 13.799262105639343,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.6276983389770265e-07,
+            "predicted_at_target": 0.8518489739901148,
+            "measured_at_target": 0.8518494367599487,
+            "delta_attention": -0.04788243770599365,
+            "predicted_delta_attention": -0.04788290047582755
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              20
+            ],
+            "intended_suppression": 16.820232649990086,
+            "achieved_suppression": 13.799262105639343,
+            "suppression_ratio": 0.8203966254680477,
+            "prediction_error": 4.6276983389770265e-07,
+            "predicted_at_target": 0.8518489739901148,
+            "measured_at_target": 0.8518494367599487,
+            "delta_attention": -0.04788243770599365,
+            "predicted_delta_attention": -0.04788290047582755
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 4,
+          "head": 5,
+          "query": 60,
+          "target": 1,
+          "delta": 59,
+          "n_visible": 60,
+          "baseline_attention": 0.8996939659118652,
+          "baseline_prediction_error": 7.114328581803164e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 16.931671728406393,
+            "achieved_suppression": 16.931671728406393,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.76757341488576e-07,
+            "predicted_at_target": 0.5543545697201671,
+            "measured_at_target": 0.5543548464775085,
+            "delta_attention": -0.3453391194343567,
+            "predicted_delta_attention": -0.3453393961916982
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 16.820239154425025,
+            "achieved_suppression": 16.931671728406393,
+            "suppression_ratio": 1.0066249102024243,
+            "prediction_error": 2.76757341488576e-07,
+            "predicted_at_target": 0.5543545697201671,
+            "measured_at_target": 0.5543548464775085,
+            "delta_attention": -0.3453391194343567,
+            "predicted_delta_attention": -0.3453393961916982
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 4,
+          "head": 4,
+          "query": 81,
+          "target": 1,
+          "delta": 80,
+          "n_visible": 81,
+          "baseline_attention": 0.8996306657791138,
+          "baseline_prediction_error": 8.445185828431789e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              26
+            ],
+            "intended_suppression": 18.126140122510375,
+            "achieved_suppression": 18.126140122510375,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.6342309838712765e-07,
+            "predicted_at_target": 0.12607046045308684,
+            "measured_at_target": 0.12607046961784363,
+            "delta_attention": -0.7735601961612701,
+            "predicted_delta_attention": -0.7735602053260269
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              26
+            ],
+            "intended_suppression": 17.69772725962739,
+            "achieved_suppression": 18.126140122510375,
+            "suppression_ratio": 1.0242072248372984,
+            "prediction_error": 1.6342309838712765e-07,
+            "predicted_at_target": 0.12607046045308684,
+            "measured_at_target": 0.12607046961784363,
+            "delta_attention": -0.7735601961612701,
+            "predicted_delta_attention": -0.7735602053260269
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 5,
+          "head": 0,
+          "query": 84,
+          "target": 1,
+          "delta": 83,
+          "n_visible": 84,
+          "baseline_attention": 0.8995281457901001,
+          "baseline_prediction_error": 6.092341942043333e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              25
+            ],
+            "intended_suppression": 10.966071281279397,
+            "achieved_suppression": 10.966071281279397,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.554895971509154e-08,
+            "predicted_at_target": 0.8257695577034512,
+            "measured_at_target": 0.8257696032524109,
+            "delta_attention": -0.07375854253768921,
+            "predicted_delta_attention": -0.07375858808664892
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 10.404609792973343,
+            "achieved_suppression": 10.360716274170207,
+            "suppression_ratio": 0.9957813392643731,
+            "prediction_error": 3.183818841900887e-08,
+            "predicted_at_target": 0.7256270924713514,
+            "measured_at_target": 0.7256271243095398,
+            "delta_attention": -0.1739010214805603,
+            "predicted_delta_attention": -0.17390105331874872
+          },
+          "same_pair": false,
+          "ratio": 0.9447974583073688,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 6,
+          "head": 11,
+          "query": 57,
+          "target": 1,
+          "delta": 56,
+          "n_visible": 57,
+          "baseline_attention": 0.8995058536529541,
+          "baseline_prediction_error": 6.128714835629268e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 12.34878242007417,
+            "achieved_suppression": 12.34878242007417,
+            "suppression_ratio": 1.0,
+            "prediction_error": 9.218815355538368e-08,
+            "predicted_at_target": 0.7512420090043208,
+            "measured_at_target": 0.7512421011924744,
+            "delta_attention": -0.14826375246047974,
+            "predicted_delta_attention": -0.1482638446486333
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 12.354455100334677,
+            "achieved_suppression": 12.34878242007417,
+            "suppression_ratio": 0.9995408392993104,
+            "prediction_error": 9.218815355538368e-08,
+            "predicted_at_target": 0.7512420090043208,
+            "measured_at_target": 0.7512421011924744,
+            "delta_attention": -0.14826375246047974,
+            "predicted_delta_attention": -0.1482638446486333
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 11,
+          "head": 3,
+          "query": 214,
+          "target": 1,
+          "delta": 213,
+          "n_visible": 214,
+          "baseline_attention": 0.8994614481925964,
+          "baseline_prediction_error": 3.7129667639079766e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 47.565243590822575,
+            "achieved_suppression": 47.565243590822575,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.7525719783750837e-07,
+            "predicted_at_target": 0.21352849545048855,
+            "measured_at_target": 0.2135283201932907,
+            "delta_attention": -0.6859331279993057,
+            "predicted_delta_attention": -0.6859329527421079
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 47.84893762632811,
+            "achieved_suppression": 47.565243590822575,
+            "suppression_ratio": 0.9940710483956611,
+            "prediction_error": 1.7525719783750837e-07,
+            "predicted_at_target": 0.21352849545048855,
+            "measured_at_target": 0.2135283201932907,
+            "delta_attention": -0.6859331279993057,
+            "predicted_delta_attention": -0.6859329527421079
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 2,
+          "head": 5,
+          "query": 166,
+          "target": 165,
+          "delta": 1,
+          "n_visible": 166,
+          "baseline_attention": 0.8993721604347229,
+          "baseline_prediction_error": 2.164515552349755e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              20
+            ],
+            "intended_suppression": 23.02275533122356,
+            "achieved_suppression": 23.02275533122356,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.9641759652653263e-08,
+            "predicted_at_target": 0.8417432507825873,
+            "measured_at_target": 0.8417432904243469,
+            "delta_attention": -0.05762887001037598,
+            "predicted_delta_attention": -0.05762890965213563
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              20
+            ],
+            "intended_suppression": 29.426298140468717,
+            "achieved_suppression": 23.02275533122356,
+            "suppression_ratio": 0.7823870750348091,
+            "prediction_error": 3.9641759652653263e-08,
+            "predicted_at_target": 0.8417432507825873,
+            "measured_at_target": 0.8417432904243469,
+            "delta_attention": -0.05762887001037598,
+            "predicted_delta_attention": -0.05762890965213563
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 1,
+          "head": 11,
+          "query": 280,
+          "target": 267,
+          "delta": 13,
+          "n_visible": 280,
+          "baseline_attention": 0.8992409706115723,
+          "baseline_prediction_error": 3.461742650694155e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              14
+            ],
+            "intended_suppression": 14.049109250912355,
+            "achieved_suppression": 14.049109250912355,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.5012005455682385e-07,
+            "predicted_at_target": 0.8464481117535722,
+            "measured_at_target": 0.8464483618736267,
+            "delta_attention": -0.05279260873794556,
+            "predicted_delta_attention": -0.05279285885800011
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              20
+            ],
+            "intended_suppression": 6.699364019036329,
+            "achieved_suppression": 4.430333599723089,
+            "suppression_ratio": 0.6613065937504276,
+            "prediction_error": 6.427643761686141e-08,
+            "predicted_at_target": 0.891059453583975,
+            "measured_at_target": 0.8910595178604126,
+            "delta_attention": -0.008181452751159668,
+            "predicted_delta_attention": -0.008181517027597285
+          },
+          "same_pair": false,
+          "ratio": 0.3153462273371802,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 5,
+          "head": 4,
+          "query": 69,
+          "target": 1,
+          "delta": 68,
+          "n_visible": 69,
+          "baseline_attention": 0.8990312814712524,
+          "baseline_prediction_error": 1.4969487305283025e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 30.096311693000104,
+            "achieved_suppression": 30.096311693000104,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.3267341594791482e-07,
+            "predicted_at_target": 0.2318055019313429,
+            "measured_at_target": 0.23180536925792694,
+            "delta_attention": -0.6672259122133255,
+            "predicted_delta_attention": -0.6672257795399096
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 29.836606653858578,
+            "achieved_suppression": 30.096311693000104,
+            "suppression_ratio": 1.0087042418112229,
+            "prediction_error": 1.3267341594791482e-07,
+            "predicted_at_target": 0.2318055019313429,
+            "measured_at_target": 0.23180536925792694,
+            "delta_attention": -0.6672259122133255,
+            "predicted_delta_attention": -0.6672257795399096
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 8,
+          "head": 8,
+          "query": 87,
+          "target": 1,
+          "delta": 86,
+          "n_visible": 87,
+          "baseline_attention": 0.8989461660385132,
+          "baseline_prediction_error": 4.8439988353798924e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 15.690086760698193,
+            "achieved_suppression": 15.690086760698193,
+            "suppression_ratio": 1.0,
+            "prediction_error": 7.55368534388623e-08,
+            "predicted_at_target": 0.5612425048769649,
+            "measured_at_target": 0.5612425804138184,
+            "delta_attention": -0.3377035856246948,
+            "predicted_delta_attention": -0.33770366116154826
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 15.494590970587517,
+            "achieved_suppression": 15.690086760698193,
+            "suppression_ratio": 1.0126170345820535,
+            "prediction_error": 7.55368534388623e-08,
+            "predicted_at_target": 0.5612425048769649,
+            "measured_at_target": 0.5612425804138184,
+            "delta_attention": -0.3377035856246948,
+            "predicted_delta_attention": -0.33770366116154826
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 4,
+          "head": 0,
+          "query": 69,
+          "target": 1,
+          "delta": 68,
+          "n_visible": 69,
+          "baseline_attention": 0.8989416360855103,
+          "baseline_prediction_error": 3.226485656426803e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 14.225573095979287,
+            "achieved_suppression": 14.225573095979287,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.1181681386650553e-07,
+            "predicted_at_target": 0.5509310694752001,
+            "measured_at_target": 0.5509308576583862,
+            "delta_attention": -0.348010778427124,
+            "predicted_delta_attention": -0.34801056661031016
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 14.12466367400503,
+            "achieved_suppression": 14.225573095979287,
+            "suppression_ratio": 1.0071441999826143,
+            "prediction_error": 2.1181681386650553e-07,
+            "predicted_at_target": 0.5509310694752001,
+            "measured_at_target": 0.5509308576583862,
+            "delta_attention": -0.348010778427124,
+            "predicted_delta_attention": -0.34801056661031016
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 10,
+          "head": 8,
+          "query": 114,
+          "target": 1,
+          "delta": 113,
+          "n_visible": 114,
+          "baseline_attention": 0.8989139795303345,
+          "baseline_prediction_error": 3.471420056272434e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 19.284314007643246,
+            "achieved_suppression": 19.284314007643246,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.0215116763866448e-07,
+            "predicted_at_target": 0.3936912780085919,
+            "measured_at_target": 0.3936914801597595,
+            "delta_attention": -0.505222499370575,
+            "predicted_delta_attention": -0.5052227015217425
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 19.36583857795246,
+            "achieved_suppression": 19.284314007643246,
+            "suppression_ratio": 0.9957902896907327,
+            "prediction_error": 2.0215116763866448e-07,
+            "predicted_at_target": 0.3936912780085919,
+            "measured_at_target": 0.3936914801597595,
+            "delta_attention": -0.505222499370575,
+            "predicted_delta_attention": -0.5052227015217425
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 6,
+          "head": 4,
+          "query": 106,
+          "target": 1,
+          "delta": 105,
+          "n_visible": 106,
+          "baseline_attention": 0.8987592458724976,
+          "baseline_prediction_error": 1.0794556526416699e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 19.351476554538834,
+            "achieved_suppression": 19.351476554538834,
+            "suppression_ratio": 1.0,
+            "prediction_error": 9.924916063996925e-08,
+            "predicted_at_target": 0.22950294187206638,
+            "measured_at_target": 0.22950294613838196,
+            "delta_attention": -0.6692562997341156,
+            "predicted_delta_attention": -0.6692563040004311
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 19.36125668452169,
+            "achieved_suppression": 19.351476554538834,
+            "suppression_ratio": 0.9994948607860422,
+            "prediction_error": 9.924916063996925e-08,
+            "predicted_at_target": 0.22950294187206638,
+            "measured_at_target": 0.22950294613838196,
+            "delta_attention": -0.6692562997341156,
+            "predicted_delta_attention": -0.6692563040004311
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 8,
+          "head": 11,
+          "query": 51,
+          "target": 1,
+          "delta": 50,
+          "n_visible": 51,
+          "baseline_attention": 0.8985173106193542,
+          "baseline_prediction_error": 1.5011754528337917e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 28.859996817503813,
+            "achieved_suppression": 28.859996817503813,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.8717036961990452e-08,
+            "predicted_at_target": 0.34861261757455664,
+            "measured_at_target": 0.34861260652542114,
+            "delta_attention": -0.5499047040939331,
+            "predicted_delta_attention": -0.5499046930447976
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 28.8468083778473,
+            "achieved_suppression": 28.859996817503813,
+            "suppression_ratio": 1.0004571888676128,
+            "prediction_error": 1.8717036961990452e-08,
+            "predicted_at_target": 0.34861261757455664,
+            "measured_at_target": 0.34861260652542114,
+            "delta_attention": -0.5499047040939331,
+            "predicted_delta_attention": -0.5499046930447976
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 4,
+          "head": 6,
+          "query": 63,
+          "target": 1,
+          "delta": 62,
+          "n_visible": 63,
+          "baseline_attention": 0.8984262943267822,
+          "baseline_prediction_error": 2.989459571001163e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 19.594451824264283,
+            "achieved_suppression": 19.594451824264283,
+            "suppression_ratio": 1.0,
+            "prediction_error": 9.25684150721029e-08,
+            "predicted_at_target": 0.2488662684792405,
+            "measured_at_target": 0.2488662451505661,
+            "delta_attention": -0.6495600491762161,
+            "predicted_delta_attention": -0.6495600258475417
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 19.71340727498308,
+            "achieved_suppression": 19.594451824264283,
+            "suppression_ratio": 0.9939657589852691,
+            "prediction_error": 9.25684150721029e-08,
+            "predicted_at_target": 0.2488662684792405,
+            "measured_at_target": 0.2488662451505661,
+            "delta_attention": -0.6495600491762161,
+            "predicted_delta_attention": -0.6495600258475417
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 4,
+          "head": 9,
+          "query": 36,
+          "target": 1,
+          "delta": 35,
+          "n_visible": 36,
+          "baseline_attention": 0.8983960747718811,
+          "baseline_prediction_error": 1.6977145678165328e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              27
+            ],
+            "intended_suppression": 15.017073784500324,
+            "achieved_suppression": 15.017073784500324,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.7432618338328894e-08,
+            "predicted_at_target": 0.26034443807511787,
+            "measured_at_target": 0.2603444755077362,
+            "delta_attention": -0.6380515992641449,
+            "predicted_delta_attention": -0.6380516366967632
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              27
+            ],
+            "intended_suppression": 15.000528280302541,
+            "achieved_suppression": 15.017073784500324,
+            "suppression_ratio": 1.0011029947671581,
+            "prediction_error": 3.7432618338328894e-08,
+            "predicted_at_target": 0.26034443807511787,
+            "measured_at_target": 0.2603444755077362,
+            "delta_attention": -0.6380515992641449,
+            "predicted_delta_attention": -0.6380516366967632
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 1,
+          "head": 4,
+          "query": 324,
+          "target": 323,
+          "delta": 1,
+          "n_visible": 324,
+          "baseline_attention": 0.8982431888580322,
+          "baseline_prediction_error": 1.4753130923583768e-06,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              1
+            ],
+            "intended_suppression": 20.3383801817927,
+            "achieved_suppression": 20.3383801817927,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.0330670086045046e-06,
+            "predicted_at_target": 0.6074004967205731,
+            "measured_at_target": 0.6073994636535645,
+            "delta_attention": -0.2908437252044678,
+            "predicted_delta_attention": -0.29084269213745917
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              20
+            ],
+            "intended_suppression": 5.9269977810430765,
+            "achieved_suppression": 5.389506002225199,
+            "suppression_ratio": 0.9093146650844053,
+            "prediction_error": 1.7310585520569077e-06,
+            "predicted_at_target": 0.8873003150429271,
+            "measured_at_target": 0.887298583984375,
+            "delta_attention": -0.010944604873657227,
+            "predicted_delta_attention": -0.01094287381510517
+          },
+          "same_pair": false,
+          "ratio": 0.2649918997506982,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 5,
+          "head": 8,
+          "query": 111,
+          "target": 1,
+          "delta": 110,
+          "n_visible": 111,
+          "baseline_attention": 0.8980126976966858,
+          "baseline_prediction_error": 5.8233386668327114e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              23
+            ],
+            "intended_suppression": 13.329088334241463,
+            "achieved_suppression": 13.329088334241463,
+            "suppression_ratio": 1.0,
+            "prediction_error": 9.953695156994513e-08,
+            "predicted_at_target": 0.33882042051926947,
+            "measured_at_target": 0.33882051706314087,
+            "delta_attention": -0.5591921806335449,
+            "predicted_delta_attention": -0.5591922771774163
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              23
+            ],
+            "intended_suppression": 11.456808004039695,
+            "achieved_suppression": 13.329088334241463,
+            "suppression_ratio": 1.1634207651504327,
+            "prediction_error": 9.953695156994513e-08,
+            "predicted_at_target": 0.33882042051926947,
+            "measured_at_target": 0.33882051706314087,
+            "delta_attention": -0.5591921806335449,
+            "predicted_delta_attention": -0.5591922771774163
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 6,
+          "head": 5,
+          "query": 192,
+          "target": 189,
+          "delta": 3,
+          "n_visible": 192,
+          "baseline_attention": 0.8977011442184448,
+          "baseline_prediction_error": 1.9515941789352564e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              8
+            ],
+            "intended_suppression": 19.47739201415219,
+            "achieved_suppression": 19.47739201415219,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.1282625129479555e-07,
+            "predicted_at_target": 0.5343897386744506,
+            "measured_at_target": 0.5343901515007019,
+            "delta_attention": -0.3633109927177429,
+            "predicted_delta_attention": -0.3633114055439942
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              16
+            ],
+            "intended_suppression": 4.102608616656771,
+            "achieved_suppression": 3.756566454289946,
+            "suppression_ratio": 0.9156531381126928,
+            "prediction_error": 1.8096259088093425e-07,
+            "predicted_at_target": 0.8648044699260731,
+            "measured_at_target": 0.8648045659065247,
+            "delta_attention": -0.032896578311920166,
+            "predicted_delta_attention": -0.03289667429237175
+          },
+          "same_pair": false,
+          "ratio": 0.19286804165364854,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 6,
+          "head": 1,
+          "query": 328,
+          "target": 327,
+          "delta": 1,
+          "n_visible": 328,
+          "baseline_attention": 0.8975333571434021,
+          "baseline_prediction_error": 7.368105703342565e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              0
+            ],
+            "intended_suppression": 16.65937123264828,
+            "achieved_suppression": 16.65937123264828,
+            "suppression_ratio": 1.0,
+            "prediction_error": 8.496542328595424e-07,
+            "predicted_at_target": 0.5348946604032868,
+            "measured_at_target": 0.534893810749054,
+            "delta_attention": -0.36263954639434814,
+            "predicted_delta_attention": -0.3626386967401153
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              16
+            ],
+            "intended_suppression": 6.487690496514613,
+            "achieved_suppression": 4.151976202790197,
+            "suppression_ratio": 0.6399775397764068,
+            "prediction_error": 2.450454394953283e-07,
+            "predicted_at_target": 0.842335409592406,
+            "measured_at_target": 0.8423351645469666,
+            "delta_attention": -0.05519819259643555,
+            "predicted_delta_attention": -0.05519794755099605
+          },
+          "same_pair": false,
+          "ratio": 0.2492276656068113,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 5,
+          "head": 9,
+          "query": 66,
+          "target": 1,
+          "delta": 65,
+          "n_visible": 66,
+          "baseline_attention": 0.8973367214202881,
+          "baseline_prediction_error": 1.7557008769042426e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 12.433255698544468,
+            "achieved_suppression": 12.433255698544468,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.0214077312008527e-07,
+            "predicted_at_target": 0.6253599161719926,
+            "measured_at_target": 0.6253597140312195,
+            "delta_attention": -0.2719770073890686,
+            "predicted_delta_attention": -0.2719768052482955
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 12.459580577055675,
+            "achieved_suppression": 12.433255698544468,
+            "suppression_ratio": 0.9978871777947578,
+            "prediction_error": 2.0214077312008527e-07,
+            "predicted_at_target": 0.6253599161719926,
+            "measured_at_target": 0.6253597140312195,
+            "delta_attention": -0.2719770073890686,
+            "predicted_delta_attention": -0.2719768052482955
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 7,
+          "head": 5,
+          "query": 70,
+          "target": 1,
+          "delta": 69,
+          "n_visible": 70,
+          "baseline_attention": 0.8971580266952515,
+          "baseline_prediction_error": 1.618770040234807e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 31.599846927058806,
+            "achieved_suppression": 31.599846927058806,
+            "suppression_ratio": 1.0,
+            "prediction_error": 5.696211452521638e-08,
+            "predicted_at_target": 0.06436682395778182,
+            "measured_at_target": 0.06436684727668762,
+            "delta_attention": -0.8327911794185638,
+            "predicted_delta_attention": -0.8327912027374696
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 31.669398431584156,
+            "achieved_suppression": 31.599846927058806,
+            "suppression_ratio": 0.9978038261549046,
+            "prediction_error": 5.696211452521638e-08,
+            "predicted_at_target": 0.06436682395778182,
+            "measured_at_target": 0.06436684727668762,
+            "delta_attention": -0.8327911794185638,
+            "predicted_delta_attention": -0.8327912027374696
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 6,
+          "head": 8,
+          "query": 112,
+          "target": 1,
+          "delta": 111,
+          "n_visible": 112,
+          "baseline_attention": 0.8969530463218689,
+          "baseline_prediction_error": 1.684174266713967e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              24
+            ],
+            "intended_suppression": 17.28414364258135,
+            "achieved_suppression": 17.28414364258135,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.2078906628263404e-08,
+            "predicted_at_target": 0.15480978738224355,
+            "measured_at_target": 0.15480980277061462,
+            "delta_attention": -0.7421432435512543,
+            "predicted_delta_attention": -0.7421432589396253
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              24
+            ],
+            "intended_suppression": 16.097407669498974,
+            "achieved_suppression": 17.28414364258135,
+            "suppression_ratio": 1.0737221792134255,
+            "prediction_error": 3.2078906628263404e-08,
+            "predicted_at_target": 0.15480978738224355,
+            "measured_at_target": 0.15480980277061462,
+            "delta_attention": -0.7421432435512543,
+            "predicted_delta_attention": -0.7421432589396253
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 9,
+          "head": 2,
+          "query": 245,
+          "target": 240,
+          "delta": 5,
+          "n_visible": 245,
+          "baseline_attention": 0.8965712189674377,
+          "baseline_prediction_error": 1.0687720197744e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 27.484544967749574,
+            "achieved_suppression": 27.484544967749574,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.1307975694995207e-07,
+            "predicted_at_target": 0.5964194789597328,
+            "measured_at_target": 0.5964196920394897,
+            "delta_attention": -0.300151526927948,
+            "predicted_delta_attention": -0.30015174000770495
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 27.69604499209933,
+            "achieved_suppression": 27.484544967749574,
+            "suppression_ratio": 0.9923635297238256,
+            "prediction_error": 2.1307975694995207e-07,
+            "predicted_at_target": 0.5964194789597328,
+            "measured_at_target": 0.5964196920394897,
+            "delta_attention": -0.300151526927948,
+            "predicted_delta_attention": -0.30015174000770495
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 7,
+          "head": 0,
+          "query": 62,
+          "target": 1,
+          "delta": 61,
+          "n_visible": 62,
+          "baseline_attention": 0.8964928388595581,
+          "baseline_prediction_error": 3.594974917753291e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              27
+            ],
+            "intended_suppression": 14.557219030973798,
+            "achieved_suppression": 14.557219030973798,
+            "suppression_ratio": 1.0,
+            "prediction_error": 8.178728372332245e-08,
+            "predicted_at_target": 0.7030397431753322,
+            "measured_at_target": 0.703039824962616,
+            "delta_attention": -0.19345301389694214,
+            "predicted_delta_attention": -0.19345309568422586
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              27
+            ],
+            "intended_suppression": 14.386738406748403,
+            "achieved_suppression": 14.557219030973798,
+            "suppression_ratio": 1.0118498452815008,
+            "prediction_error": 8.178728372332245e-08,
+            "predicted_at_target": 0.7030397431753322,
+            "measured_at_target": 0.703039824962616,
+            "delta_attention": -0.19345301389694214,
+            "predicted_delta_attention": -0.19345309568422586
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 11,
+          "head": 1,
+          "query": 109,
+          "target": 1,
+          "delta": 108,
+          "n_visible": 109,
+          "baseline_attention": 0.8962479829788208,
+          "baseline_prediction_error": 1.0421877649768874e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              25
+            ],
+            "intended_suppression": 21.486952386690835,
+            "achieved_suppression": 21.486952386690835,
+            "suppression_ratio": 1.0,
+            "prediction_error": 5.623578935853857e-08,
+            "predicted_at_target": 0.6228075657200822,
+            "measured_at_target": 0.6228076219558716,
+            "delta_attention": -0.2734403610229492,
+            "predicted_delta_attention": -0.2734404172587386
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              25
+            ],
+            "intended_suppression": 18.260433316767152,
+            "achieved_suppression": 21.486952386690835,
+            "suppression_ratio": 1.176694551216428,
+            "prediction_error": 5.623578935853857e-08,
+            "predicted_at_target": 0.6228075657200822,
+            "measured_at_target": 0.6228076219558716,
+            "delta_attention": -0.2734403610229492,
+            "predicted_delta_attention": -0.2734404172587386
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 1,
+          "head": 0,
+          "query": 168,
+          "target": 167,
+          "delta": 1,
+          "n_visible": 168,
+          "baseline_attention": 0.8961848020553589,
+          "baseline_prediction_error": 1.0106946601862177e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              0
+            ],
+            "intended_suppression": 43.42657019803951,
+            "achieved_suppression": 43.42657019803951,
+            "suppression_ratio": 1.0,
+            "prediction_error": 5.712703660121221e-07,
+            "predicted_at_target": 0.08259087560874996,
+            "measured_at_target": 0.08259062469005585,
+            "delta_attention": -0.813594177365303,
+            "predicted_delta_attention": -0.8135939264466089
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              15
+            ],
+            "intended_suppression": 2.798179475087591,
+            "achieved_suppression": 2.2024047448283564,
+            "suppression_ratio": 0.7870848758760962,
+            "prediction_error": 9.052383709295952e-08,
+            "predicted_at_target": 0.8885452438153048,
+            "measured_at_target": 0.8885453343391418,
+            "delta_attention": -0.007639467716217041,
+            "predicted_delta_attention": -0.007639558240054134
+          },
+          "same_pair": false,
+          "ratio": 0.050715604174694506,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 7,
+          "head": 10,
+          "query": 255,
+          "target": 254,
+          "delta": 1,
+          "n_visible": 255,
+          "baseline_attention": 0.8958314657211304,
+          "baseline_prediction_error": 1.1445915946151075e-06,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              3
+            ],
+            "intended_suppression": 16.81884649727393,
+            "achieved_suppression": 16.81884649727393,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.581806037849077e-06,
+            "predicted_at_target": 0.6715406963537673,
+            "measured_at_target": 0.6715381145477295,
+            "delta_attention": -0.22429335117340088,
+            "predicted_delta_attention": -0.22429076936736303
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              20
+            ],
+            "intended_suppression": 24.38322244996401,
+            "achieved_suppression": -2.9644732962115277,
+            "suppression_ratio": -0.12157840508139658,
+            "prediction_error": 1.3969350118880897e-06,
+            "predicted_at_target": 0.8938419483113547,
+            "measured_at_target": 0.8938405513763428,
+            "delta_attention": -0.0019909143447875977,
+            "predicted_delta_attention": -0.0019895174097757096
+          },
+          "same_pair": false,
+          "ratio": -0.17625901376126013,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 8,
+          "head": 9,
+          "query": 49,
+          "target": 1,
+          "delta": 48,
+          "n_visible": 49,
+          "baseline_attention": 0.8956698179244995,
+          "baseline_prediction_error": 5.901151789444725e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 12.413385281510791,
+            "achieved_suppression": 12.413385281510791,
+            "suppression_ratio": 1.0,
+            "prediction_error": 7.060875362174812e-08,
+            "predicted_at_target": 0.6485103854764515,
+            "measured_at_target": 0.6485104560852051,
+            "delta_attention": -0.24715936183929443,
+            "predicted_delta_attention": -0.24715943244804806
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 12.522913133444384,
+            "achieved_suppression": 12.357580522599521,
+            "suppression_ratio": 0.9867975918156523,
+            "prediction_error": 1.9963768765896006e-07,
+            "predicted_at_target": 0.5455907924361946,
+            "measured_at_target": 0.545590877532959,
+            "delta_attention": -0.3500789403915405,
+            "predicted_delta_attention": -0.35007902548830494
+          },
+          "same_pair": false,
+          "ratio": 0.995504468954622,
+          "prompt_index": 0,
+          "n_tokens": 351
+        },
+        {
+          "layer": 11,
+          "head": 7,
+          "query": 70,
+          "target": 1,
+          "delta": 69,
+          "n_visible": 70,
+          "baseline_attention": 0.8955902457237244,
+          "baseline_prediction_error": 1.1297827839928942e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 23.735727326008654,
+            "achieved_suppression": 23.735727326008654,
+            "suppression_ratio": 1.0,
+            "prediction_error": 6.934692242666074e-08,
+            "predicted_at_target": 0.5765189625888048,
+            "measured_at_target": 0.5765188932418823,
+            "delta_attention": -0.31907135248184204,
+            "predicted_delta_attention": -0.3190712831349196
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 23.72469612201036,
+            "achieved_suppression": 23.735727326008654,
+            "suppression_ratio": 1.0004649671355772,
+            "prediction_error": 6.934692242666074e-08,
+            "predicted_at_target": 0.5765189625888048,
+            "measured_at_target": 0.5765188932418823,
+            "delta_attention": -0.31907135248184204,
+            "predicted_delta_attention": -0.3190712831349196
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 351
+        }
+      ]
+    },
+    {
+      "model_id": "HuggingFaceTB/SmolLM-135M",
+      "rope_dim": 64,
+      "rope_theta": 10000.0,
+      "n_heads": 9,
+      "n_cells": 32,
+      "n_selection_differs": 3,
+      "budget": 1,
+      "cell_selection": {
+        "min_peak": 0.001,
+        "max_peak": 0.9,
+        "min_visible_keys": 32,
+        "rule": "one candidate per head: its strongest baseline attention row that is neither saturated nor shorter than min_visible_keys, diagonal excluded, chosen before any intervention"
+      },
+      "schema_note": "suppression_ratio = achieved / intended at the head's own strongest unsaturated key; prediction_error is a max over the query row of |predicted - measured| post-softmax attention from a float32 forward pass",
+      "pooled": {
+        "baseline_prediction_error_median": 8.016336705291699e-08,
+        "exact_prediction_error_median": 1.0207392969752149e-07,
+        "exact_prediction_error_max": 1.590953699392994e-06,
+        "surrogate_prediction_error_median": 1.0297629032818278e-07,
+        "surrogate_prediction_error_max": 1.590953699392994e-06,
+        "exact_suppression_ratio_min": 1.0,
+        "exact_suppression_ratio_max": 1.0,
+        "surrogate_suppression_ratio_median": 0.9916992191003982,
+        "surrogate_suppression_ratio_min": 0.4658056133120327,
+        "surrogate_sign_reversal_fraction": 0.0,
+        "differing_suppression_ratio_median": 0.6512637928277301,
+        "differing_sign_reversal_fraction": 0.0,
+        "exact_abs_delta_attention_median": 0.8468097615987062,
+        "surrogate_abs_delta_attention_median": 0.8468097615987062,
+        "fraction_selection_differs": 0.09375
+      },
+      "cells": [
+        {
+          "layer": 23,
+          "head": 3,
+          "query": 102,
+          "target": 0,
+          "delta": 102,
+          "n_visible": 102,
+          "baseline_attention": 0.8999996781349182,
+          "baseline_prediction_error": 2.3631897660969514e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 16.997556949636753,
+            "achieved_suppression": 16.997556949636753,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.6361673865761261e-07,
+            "predicted_at_target": 0.2115940548599589,
+            "measured_at_target": 0.21159414947032928,
+            "delta_attention": -0.6884055286645889,
+            "predicted_delta_attention": -0.6884056232749594
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 17.085483813079218,
+            "achieved_suppression": 16.997556949636753,
+            "suppression_ratio": 0.9948537094761604,
+            "prediction_error": 1.6361673865761261e-07,
+            "predicted_at_target": 0.2115940548599589,
+            "measured_at_target": 0.21159414947032928,
+            "delta_attention": -0.6884055286645889,
+            "predicted_delta_attention": -0.6884056232749594
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 17,
+          "head": 0,
+          "query": 84,
+          "target": 0,
+          "delta": 84,
+          "n_visible": 84,
+          "baseline_attention": 0.8999977111816406,
+          "baseline_prediction_error": 9.311697923841677e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 34.599377627640294,
+            "achieved_suppression": 34.599377627640294,
+            "suppression_ratio": 1.0,
+            "prediction_error": 5.044740551685134e-08,
+            "predicted_at_target": 0.003496013418429741,
+            "measured_at_target": 0.003496013581752777,
+            "delta_attention": -0.8965016975998878,
+            "predicted_delta_attention": -0.8965016977632109
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 34.89653478938558,
+            "achieved_suppression": 34.599377627640294,
+            "suppression_ratio": 0.9914846226555516,
+            "prediction_error": 5.044740551685134e-08,
+            "predicted_at_target": 0.003496013418429741,
+            "measured_at_target": 0.003496013581752777,
+            "delta_attention": -0.8965016975998878,
+            "predicted_delta_attention": -0.8965016977632109
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 21,
+          "head": 4,
+          "query": 185,
+          "target": 0,
+          "delta": 185,
+          "n_visible": 185,
+          "baseline_attention": 0.8999828696250916,
+          "baseline_prediction_error": 2.4867599448391564e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 41.44753859189559,
+            "achieved_suppression": 41.44753859189559,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.0467386595279802e-07,
+            "predicted_at_target": 0.00040614555786444594,
+            "measured_at_target": 0.00040614535100758076,
+            "delta_attention": -0.899576724274084,
+            "predicted_delta_attention": -0.8995767240672271
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 41.78542323166686,
+            "achieved_suppression": 41.44753859189559,
+            "suppression_ratio": 0.9919138155452447,
+            "prediction_error": 2.0467386595279802e-07,
+            "predicted_at_target": 0.00040614555786444594,
+            "measured_at_target": 0.00040614535100758076,
+            "delta_attention": -0.899576724274084,
+            "predicted_delta_attention": -0.8995767240672271
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 28,
+          "head": 8,
+          "query": 169,
+          "target": 0,
+          "delta": 169,
+          "n_visible": 169,
+          "baseline_attention": 0.8999699950218201,
+          "baseline_prediction_error": 1.435407394057009e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 25.09189486478549,
+            "achieved_suppression": 25.09189486478549,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.837727624023124e-07,
+            "predicted_at_target": 0.01583989339633265,
+            "measured_at_target": 0.015839871019124985,
+            "delta_attention": -0.8841301240026951,
+            "predicted_delta_attention": -0.8841301016254874
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 24.855046968514962,
+            "achieved_suppression": 25.09189486478549,
+            "suppression_ratio": 1.0095291671172681,
+            "prediction_error": 3.837727624023124e-07,
+            "predicted_at_target": 0.01583989339633265,
+            "measured_at_target": 0.015839871019124985,
+            "delta_attention": -0.8841301240026951,
+            "predicted_delta_attention": -0.8841301016254874
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 22,
+          "head": 4,
+          "query": 54,
+          "target": 0,
+          "delta": 54,
+          "n_visible": 54,
+          "baseline_attention": 0.8999661803245544,
+          "baseline_prediction_error": 3.056206088203339e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 41.696044081797226,
+            "achieved_suppression": 41.696044081797226,
+            "suppression_ratio": 1.0,
+            "prediction_error": 6.748404021705845e-08,
+            "predicted_at_target": 0.00502182953471844,
+            "measured_at_target": 0.005021830555051565,
+            "delta_attention": -0.8949443497695029,
+            "predicted_delta_attention": -0.894944350789836
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 41.85926019124117,
+            "achieved_suppression": 41.696044081797226,
+            "suppression_ratio": 0.9961008362618388,
+            "prediction_error": 6.748404021705845e-08,
+            "predicted_at_target": 0.00502182953471844,
+            "measured_at_target": 0.005021830555051565,
+            "delta_attention": -0.8949443497695029,
+            "predicted_delta_attention": -0.894944350789836
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 20,
+          "head": 1,
+          "query": 177,
+          "target": 0,
+          "delta": 177,
+          "n_visible": 177,
+          "baseline_attention": 0.8999364376068115,
+          "baseline_prediction_error": 6.715645706201201e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 20.278039292158397,
+            "achieved_suppression": 20.278039292158397,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.283558656612783e-07,
+            "predicted_at_target": 0.024308425778224157,
+            "measured_at_target": 0.024308428168296814,
+            "delta_attention": -0.8756280094385147,
+            "predicted_delta_attention": -0.8756280118285874
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 20.827036849701244,
+            "achieved_suppression": 20.278039292158397,
+            "suppression_ratio": 0.9736401504686096,
+            "prediction_error": 2.283558656612783e-07,
+            "predicted_at_target": 0.024308425778224157,
+            "measured_at_target": 0.024308428168296814,
+            "delta_attention": -0.8756280094385147,
+            "predicted_delta_attention": -0.8756280118285874
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 23,
+          "head": 7,
+          "query": 202,
+          "target": 0,
+          "delta": 202,
+          "n_visible": 202,
+          "baseline_attention": 0.8998895287513733,
+          "baseline_prediction_error": 2.364127061893484e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 24.557220887906045,
+            "achieved_suppression": 24.557220887906045,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.0257787181066078e-07,
+            "predicted_at_target": 0.0798653758605189,
+            "measured_at_target": 0.07986532151699066,
+            "delta_attention": -0.8200242072343826,
+            "predicted_delta_attention": -0.8200241528908544
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 25.115443987926138,
+            "achieved_suppression": 24.557220887906045,
+            "suppression_ratio": 0.9777737116537358,
+            "prediction_error": 2.0257787181066078e-07,
+            "predicted_at_target": 0.0798653758605189,
+            "measured_at_target": 0.07986532151699066,
+            "delta_attention": -0.8200242072343826,
+            "predicted_delta_attention": -0.8200241528908544
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 13,
+          "head": 1,
+          "query": 275,
+          "target": 0,
+          "delta": 275,
+          "n_visible": 275,
+          "baseline_attention": 0.8998764753341675,
+          "baseline_prediction_error": 3.2285469507564724e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 13.677571967245056,
+            "achieved_suppression": 13.677571967245056,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.590953699392994e-06,
+            "predicted_at_target": 0.05531545072567132,
+            "measured_at_target": 0.055315274745225906,
+            "delta_attention": -0.8445612005889416,
+            "predicted_delta_attention": -0.8445610246084961
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 13.472909042020595,
+            "achieved_suppression": 13.677571967245056,
+            "suppression_ratio": 1.0151907004334504,
+            "prediction_error": 1.590953699392994e-06,
+            "predicted_at_target": 0.05531545072567132,
+            "measured_at_target": 0.055315274745225906,
+            "delta_attention": -0.8445612005889416,
+            "predicted_delta_attention": -0.8445610246084961
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 25,
+          "head": 7,
+          "query": 238,
+          "target": 0,
+          "delta": 238,
+          "n_visible": 238,
+          "baseline_attention": 0.8998754024505615,
+          "baseline_prediction_error": 2.7913788169797726e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 23.117612790461276,
+            "achieved_suppression": 23.117612790461276,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.959905954005084e-08,
+            "predicted_at_target": 0.05765990698345855,
+            "measured_at_target": 0.05765992030501366,
+            "delta_attention": -0.8422154821455479,
+            "predicted_delta_attention": -0.842215495467103
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 23.67171853250686,
+            "achieved_suppression": 23.117612790461276,
+            "suppression_ratio": 0.9765920779564583,
+            "prediction_error": 4.959905954005084e-08,
+            "predicted_at_target": 0.05765990698345855,
+            "measured_at_target": 0.05765992030501366,
+            "delta_attention": -0.8422154821455479,
+            "predicted_delta_attention": -0.842215495467103
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 18,
+          "head": 3,
+          "query": 63,
+          "target": 0,
+          "delta": 63,
+          "n_visible": 63,
+          "baseline_attention": 0.8998342752456665,
+          "baseline_prediction_error": 2.146073563302764e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 24.25935030396486,
+            "achieved_suppression": 24.25935030396486,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.8764811787752578e-08,
+            "predicted_at_target": 0.005138458525245782,
+            "measured_at_target": 0.0051384586840868,
+            "delta_attention": -0.8946958165615797,
+            "predicted_delta_attention": -0.8946958167204208
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 24.278328463079873,
+            "achieved_suppression": 24.25935030396486,
+            "suppression_ratio": 0.9992183086597634,
+            "prediction_error": 1.8764811787752578e-08,
+            "predicted_at_target": 0.005138458525245782,
+            "measured_at_target": 0.0051384586840868,
+            "delta_attention": -0.8946958165615797,
+            "predicted_delta_attention": -0.8946958167204208
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 16,
+          "head": 2,
+          "query": 93,
+          "target": 0,
+          "delta": 93,
+          "n_visible": 93,
+          "baseline_attention": 0.8997792601585388,
+          "baseline_prediction_error": 2.8603611701427667e-09,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 21.46255517683688,
+            "achieved_suppression": 21.46255517683688,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.0846509761474064e-08,
+            "predicted_at_target": 0.0012613177939137833,
+            "measured_at_target": 0.0012613177532330155,
+            "delta_attention": -0.8985179424053058,
+            "predicted_delta_attention": -0.898517942364625
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 21.59194885322194,
+            "achieved_suppression": 21.46255517683688,
+            "suppression_ratio": 0.9940073183173666,
+            "prediction_error": 2.0846509761474064e-08,
+            "predicted_at_target": 0.0012613177939137833,
+            "measured_at_target": 0.0012613177532330155,
+            "delta_attention": -0.8985179424053058,
+            "predicted_delta_attention": -0.898517942364625
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 12,
+          "head": 7,
+          "query": 273,
+          "target": 0,
+          "delta": 273,
+          "n_visible": 273,
+          "baseline_attention": 0.8997652530670166,
+          "baseline_prediction_error": 6.72097548674172e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 14.442571535530282,
+            "achieved_suppression": 14.442571535530282,
+            "suppression_ratio": 1.0,
+            "prediction_error": 8.13786915382364e-07,
+            "predicted_at_target": 0.11315424209916158,
+            "measured_at_target": 0.11315417289733887,
+            "delta_attention": -0.7866110801696777,
+            "predicted_delta_attention": -0.786611010967855
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 14.288146341241971,
+            "achieved_suppression": 14.442571535530282,
+            "suppression_ratio": 1.0108079236172556,
+            "prediction_error": 8.13786915382364e-07,
+            "predicted_at_target": 0.11315424209916158,
+            "measured_at_target": 0.11315417289733887,
+            "delta_attention": -0.7866110801696777,
+            "predicted_delta_attention": -0.786611010967855
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 7,
+          "head": 4,
+          "query": 86,
+          "target": 9,
+          "delta": 77,
+          "n_visible": 86,
+          "baseline_attention": 0.8997375965118408,
+          "baseline_prediction_error": 1.7930979967495375e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              22
+            ],
+            "intended_suppression": 51.0125601254202,
+            "achieved_suppression": 51.0125601254202,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.734584966442634e-08,
+            "predicted_at_target": 0.04585159922559359,
+            "measured_at_target": 0.04585159942507744,
+            "delta_attention": -0.8538859970867634,
+            "predicted_delta_attention": -0.8538859972862473
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              22
+            ],
+            "intended_suppression": 49.03444267890233,
+            "achieved_suppression": 51.0125601254202,
+            "suppression_ratio": 1.040341387368699,
+            "prediction_error": 4.734584966442634e-08,
+            "predicted_at_target": 0.04585159922559359,
+            "measured_at_target": 0.04585159942507744,
+            "delta_attention": -0.8538859970867634,
+            "predicted_delta_attention": -0.8538859972862473
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 25,
+          "head": 3,
+          "query": 275,
+          "target": 0,
+          "delta": 275,
+          "n_visible": 275,
+          "baseline_attention": 0.8997252583503723,
+          "baseline_prediction_error": 2.3216264400521824e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 27.45431011819623,
+            "achieved_suppression": 27.45431011819623,
+            "suppression_ratio": 1.0,
+            "prediction_error": 7.333673556625397e-08,
+            "predicted_at_target": 0.02423766430399265,
+            "measured_at_target": 0.024237675592303276,
+            "delta_attention": -0.875487582758069,
+            "predicted_delta_attention": -0.8754875940463797
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 28.101149089445368,
+            "achieved_suppression": 27.45431011819623,
+            "suppression_ratio": 0.976981760810198,
+            "prediction_error": 7.333673556625397e-08,
+            "predicted_at_target": 0.02423766430399265,
+            "measured_at_target": 0.024237675592303276,
+            "delta_attention": -0.875487582758069,
+            "predicted_delta_attention": -0.8754875940463797
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 14,
+          "head": 7,
+          "query": 199,
+          "target": 0,
+          "delta": 199,
+          "n_visible": 199,
+          "baseline_attention": 0.8997252583503723,
+          "baseline_prediction_error": 1.179247687277396e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 14.326938663997812,
+            "achieved_suppression": 14.326938663997812,
+            "suppression_ratio": 1.0,
+            "prediction_error": 8.828262620941274e-08,
+            "predicted_at_target": 0.07988006603993049,
+            "measured_at_target": 0.07988005131483078,
+            "delta_attention": -0.8198452070355415,
+            "predicted_delta_attention": -0.8198451923104418
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 14.389691750810982,
+            "achieved_suppression": 14.326938663997812,
+            "suppression_ratio": 0.9956390249423075,
+            "prediction_error": 8.828262620941274e-08,
+            "predicted_at_target": 0.07988006603993049,
+            "measured_at_target": 0.07988005131483078,
+            "delta_attention": -0.8198452070355415,
+            "predicted_delta_attention": -0.8198451923104418
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 27,
+          "head": 2,
+          "query": 81,
+          "target": 0,
+          "delta": 81,
+          "n_visible": 81,
+          "baseline_attention": 0.8997085094451904,
+          "baseline_prediction_error": 1.6045663620012363e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 15.41346354443209,
+            "achieved_suppression": 15.41346354443209,
+            "suppression_ratio": 1.0,
+            "prediction_error": 7.33755199100461e-08,
+            "predicted_at_target": 0.0852403342105605,
+            "measured_at_target": 0.08524032682180405,
+            "delta_attention": -0.8144681826233864,
+            "predicted_delta_attention": -0.8144681752346299
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 15.612338021672134,
+            "achieved_suppression": 15.41346354443209,
+            "suppression_ratio": 0.9872617107723406,
+            "prediction_error": 7.33755199100461e-08,
+            "predicted_at_target": 0.0852403342105605,
+            "measured_at_target": 0.08524032682180405,
+            "delta_attention": -0.8144681826233864,
+            "predicted_delta_attention": -0.8144681752346299
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 22,
+          "head": 0,
+          "query": 132,
+          "target": 0,
+          "delta": 132,
+          "n_visible": 132,
+          "baseline_attention": 0.8996978998184204,
+          "baseline_prediction_error": 4.516127571907447e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 34.10005006740454,
+            "achieved_suppression": 34.10005006740454,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.460687454133083e-08,
+            "predicted_at_target": 0.005962485421529907,
+            "measured_at_target": 0.005962484981864691,
+            "delta_attention": -0.8937354148365557,
+            "predicted_delta_attention": -0.8937354143968905
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 34.458841880824345,
+            "achieved_suppression": 34.10005006740454,
+            "suppression_ratio": 0.989587815671209,
+            "prediction_error": 4.460687454133083e-08,
+            "predicted_at_target": 0.005962485421529907,
+            "measured_at_target": 0.005962484981864691,
+            "delta_attention": -0.8937354148365557,
+            "predicted_delta_attention": -0.8937354143968905
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 22,
+          "head": 1,
+          "query": 165,
+          "target": 0,
+          "delta": 165,
+          "n_visible": 165,
+          "baseline_attention": 0.8996895551681519,
+          "baseline_prediction_error": 2.209582244949715e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 20.336609211609048,
+            "achieved_suppression": 20.336609211609048,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.010054500096615e-08,
+            "predicted_at_target": 0.05358046884232193,
+            "measured_at_target": 0.05358046293258667,
+            "delta_attention": -0.8461090922355652,
+            "predicted_delta_attention": -0.8461090863258299
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 20.65193248547825,
+            "achieved_suppression": 20.336609211609048,
+            "suppression_ratio": 0.9847315366689812,
+            "prediction_error": 3.010054500096615e-08,
+            "predicted_at_target": 0.05358046884232193,
+            "measured_at_target": 0.05358046293258667,
+            "delta_attention": -0.8461090922355652,
+            "predicted_delta_attention": -0.8461090863258299
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 8,
+          "head": 5,
+          "query": 215,
+          "target": 211,
+          "delta": 4,
+          "n_visible": 215,
+          "baseline_attention": 0.8996708393096924,
+          "baseline_prediction_error": 3.8705135196881457e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              9
+            ],
+            "intended_suppression": 16.08567075158115,
+            "achieved_suppression": 16.08567075158115,
+            "suppression_ratio": 1.0,
+            "prediction_error": 3.342363705804985e-07,
+            "predicted_at_target": 0.6688724990155825,
+            "measured_at_target": 0.6688728332519531,
+            "delta_attention": -0.23079800605773926,
+            "predicted_delta_attention": -0.23079834029410984
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              20
+            ],
+            "intended_suppression": 6.591059199404713,
+            "achieved_suppression": 4.9919334082919855,
+            "suppression_ratio": 0.7573795436009502,
+            "prediction_error": 2.619078325327706e-07,
+            "predicted_at_target": 0.8621035579392744,
+            "measured_at_target": 0.8621038198471069,
+            "delta_attention": -0.03756701946258545,
+            "predicted_delta_attention": -0.03756728137041798
+          },
+          "same_pair": false,
+          "ratio": 0.3103341778769965,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 23,
+          "head": 1,
+          "query": 95,
+          "target": 0,
+          "delta": 95,
+          "n_visible": 95,
+          "baseline_attention": 0.8996485471725464,
+          "baseline_prediction_error": 6.516581152471446e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 21.37286057196528,
+            "achieved_suppression": 21.37286057196528,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.7994588472070028e-08,
+            "predicted_at_target": 0.0836750465484878,
+            "measured_at_target": 0.08367503434419632,
+            "delta_attention": -0.8159735128283501,
+            "predicted_delta_attention": -0.8159735006240586
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              28
+            ],
+            "intended_suppression": 21.375462073837888,
+            "achieved_suppression": 21.37286057196528,
+            "suppression_ratio": 0.9998782949410113,
+            "prediction_error": 1.7994588472070028e-08,
+            "predicted_at_target": 0.0836750465484878,
+            "measured_at_target": 0.08367503434419632,
+            "delta_attention": -0.8159735128283501,
+            "predicted_delta_attention": -0.8159735006240586
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 14,
+          "head": 1,
+          "query": 198,
+          "target": 0,
+          "delta": 198,
+          "n_visible": 198,
+          "baseline_attention": 0.8996261358261108,
+          "baseline_prediction_error": 1.3688738664807687e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 27.67685443120748,
+            "achieved_suppression": 27.67685443120748,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.1534230254527387e-07,
+            "predicted_at_target": 5.292522448725688e-05,
+            "measured_at_target": 5.292518835631199e-05,
+            "delta_attention": -0.8995732106377545,
+            "predicted_delta_attention": -0.8995732106016235
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 28.004226525997062,
+            "achieved_suppression": 27.67685443120748,
+            "suppression_ratio": 0.9883099040608863,
+            "prediction_error": 2.1534230254527387e-07,
+            "predicted_at_target": 5.292522448725688e-05,
+            "measured_at_target": 5.292518835631199e-05,
+            "delta_attention": -0.8995732106377545,
+            "predicted_delta_attention": -0.8995732106016235
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 28,
+          "head": 0,
+          "query": 32,
+          "target": 0,
+          "delta": 32,
+          "n_visible": 32,
+          "baseline_attention": 0.8995629549026489,
+          "baseline_prediction_error": 2.565529246822962e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 30.755726469261248,
+            "achieved_suppression": 30.755726469261248,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.3491786416141025e-07,
+            "predicted_at_target": 0.09714720337438193,
+            "measured_at_target": 0.09714726358652115,
+            "delta_attention": -0.8024156913161278,
+            "predicted_delta_attention": -0.802415751528267
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 30.77731127809311,
+            "achieved_suppression": 30.755726469261248,
+            "suppression_ratio": 0.9992986778917486,
+            "prediction_error": 2.3491786416141025e-07,
+            "predicted_at_target": 0.09714720337438193,
+            "measured_at_target": 0.09714726358652115,
+            "delta_attention": -0.8024156913161278,
+            "predicted_delta_attention": -0.802415751528267
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 13,
+          "head": 8,
+          "query": 52,
+          "target": 51,
+          "delta": 1,
+          "n_visible": 52,
+          "baseline_attention": 0.8995607495307922,
+          "baseline_prediction_error": 2.647339266692583e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              0
+            ],
+            "intended_suppression": 45.48248467668252,
+            "achieved_suppression": 45.48248467668252,
+            "suppression_ratio": 1.0,
+            "prediction_error": 7.717124220207872e-08,
+            "predicted_at_target": 0.08047027153624535,
+            "measured_at_target": 0.0804702639579773,
+            "delta_attention": -0.8190904855728149,
+            "predicted_delta_attention": -0.8190904779945469
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              11
+            ],
+            "intended_suppression": 19.975218022213014,
+            "achieved_suppression": 9.304568681878502,
+            "suppression_ratio": 0.4658056133120327,
+            "prediction_error": 1.1766995444695283e-07,
+            "predicted_at_target": 0.8452565089360331,
+            "measured_at_target": 0.8452566266059875,
+            "delta_attention": -0.05430412292480469,
+            "predicted_delta_attention": -0.054304240594759134
+          },
+          "same_pair": false,
+          "ratio": 0.20457476648474904,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 22,
+          "head": 7,
+          "query": 117,
+          "target": 0,
+          "delta": 117,
+          "n_visible": 117,
+          "baseline_attention": 0.8995447158813477,
+          "baseline_prediction_error": 1.1123635994952918e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 34.03425448545366,
+            "achieved_suppression": 34.03425448545366,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.400165355689101e-08,
+            "predicted_at_target": 0.004292383448062647,
+            "measured_at_target": 0.004292383324354887,
+            "delta_attention": -0.8952523325569928,
+            "predicted_delta_attention": -0.8952523324332851
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              29
+            ],
+            "intended_suppression": 33.92589627746948,
+            "achieved_suppression": 34.03425448545366,
+            "suppression_ratio": 1.0031939674370856,
+            "prediction_error": 4.400165355689101e-08,
+            "predicted_at_target": 0.004292383448062647,
+            "measured_at_target": 0.004292383324354887,
+            "delta_attention": -0.8952523325569928,
+            "predicted_delta_attention": -0.8952523324332851
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 27,
+          "head": 4,
+          "query": 287,
+          "target": 0,
+          "delta": 287,
+          "n_visible": 287,
+          "baseline_attention": 0.8995311260223389,
+          "baseline_prediction_error": 1.49084511957831e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              26
+            ],
+            "intended_suppression": 27.155665813025198,
+            "achieved_suppression": 27.155665813025198,
+            "suppression_ratio": 1.0,
+            "prediction_error": 5.662250776583555e-08,
+            "predicted_at_target": 0.0020450445444134,
+            "measured_at_target": 0.002045044442638755,
+            "delta_attention": -0.8974860815797001,
+            "predicted_delta_attention": -0.8974860814779254
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              26
+            ],
+            "intended_suppression": 25.537874146646026,
+            "achieved_suppression": 27.155665813025198,
+            "suppression_ratio": 1.0633487210834125,
+            "prediction_error": 5.662250776583555e-08,
+            "predicted_at_target": 0.0020450445444134,
+            "measured_at_target": 0.002045044442638755,
+            "delta_attention": -0.8974860815797001,
+            "predicted_delta_attention": -0.8974860814779254
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 11,
+          "head": 5,
+          "query": 217,
+          "target": 216,
+          "delta": 1,
+          "n_visible": 217,
+          "baseline_attention": 0.8995246291160583,
+          "baseline_prediction_error": 2.697426508546652e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              8
+            ],
+            "intended_suppression": 18.70314222693902,
+            "achieved_suppression": 18.70314222693902,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.1586523318563025e-07,
+            "predicted_at_target": 0.6380561027588818,
+            "measured_at_target": 0.638056218624115,
+            "delta_attention": -0.26146841049194336,
+            "predicted_delta_attention": -0.26146852635717655
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              18
+            ],
+            "intended_suppression": 9.016918097151116,
+            "achieved_suppression": 5.872392279567634,
+            "suppression_ratio": 0.6512637928277301,
+            "prediction_error": 8.534886075661774e-08,
+            "predicted_at_target": 0.8567375879337625,
+            "measured_at_target": 0.8567376732826233,
+            "delta_attention": -0.04278695583343506,
+            "predicted_delta_attention": -0.042787041182295815
+          },
+          "same_pair": false,
+          "ratio": 0.3139789137201422,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 11,
+          "head": 7,
+          "query": 239,
+          "target": 237,
+          "delta": 2,
+          "n_visible": 239,
+          "baseline_attention": 0.8995055556297302,
+          "baseline_prediction_error": 1.1109962649857863e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              22
+            ],
+            "intended_suppression": 13.578851560687983,
+            "achieved_suppression": 13.578851560687983,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.3255123498812083e-07,
+            "predicted_at_target": 0.9065137638950765,
+            "measured_at_target": 0.9065136313438416,
+            "delta_attention": 0.007008075714111328,
+            "predicted_delta_attention": 0.007008208265346316
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              22
+            ],
+            "intended_suppression": 20.982345622026493,
+            "achieved_suppression": 13.578851560687983,
+            "suppression_ratio": 0.6471560332336441,
+            "prediction_error": 1.3255123498812083e-07,
+            "predicted_at_target": 0.9065137638950765,
+            "measured_at_target": 0.9065136313438416,
+            "delta_attention": 0.007008075714111328,
+            "predicted_delta_attention": 0.007008208265346316
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 5,
+          "head": 2,
+          "query": 83,
+          "target": 9,
+          "delta": 74,
+          "n_visible": 83,
+          "baseline_attention": 0.8995001316070557,
+          "baseline_prediction_error": 4.34031773854926e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              23
+            ],
+            "intended_suppression": 49.74705906533218,
+            "achieved_suppression": 49.74705906533218,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.482458808517052e-07,
+            "predicted_at_target": 0.051989723773903304,
+            "measured_at_target": 0.05198970064520836,
+            "delta_attention": -0.8475104309618473,
+            "predicted_delta_attention": -0.8475104078331523
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              23
+            ],
+            "intended_suppression": 48.04515172833904,
+            "achieved_suppression": 49.74705906533218,
+            "suppression_ratio": 1.0354230817422787,
+            "prediction_error": 2.482458808517052e-07,
+            "predicted_at_target": 0.051989723773903304,
+            "measured_at_target": 0.05198970064520836,
+            "delta_attention": -0.8475104309618473,
+            "predicted_delta_attention": -0.8475104078331523
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 27,
+          "head": 8,
+          "query": 194,
+          "target": 0,
+          "delta": 194,
+          "n_visible": 194,
+          "baseline_attention": 0.8994981050491333,
+          "baseline_prediction_error": 3.261273773258466e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 20.31930249569598,
+            "achieved_suppression": 20.31930249569598,
+            "suppression_ratio": 1.0,
+            "prediction_error": 1.7808327529289514e-07,
+            "predicted_at_target": 0.09627581364695606,
+            "measured_at_target": 0.09627579897642136,
+            "delta_attention": -0.803222306072712,
+            "predicted_delta_attention": -0.8032222914021773
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 20.910170914437806,
+            "achieved_suppression": 20.31930249569598,
+            "suppression_ratio": 0.9717425351921035,
+            "prediction_error": 1.7808327529289514e-07,
+            "predicted_at_target": 0.09627581364695606,
+            "measured_at_target": 0.09627579897642136,
+            "delta_attention": -0.803222306072712,
+            "predicted_delta_attention": -0.8032222914021773
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 19,
+          "head": 5,
+          "query": 201,
+          "target": 0,
+          "delta": 201,
+          "n_visible": 201,
+          "baseline_attention": 0.8994675278663635,
+          "baseline_prediction_error": 3.6502064859611494e-07,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 26.772687430267236,
+            "achieved_suppression": 26.772687430267236,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.3067764298723148e-07,
+            "predicted_at_target": 0.030590600181886654,
+            "measured_at_target": 0.030590595677495003,
+            "delta_attention": -0.8688769321888685,
+            "predicted_delta_attention": -0.8688769276844769
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              30
+            ],
+            "intended_suppression": 27.13035195004935,
+            "achieved_suppression": 26.772687430267236,
+            "suppression_ratio": 0.9868168123863406,
+            "prediction_error": 2.3067764298723148e-07,
+            "predicted_at_target": 0.030590600181886654,
+            "measured_at_target": 0.030590595677495003,
+            "delta_attention": -0.8688769321888685,
+            "predicted_delta_attention": -0.8688769276844769
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 28,
+          "head": 3,
+          "query": 165,
+          "target": 0,
+          "delta": 165,
+          "n_visible": 165,
+          "baseline_attention": 0.8994653224945068,
+          "baseline_prediction_error": 5.4336895649598205e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 43.236119104785296,
+            "achieved_suppression": 43.236119104785296,
+            "suppression_ratio": 1.0,
+            "prediction_error": 4.5340509596814016e-08,
+            "predicted_at_target": 0.009456760541398873,
+            "measured_at_target": 0.009456760250031948,
+            "delta_attention": -0.8900085622444749,
+            "predicted_delta_attention": -0.890008561953108
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 43.785414107744366,
+            "achieved_suppression": 43.236119104785296,
+            "suppression_ratio": 0.9874548405181827,
+            "prediction_error": 4.5340509596814016e-08,
+            "predicted_at_target": 0.009456760541398873,
+            "measured_at_target": 0.009456760250031948,
+            "delta_attention": -0.8900085622444749,
+            "predicted_delta_attention": -0.890008561953108
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        },
+        {
+          "layer": 26,
+          "head": 2,
+          "query": 222,
+          "target": 0,
+          "delta": 222,
+          "n_visible": 222,
+          "baseline_attention": 0.8994551301002502,
+          "baseline_prediction_error": 6.357286211344793e-08,
+          "exact": {
+            "rule": "exact",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 36.147866641287315,
+            "achieved_suppression": 36.147866641287315,
+            "suppression_ratio": 1.0,
+            "prediction_error": 2.681859111453022e-07,
+            "predicted_at_target": 0.0901071653805937,
+            "measured_at_target": 0.09010716527700424,
+            "delta_attention": -0.809347964823246,
+            "predicted_delta_attention": -0.8093479647196565
+          },
+          "surrogate": {
+            "rule": "surrogate",
+            "pairs": [
+              31
+            ],
+            "intended_suppression": 36.12724828571629,
+            "achieved_suppression": 36.147866641287315,
+            "suppression_ratio": 1.0005707148080574,
+            "prediction_error": 2.681859111453022e-07,
+            "predicted_at_target": 0.0901071653805937,
+            "measured_at_target": 0.09010716527700424,
+            "delta_attention": -0.809347964823246,
+            "predicted_delta_attention": -0.8093479647196565
+          },
+          "same_pair": true,
+          "ratio": 1.0,
+          "prompt_index": 0,
+          "n_tokens": 300
+        }
+      ]
+    }
+  ]
+}
