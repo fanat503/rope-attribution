@@ -1031,7 +1031,7 @@ CLAIMS += (
     # results/qk_attribution.json, whose aggregate block is the source.
     Claim(
         "qk_intro_dictionary",
-        r"public \$(\d+)\$k dictionary on \\texttt\{pythia-70m\}, where the bucket "
+        r"public \$(\d+)\$k dictionary on \\texttt\{pythia-70m(?:-deduped)?\}, where the bucket "
         r"identity closes to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$",
     ),
     Claim(
@@ -1199,6 +1199,20 @@ CLAIMS += (
         r"&\s*\$(\d+)\$, \$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\\%\$ & "
         r"\\texttt\{results/qk\\_trajectory\.json :: pooled\}",
     ),
+    # ---- the second dictionary, as an external-validity check -----------------
+    Claim(
+        "qk_p2_setup",
+        r"TopK release at layer \$(\d+)\$: \$k=(\d+)\$ latents of width "
+        r"\$(\d+)\{,\}(\d+)\$, a different on-disk layout and a different "
+        r"activation rule\. Its reconstruction error is \$(\d+\.\d+)\$ and the "
+        r"bucket identity closes to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$;",
+    ),
+    Claim(
+        "qk_p2_rates",
+        r"the rotary rate is \$(\d+\.\d+)\\%\$, the total rate \$(\d+\.\d+)\\%\$ "
+        r"and the feature-pair rate \$(\d+\.\d+)\\%\$, against \$(\d+\.\d+)\\%\$, "
+        r"\$(\d+\.\d+)\\%\$ and \$(\d+\.\d+)\\%\$",
+    ),
     # ---- the distance trajectory of the feature-pair block --------------------
     #
     # The table itself is covered wholesale by VERIFIED_TABLES; the prose quotes
@@ -1261,9 +1275,10 @@ CLAIMS += (
     ),
     Claim(
         "qk_traj_layer_curve",
-        r"participation ratio stays below \$(\d+\.\d+)\$ and the flatten error below "
-        r"\$(\d+\.\d+)\$; at the last attributable block they rise to \$(\d+\.\d+)\$ "
-        r"and \$(\d+\.\d+)\$",
+        r"last attributable block has the largest\s+participation ratio "
+        r"\(\$(\d+\.\d+)\$, against at most \$(\d+\.\d+)\$ in the first four rows\), "
+        r"while the first block has the largest flatten error \(\$(\d+\.\d+)\\%\$, "
+        r"against \$(\d+\.\d+)\\%\$ at the last\)",
     ),
     Claim(
         "qk_traj_pairs",
@@ -3996,6 +4011,7 @@ def unaccounted_numbers() -> set[str]:
 
 ATTENTION_COST_PATH = _REPO / "results" / "attention_cost.json"
 QK_PATH = _REPO / "results" / "qk_attribution.json"
+QK_P2_PATH = _REPO / "results" / "qk_attribution_p2.json"
 DEPTH_PATH = _REPO / "results" / "qk_depth.json"
 QK_TRAJECTORY_PATH = _REPO / "results" / "qk_trajectory.json"
 USEFULNESS_PATH = _REPO / "results" / "usefulness.json"
@@ -4252,7 +4268,7 @@ def test_the_fixed_content_sweep_reverses_where_the_total_profile_does_not() -> 
     """The paper's central numerical contrast, recomputed from the aggregate.
 
     Mutation verdict: swapping the rotary and total sweep rates, or quoting
-    4.7%/10.0% as the fixed-content result, fails the aggregate comparison and
+    3.9%/8.5% as the fixed-content result, fails the aggregate comparison and
     the per-head range; the provenance rows are checked to the same literals.
     """
     qk = _artifact(QK_PATH)
@@ -4296,7 +4312,7 @@ def test_the_fixed_content_sweep_reverses_where_the_total_profile_does_not() -> 
     assert_paper_number_matches(per_head[-1], rates[3], "per-head rotary max")
 
     # The sweep and the headline are deliberately not compared: 27.0% is per
-    # rotary pair on trained checkpoints, 21.4% is per SAE feature on one
+    # rotary pair on trained checkpoints, 21.5% is per SAE feature on one
     # dictionary. The paper must say so rather than imply a shared scale.
     assert groups("feat_sweep_units") == [()]
     assert "not directly comparable" in TEX_FLAT
@@ -4328,6 +4344,84 @@ def test_the_fixed_content_sweep_reverses_where_the_total_profile_does_not() -> 
     prov_shares = groups("prov_features_share_row")[0]
     assert_paper_number_matches(aggregate["base_share_mean"], prov_shares[0], "prov base share")
     assert_paper_number_matches(aggregate["top_k_share_mean"], prov_shares[1], "prov top-k share")
+
+
+def test_the_second_dictionary_reproduces_the_contrast() -> None:
+    """The external-validity paragraph is checked against both artifacts.
+
+    Mutation verdict: quoting the primary dictionary's rates as the second one,
+    or dropping the qualitative ordering, fails the six-way comparison; changing
+    the TopK width, layout or activation fails the metadata assertions, so a
+    different artifact cannot be substituted silently.
+    """
+    primary = _artifact(QK_PATH)
+    second = _artifact(QK_P2_PATH)
+
+    assert second["schema"] == "qk-attribution/v1"
+    assert second["model_id"] == primary["model_id"]
+    assert second["dictionary_format"] == "eleuther"
+    assert second["dictionary_activation"] == "topk"
+    assert second["dictionary_top_k"] == second["top_k"] == 16
+    assert second["sae_reconstruction_relative_error"] < 0.5
+    assert second["aggregate"]["max_relative_exactness_error"] < 1e-9
+
+    setup = groups("qk_p2_setup")[0]
+    assert int(setup[0]) == second["sae_layer"]
+    assert int(setup[1]) == second["dictionary_top_k"]
+    assert int(setup[2]) * 1000 + int(setup[3]) == 32 * 1024
+    assert_paper_number_matches(
+        second["sae_reconstruction_relative_error"], setup[4], "second reconstruction"
+    )
+    assert_paper_sci_matches(
+        second["aggregate"]["max_relative_exactness_error"],
+        setup[5],
+        int(setup[6]),
+        "second exactness",
+    )
+
+    written = groups("qk_p2_rates")[0]
+    for actual, literal_text, what in (
+        (
+            second["aggregate"]["sweep_rotary"]["sign_flip_fraction"] * 100,
+            written[0],
+            "second rotary",
+        ),
+        (
+            second["aggregate"]["sweep_feature"]["sign_flip_fraction"] * 100,
+            written[1],
+            "second total",
+        ),
+        (
+            second["aggregate"]["sweep_pair"]["sign_flip_fraction"] * 100,
+            written[2],
+            "second pairs",
+        ),
+        (
+            primary["aggregate"]["sweep_rotary"]["sign_flip_fraction"] * 100,
+            written[3],
+            "primary rotary",
+        ),
+        (
+            primary["aggregate"]["sweep_feature"]["sign_flip_fraction"] * 100,
+            written[4],
+            "primary total",
+        ),
+        (
+            primary["aggregate"]["sweep_pair"]["sign_flip_fraction"] * 100,
+            written[5],
+            "primary pairs",
+        ),
+    ):
+        assert_paper_number_matches(actual, literal_text, what)
+
+    # The contrast is the claim, not the individual values: the total view is
+    # blind to the reversal that the rotary view shows, under both dictionaries.
+    for name, artifact in (("primary", primary), ("second", second)):
+        aggregate = artifact["aggregate"]
+        total = aggregate["sweep_feature"]["sign_flip_fraction"]
+        pairs = aggregate["sweep_pair"]["sign_flip_fraction"]
+        rotary = aggregate["sweep_rotary"]["sign_flip_fraction"]
+        assert total < pairs < rotary, name
 
 
 def test_the_depth_table_restates_the_depth_artifact() -> None:
@@ -4493,18 +4587,22 @@ def test_the_trajectory_table_restates_the_trajectory_artifact() -> None:
             pooled["flatten_relative_error"][key] * 100, written, what
         )
 
-    below_pr, below_flat, last_pr, last_flat = groups("qk_traj_layer_curve")[0]
+    last_pr, below_pr, first_flat, last_flat = groups("qk_traj_layer_curve")[0]
     assert max(
         layer["trajectory_participation_ratio"]["mean"] for layer in layers[:4]
-    ) < float(below_pr)
-    assert max(
-        layer["flatten_relative_error"]["mean"] for layer in layers[:4]
-    ) < float(below_flat)
+    ) <= float(below_pr) + 1e-12
     assert_paper_number_matches(
         layers[-1]["trajectory_participation_ratio"]["mean"], last_pr, "last-layer PR"
     )
     assert_paper_number_matches(
-        layers[-1]["flatten_relative_error"]["mean"], last_flat, "last-layer flatten"
+        layers[0]["flatten_relative_error"]["mean"] * 100,
+        first_flat,
+        "first-layer flatten",
+    )
+    assert_paper_number_matches(
+        layers[-1]["flatten_relative_error"]["mean"] * 100,
+        last_flat,
+        "last-layer flatten",
     )
 
     content_pairs = groups("qk_traj_pairs")[0]

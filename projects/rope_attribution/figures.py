@@ -1392,8 +1392,8 @@ def fig12_qk_case_study() -> FigureRecord:
     """The trained-dictionary result as a picture, from the committed artifact.
 
     The table in Section~\\ref{sec:features} reports two numbers that disagree:
-    the total per-feature profile reverses on 0.02% of cells, the rotary
-    sub-score on 21.4%. A reader can accept the arithmetic and still not see
+    the total per-feature profile reverses on 0.01% of cells, the rotary
+    sub-score on 21.5%. A reader can accept the arithmetic and still not see
     how the same feature can be flat in one view and oscillating in the other.
     This figure shows one feature on one head: the total profile is flat to
     within a fraction of a percent of its own scale, while the rotary sub-score
@@ -1517,7 +1517,7 @@ def fig12_qk_case_study() -> FigureRecord:
     return FigureRecord(
         stem=stem,
         producer=(
-            "results/qk_attribution.json (pythia-70m + public 32k SAE, layer 3); "
+            "results/qk_attribution.json (pythia-70m-deduped + public 32k SAE, layer 3); "
             f"head {head['head']}, feature {feature}"
         ),
         headline=(

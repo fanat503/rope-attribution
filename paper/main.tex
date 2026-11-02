@@ -146,11 +146,11 @@ exception: at $p = 0.25$ the unrotated sub-score is position-free to exactly
 zero spread.
 
 We then carry the attribution to a public $32$k dictionary on
-\texttt{pythia-70m}, where the bucket identity closes to
-$3.1\times10^{-14}$ and the dictionary residual is $2.7\times10^{-6}$: in the
-rotary subspace the best position-free scalar mis-signs $21.4\%$ of material
+\texttt{pythia-70m-deduped}, where the bucket identity closes to
+$1.4\times10^{-13}$ and the dictionary residual is $4.1\times10^{-6}$: in the
+rotary subspace the best position-free scalar mis-signs $21.5\%$ of material
 cells, while the total profile --- dominated by the $48$ of $64$ channels that
-partial RoPE never rotates --- mis-signs $0.02\%$. All numbers are computed by
+partial RoPE never rotates --- mis-signs $0.01\%$. All numbers are computed by
 the implementation in this repository against committed artifacts; this is a
 structural characterization, and we state explicitly what it does not include.
 \end{abstract}
@@ -205,8 +205,8 @@ $L=4096$ the median per-pair error is $1.000000$. The $27.0\%$ sign-error rate
 below is a different functional of the same profile, but it cannot escape the
 law: it rises with the window because more pairs cross the threshold and the
 least-squares constant sits between extrema that grow apart. On real dictionary
-features the reversal reappears at $21.4\%$ of material cells --- but only in
-the rotary channels: the total profile reverses on $0.02\%$ of cells, because
+features the reversal reappears at $21.5\%$ of material cells --- but only in
+the rotary channels: the total profile reverses on $0.01\%$ of cells, because
 the unrotated channels dominate it; the second number conceals the first from a
 reader of a total table. We also act on the attribution: over $96$ single-pair
 interventions the position-free selection differs from the exact one in $25$
@@ -557,29 +557,29 @@ and the convention dominates the answer.
 
 The attribution above runs over random directions. We therefore ran the
 per-distance decomposition on a public dictionary: $32{,}768$ ReLU units trained
-with SAE Lens \citep{bloom2024saelens} on \texttt{pythia-70m}
+with SAE Lens \citep{bloom2024saelens} on \texttt{pythia-70m-deduped}
 \citep{biderman2023pythia}, layer $3$, which is the input to attention layer $4$.
 The dictionary acts on the residual while
 attention sees its LayerNorm, so a feature's share is defined through the
 LayerNorm Jacobian at the residual: the split is an identity, not a
 linearisation, with the base and the residual in an explicit bucket. On a
 $320$-token input the bucket sum reproduces the score to a relative
-$3.1\times10^{-14}$, and the residual fed to the dictionary is the vector
-attention consumed to $2.7\times10^{-6}$.
+$1.4\times10^{-13}$, and the residual fed to the dictionary is the vector
+attention consumed to $4.1\times10^{-6}$.
 
 The result is two numbers that disagree, which is the point. Sweeping distance
-with content fixed, the total per-feature profile mis-signs $0.02\%$ of material
-cells; the rotary-only profile mis-signs $21.4\%$, between $17.6\%$ and $24.0\%$
-per head, and feature pairs $10.8\%$. The gap is the structural claim of
+with content fixed, the total per-feature profile mis-signs $0.01\%$ of material
+cells; the rotary-only profile mis-signs $21.5\%$, between $14.1\%$ and $28.3\%$
+per head, and feature pairs $8.5\%$. The gap is the structural claim of
 Section~\ref{sec:partial}, measured. This head rotates $16$ of its $64$ channels;
 the other $48$ contribute a term that no distance changes, and here that tail
-dominates. A reader of a total table would see $0.02\%$ and conclude that
+dominates. A reader of a total table would see $0.01\%$ and conclude that
 position does not matter at this layer; the rotary subspace says otherwise. The
 same sweep with the matching dictionary at every attributable layer keeps the
-rotary rate between $21.4\%$ and $27.4\%$, with the total rate below it
+rotary rate between $21.5\%$ and $27.7\%$, with the total rate below it
 everywhere. On that sweep the $32\times32$ feature-pair block traces a curve:
 its numerical rank is exactly $17$ for all $40$ layer-heads, and the leading
-direction carries $79.8\%$ of it on average
+direction carries $79.1\%$ of it on average
 (Table~\ref{tab:qk-depth}, Appendix~\ref{app:qktraj}). One layer of one
 $70$M-parameter checkpoint is an existence proof; five layers are a depth check,
 not a survey.
@@ -819,17 +819,17 @@ Sec.~\ref{sec:trained} & $27.0421 \pm 0.0046\%$ (seed s.d.) & \texttt{usefulness
 Sec.~\ref{sec:softmax} & $27.2$--$40.2\%$, $25.0$--$30.9\%$ & \texttt{results/attention\_cost.json} \\
  & $0.57$--$0.68$, $0.67$--$2.44$ & same, \texttt{top5\_overlap\_mean}, \texttt{kl} \\
  & $2.7\!\times\!10^{-6}$, $9.5\!\times\!10^{-3}$ & same, \texttt{max\_attention\_residual} \\
-Sec.~\ref{sec:features} & $3.1\!\times\!10^{-14}$, $2.7\!\times\!10^{-6}$ & \texttt{results/qk\_attribution.json} \\
- & $4.7\%$, $12.0\%$, $0.02\%$, $21.4\%$ & same, \texttt{aggregate.*.sign\_flip\_fraction} \\
- & $1.46\times$, $3.63\times$ & same, \texttt{base\_share\_mean}, \texttt{top\_k\_share\_mean} \\
+Sec.~\ref{sec:features} & $1.4\!\times\!10^{-13}$, $4.1\!\times\!10^{-6}$ & \texttt{results/qk\_attribution.json} \\
+ & $3.9\%$, $12.5\%$, $0.01\%$, $21.5\%$ & same, \texttt{aggregate.*.sign\_flip\_fraction} \\
+ & $2.56\times$, $4.70\times$ & same, \texttt{base\_share\_mean}, \texttt{top\_k\_share\_mean} \\
 Sec.~\ref{sec:worth} & $44$ bins; $1.000000$; exactly $1$ past threshold & \texttt{results/collapse.json :: models[].bins} \\
  & $0.750$, $0.719$, $0.719$ & same, \texttt{by\_window[].past\_threshold\_fraction} \\
  & $0.052$, $0.905$, $0.915$; $0.940$ & same, \texttt{score\_rel\_median}, \texttt{tail\_share\_median} \\
 Sec.~\ref{sec:intervention} & $96$, $25$, $7$; $13$/$5$, $9$/$2$, $3$/$0$ & \texttt{results/intervention.json} \\
  & $1.000$ oracle; $0.911$, $0.997$, $0.992$ & same, \texttt{exact}, \texttt{surrogate} \\
  & $-92.9$; $1.5\!\times\!10^{-5}$, $2.5\!\times\!10^{-5}$ & same, \texttt{pooled} \\
-App.~\ref{app:qkcase} & $21.4$--$27.4\%$ rotary; total $\le 6.96\%$ & \texttt{results/qk\_depth.json :: layers} \\
- & $17$, $79.8\%$, $44.5\%$ & \texttt{results/qk\_trajectory.json :: pooled} \\
+App.~\ref{app:qkcase} & $21.5$--$27.7\%$ rotary; total $\le 7.32\%$ & \texttt{results/qk\_depth.json :: layers} \\
+ & $17$, $79.1\%$, $52.3\%$ & \texttt{results/qk\_trajectory.json :: pooled} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1924,16 +1924,26 @@ wants to know what a position-free summary loses should look at the right one.
 
 Two further views. \emph{A table averaged over content.} At each of $14$
 realized distances from $1$ to $128$ we sample $24$ content pairs, and the
-least-squares constant mis-signs $4.7\%$ of material feature cells, or $12.0\%$
+least-squares constant mis-signs $3.9\%$ of material feature cells, or $12.5\%$
 restricted to the rotary channels --- averaging over content at fixed distance
 removes most of the oscillation before the constant is fitted. Holding each of
 $24$ pairs fixed and sweeping $\delta$ over the paper's $48$-point grid from $1$
 to $8192$ gives the per-feature analogue of the per-pair rate in
 Section~\ref{sec:worth}; the units differ, so the two are not directly
 comparable. The attribution
-is also not concentrated: the base bucket carries $1.46\times$ the score
-magnitude on average and the top-$32$ features $3.63\times$, above one because
+is also not concentrated: the base bucket carries $2.56\times$ the score
+magnitude on average and the top-$32$ features $4.70\times$, above one because
 the terms cancel. The decomposition is exact but not sparse in its effect.
+
+One dictionary family is one point. We repeated the sweep with an independent
+public dictionary, the EleutherAI TopK release at layer $3$: $k=16$ latents of
+width $32{,}768$, a different on-disk layout and a different activation rule.
+Its reconstruction error is $0.251$ and the bucket identity closes to
+$3.6\times10^{-13}$; the rotary rate is $21.1\%$, the total rate $0.05\%$ and the
+feature-pair rate $8.8\%$, against $21.5\%$, $0.01\%$ and $8.5\%$ for the ReLU
+dictionary. The contrast between the two views therefore survives a change of
+dictionary family and sparsity rule; it is not an artefact of one training
+recipe. Source: \texttt{results/qk\_attribution\_p2.json}.
 
 Table~\ref{tab:qk-depth} is the same measurement repeated for every dictionary in
 the profile (five dictionaries, layers $0$--$4$). The rotary rate stays in the
@@ -1954,11 +1964,11 @@ unrotated tail carries less of the score.
     \toprule
     dictionary & attention layer & rotary & total & feature pairs \\
     \midrule
-    0 & 1 & $27.4$ & $6.68$ & $9.7$ \\
-    1 & 2 & $27.2$ & $6.96$ & $10.5$ \\
-    2 & 3 & $21.9$ & $2.03$ & $9.5$ \\
-    3 & 4 & $21.4$ & $0.02$ & $10.8$ \\
-    4 & 5 & $22.0$ & $0.05$ & $17.2$ \\
+    0 & 1 & $26.0$ & $7.32$ & $13.2$ \\
+    1 & 2 & $27.7$ & $5.25$ & $12.2$ \\
+    2 & 3 & $22.8$ & $4.44$ & $8.7$ \\
+    3 & 4 & $21.5$ & $0.01$ & $8.5$ \\
+    4 & 5 & $22.9$ & $0.00$ & $13.8$ \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -1988,23 +1998,23 @@ constant would do. Distance enters through all $17$ dimensions; the question is
 how the energy is distributed over them.
 
 Unevenly. Across the $40$ layer-heads the leading singular direction carries
-$79.8\%$ of the squared singular-value mass, the top four carry $93.2\%$, and
-the participation ratio of the trajectory's singular values is $1.62$. Each
+$79.1\%$ of the squared singular-value mass, the top four carry $96.7\%$, and
+the participation ratio of the trajectory's singular values is $1.61$. Each
 $C(\delta)$ is dense, but the curve it traces is effectively one-dimensional.
 A position-free summary --- the distance mean --- therefore keeps the leading
 direction and drops the rest: the relative Frobenius distance from the
-trajectory to its own mean averages $44.5\%$, and is between $20.7\%$ and
-$72.4\%$ per head (Table~\ref{tab:qk-trajectory}); the distance mean therefore
-loses $44.5\%$ of the Frobenius norm. This is the matrix form of
+trajectory to its own mean averages $52.3\%$, and is between $26.5\%$ and
+$73.2\%$ per head (Table~\ref{tab:qk-trajectory}); the distance mean therefore
+loses $52.3\%$ of the Frobenius norm. This is the matrix form of
 the scalar result in Section~\ref{sec:features}: the mean is not wrong about the
 leading term, and it is wrong about the part that changes.
 
-The depth profile has one clear outlier. In the first four rows of
-Table~\ref{tab:qk-trajectory} the participation ratio stays below $1.5$ and the
-flatten error below $0.42$; at the last attributable block they rise to $2.32$
-and $0.636$. The scalar rotary rate does not order the layers the same way: it
-is highest in the first two rows of Table~\ref{tab:qk-depth} and middling in
-the last. The two measurements are therefore complementary rather than
+The depth profile is not monotone. The last attributable block has the largest
+participation ratio ($1.98$, against at most $1.66$ in the first four rows),
+while the first block has the largest flatten error ($64.8\%$, against $63.8\%$
+at the last). The scalar rotary rate orders the layers differently: it is
+highest in the first two rows of Table~\ref{tab:qk-depth} and lowest at the
+third dictionary. The two measurements are therefore complementary rather than
 redundant. A high sign-flip rate says a position-free scalar is often wrong; a
 high trajectory participation ratio says the matrix itself moves through more
 directions. We report both and do not claim that one predicts the other.
@@ -2024,11 +2034,11 @@ directions. We report both and do not claim that one predicts the other.
     \toprule
     dictionary & attention layer & PR & PR min & PR max & top-1 energy & flatten \\
     \midrule
-    0 & 1 & $1.44$ & $1.17$ & $2.02$ & $83.8$ & $39.9$ \\
-    1 & 2 & $1.48$ & $1.10$ & $1.77$ & $82.5$ & $41.0$ \\
-    2 & 3 & $1.42$ & $1.08$ & $1.93$ & $85.0$ & $37.3$ \\
-    3 & 4 & $1.44$ & $1.18$ & $1.73$ & $83.5$ & $40.6$ \\
-    4 & 5 & $2.32$ & $1.90$ & $3.08$ & $63.9$ & $63.6$ \\
+    0 & 1 & $1.66$ & $1.49$ & $2.09$ & $77.1$ & $64.8$ \\
+    1 & 2 & $1.53$ & $1.24$ & $1.82$ & $81.2$ & $48.5$ \\
+    2 & 3 & $1.40$ & $1.13$ & $1.79$ & $85.1$ & $39.9$ \\
+    3 & 4 & $1.49$ & $1.35$ & $1.71$ & $81.9$ & $44.4$ \\
+    4 & 5 & $1.98$ & $1.61$ & $2.49$ & $70.3$ & $63.8$ \\
     \bottomrule
   \end{tabular}
 \end{table*}

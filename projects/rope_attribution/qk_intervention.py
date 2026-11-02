@@ -67,16 +67,13 @@ with any budget.
 
 What this module does not claim
 -------------------------------
-It does not claim a language-model accuracy effect. Single-head, single-pair
-edits leave the logits nearly unchanged, and the module reports that instead of
+It does not claim a language-model accuracy effect: single-head, single-pair
+edits leave the logits nearly unchanged, and the module reports that rather than
 dressing it up. It does not claim the attention pattern *should* be explained by
 one pair; the measure is achieved-versus-intended suppression in the units the
-intervention spends. It does not claim a language-model accuracy effect: single
-head, single-pair edits leave the logits nearly unchanged, and the module reports
-that rather than dressing it up. It does not claim the attention pattern *should*
-be explained by one pair. It does not address rerouting: this is one forward
-pass, not a fine-tune, so the claim is immediate causal contribution, not
-necessity after adaptation.
+intervention spends. It does not address rerouting: this is one forward pass,
+not a fine-tune, so the claim is immediate causal contribution, not necessity
+after adaptation.
 """
 
 from __future__ import annotations

@@ -134,6 +134,18 @@ PYTHONPATH=../projects python -m rope_attribution.qk_attribution \
     --sae /path/to/sae_ctigges_l3.safetensors                   # qk_attribution.json
 ```
 
+The external-validity check in Appendix~\ref{app:qkcase} uses an independent
+EleutherAI TopK dictionary (`sae-pythia-70m-deduped-32k`, layer 3, $k=16$),
+whose `encoder.weight` layout and activation rule the same entry point reads
+when told the width:
+
+```sh
+PYTHONPATH=../projects python -m rope_attribution.qk_attribution \
+    --sae /path/to/layers.3/sae.safetensors --sae-k 16 \
+    --sae-label 'EleutherAI/sae-pythia-70m-deduped-32k, layers.3 (TopK, k=16, d_sae=32768)' \
+    --out ../results/qk_attribution_p2.json
+```
+
 The depth profile uses the same family, one dictionary per attributable layer
 (the last block has no block after it). It expects the Hugging Face repository
 layout, `{layer}-res-sm/sae_weights.safetensors` for layers 0--4:

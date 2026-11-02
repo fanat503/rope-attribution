@@ -25,6 +25,7 @@ from rope_attribution import rope as R
 
 REPO = Path(__file__).resolve().parent.parent
 ARTIFACT = REPO / "results" / "qk_attribution.json"
+P2 = REPO / "results" / "qk_attribution_p2.json"
 DEPTH = REPO / "results" / "qk_depth.json"
 
 TOL = 1e-12
@@ -152,6 +153,81 @@ def test_a_safetensors_file_missing_a_tensor_is_rejected(tmp_path: Path) -> None
     save_file({"W_enc": np.zeros((8, 5), np.float32)}, str(path))
     with pytest.raises(ValueError, match="missing tensors"):
         Q.SparseDictionary.load_safetensors(path)
+
+
+def test_the_eleuther_layout_is_read_with_its_transposed_encoder(
+    tmp_path: Path,
+) -> None:
+    """The second public family stores ``encoder.weight`` as ``(d_sae, d_model)``.
+
+    Mutation verdict: loading it as if it were already ``(d_model, d_sae)``
+    makes the shape check fail; skipping the transpose on a square dictionary
+    would instead produce a plausible but wrong decomposition. This test uses a
+    non-square shape and checks the encoded value against the explicit formula.
+    """
+    pytest.importorskip("safetensors.numpy")
+    from safetensors.numpy import save_file
+
+    rng = np.random.default_rng(17)
+    d_model, d_sae = 6, 9
+    encoder = rng.standard_normal((d_sae, d_model))
+    b_enc = rng.standard_normal(d_sae)
+    W_dec = rng.standard_normal((d_sae, d_model))
+    b_dec = rng.standard_normal(d_model)
+    path = tmp_path / "eleuther.safetensors"
+    save_file(
+        {
+            "encoder.weight": encoder,
+            "encoder.bias": b_enc,
+            "W_dec": W_dec,
+            "b_dec": b_dec,
+        },
+        str(path),
+    )
+    (tmp_path / "cfg.json").write_text('{"k": 3}', encoding="utf-8")
+    dictionary = Q.SparseDictionary.load_safetensors(path)
+    assert dictionary.format == "eleuther"
+    assert dictionary.activation == "topk"
+    assert dictionary.top_k == 3
+    assert dictionary.W_enc.shape == (d_model, d_sae)
+
+    x = rng.standard_normal((4, d_model))
+    latents = (x - b_dec) @ encoder.T + b_enc
+    expected = np.zeros_like(latents)
+    order = np.argsort(-latents, axis=1, kind="stable")[:, :3]
+    np.put_along_axis(
+        expected, order, np.take_along_axis(latents, order, axis=1), axis=1
+    )
+    assert np.allclose(dictionary.encode(x), expected)
+    assert (dictionary.encode(x) != 0).sum(axis=1).tolist() == [3, 3, 3, 3]
+
+
+def test_a_topk_dictionary_without_a_width_is_rejected(tmp_path: Path) -> None:
+    pytest.importorskip("safetensors.numpy")
+    from safetensors.numpy import save_file
+
+    path = tmp_path / "nowidth.safetensors"
+    save_file(
+        {
+            "encoder.weight": np.zeros((5, 4), np.float32),
+            "encoder.bias": np.zeros(5, np.float32),
+            "W_dec": np.zeros((5, 4), np.float32),
+            "b_dec": np.zeros(4, np.float32),
+        },
+        str(path),
+    )
+    with pytest.raises(ValueError, match="needs top_k"):
+        Q.SparseDictionary.load_safetensors(path)
+
+
+def test_the_default_checkpoint_is_the_one_the_dictionary_was_trained_on() -> None:
+    """The repository shipped the non-deduplicated checkpoint once.
+
+    The two Pythia releases share an architecture but not weights; the public
+    ctigges dictionary names ``pythia-70m-deduped`` in its own ``cfg.json``.
+    The default is pinned here so a future edit cannot silently re-pair them.
+    """
+    assert Q.DEFAULT_MODEL_ID == "EleutherAI/pythia-70m-deduped"
 
 
 # --------------------------------------------------------------------------
@@ -679,10 +755,20 @@ def test_the_artifact_is_an_exact_reconstruction_of_a_real_forward_pass(
     the attention layer actually consumed. ``max_relative_exactness_error`` says
     the bucket split re-sums to the score. If either is not at float scale, the
     attribution numbers describe some other computation.
+
+    Mutation verdict: running the same dictionary on ``EleutherAI/pythia-70m``
+    instead of the deduplicated checkpoint it was trained on makes
+    ``sae_reconstruction_relative_error`` 10.05 and the mean active count 10,556
+    instead of 72; the bound below rejects that artifact, and the producer now
+    refuses to write it.
     """
     assert artifact["schema"] == "qk-attribution/v1"
+    assert artifact["model_id"] == Q.DEFAULT_MODEL_ID
+    assert artifact["model_id"].endswith("pythia-70m-deduped")
     assert artifact["ln_residual"] < 1e-4
     assert artifact["aggregate"]["max_relative_exactness_error"] < 1e-9
+    assert artifact["sae_reconstruction_relative_error"] < 0.5
+    assert artifact["active_features_mean"] < 500
     for head in artifact["heads"]:
         assert head["max_relative_exactness_error"] < 1e-9
 
@@ -741,6 +827,66 @@ def test_every_head_carries_a_nonzero_share_in_the_base_bucket(artifact: dict) -
     for head in artifact["heads"]:
         assert 0.0 < head["base_share_mean"] < 20.0
         assert 0.0 < head["top_k_share_mean"] < 50.0
+
+
+@pytest.fixture(scope="module")
+def second_dictionary() -> dict:
+    if not P2.is_file():
+        pytest.fail(
+            "results/qk_attribution_p2.json is absent; it is committed evidence "
+            "for the external-validity paragraph, not an optional input"
+        )
+    return json.loads(P2.read_text(encoding="utf-8"))
+
+
+def test_the_second_dictionary_artifact_is_a_topk_external_check(
+    second_dictionary: dict, artifact: dict
+) -> None:
+    """A different dictionary family, layout and activation rule.
+
+    The point of the artifact is external validity, so the test pins the
+    properties that make it external: the EleutherAI tensor layout, the TopK
+    activation with its width, the same checkpoint and the same grid. It also
+    keeps the reconstruction residual at the scale of a matched dictionary.
+
+    Mutation verdict: loading the transposed ``encoder.weight`` without the
+    transpose, or treating the TopK file as ReLU, changes the active count away
+    from exactly $k=16$ and fails the top-k assertions; pairing the dictionary
+    with another Pythia release makes the reconstruction error leave $(0,0.5)$.
+    """
+    second = second_dictionary
+    assert second["schema"] == artifact["schema"] == "qk-attribution/v1"
+    assert second["model_id"] == artifact["model_id"]
+    assert second["text"] == artifact["text"]
+    assert second["n_tokens"] == artifact["n_tokens"]
+    assert second["deltas"] == artifact["deltas"]
+    assert second["sweep_deltas"] == artifact["sweep_deltas"]
+    assert second["dictionary_format"] == "eleuther"
+    assert second["dictionary_activation"] == "topk"
+    assert second["dictionary_top_k"] == second["top_k"] == 16
+    assert 0.0 < second["sae_reconstruction_relative_error"] < 0.5
+    assert second["active_features_mean"] == 16.0
+    assert second["active_features_min"] == second["active_features_max"] == 16
+    assert second["aggregate"]["max_relative_exactness_error"] < 1e-9
+    for head in second["heads"]:
+        assert head["max_relative_exactness_error"] < 1e-9
+
+
+def test_the_two_dictionaries_order_the_three_views_the_same_way(
+    artifact: dict, second_dictionary: dict
+) -> None:
+    """The qualitative contrast must not depend on the dictionary.
+
+    Mutation verdict: swapping the rotary and total aggregates in either
+    artifact, or quoting a rate from the other dictionary, breaks the strict
+    ordering below.
+    """
+    for name, dictionary in (("primary", artifact), ("second", second_dictionary)):
+        aggregate = dictionary["aggregate"]
+        total = aggregate["sweep_feature"]["sign_flip_fraction"]
+        pairs = aggregate["sweep_pair"]["sign_flip_fraction"]
+        rotary = aggregate["sweep_rotary"]["sign_flip_fraction"]
+        assert total < pairs < rotary, name
 
 
 # --------------------------------------------------------------------------
@@ -812,7 +958,7 @@ def test_every_depth_row_is_a_real_forward_pass(depth: dict) -> None:
 
 
 def test_the_rotary_rate_is_not_a_property_of_one_layer(depth: dict) -> None:
-    """Layer 3's 21.4% must not be the maximum, or a lucky block.
+    """Layer 3's 21.5% must not be the maximum, or a lucky block.
 
     Every attributable layer is in the same 21--28% band, and at every layer
     the rotary sub-score flips sign more often than the total profile does.

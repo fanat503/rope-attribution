@@ -418,7 +418,7 @@ sinusoids that appear in the numerator, so no dilution is available, and the two
 rates must agree up to cancellation between pairs.
 
 This is the p-dependence in one line: the gap between the pair-level rate
-(`21.4%` on `pythia-70m`) and the score-level rate (`0.017%` in the same
+(`21.5%` on `pythia-70m-deduped`) and the score-level rate (`0.012%` in the same
 artefact) is a property of the architecture's rotary fraction (`rotary_pct =
 0.25` there), not a contradiction between two measurements.
 `results/collapse.json` measures the dilution per checkpoint.

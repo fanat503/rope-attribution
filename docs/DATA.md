@@ -80,5 +80,6 @@ checksums.
 * No corpus redistribution: the stream is built locally from the source the
   caller names, and no token file is committed.
 
-The training-side contract is in `docs/TPU_V5E8.md`; the tests for this module
-need neither `datasets` nor a network.
+The training-side contract is in `docs/TPU_V5E8.md`; the Kaggle-specific recipe
+(pre-tokenized import and raw-text lanes) is in `docs/KAGGLE.md`. The tests for
+this module need neither `datasets` nor a network.

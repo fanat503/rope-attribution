@@ -8,11 +8,11 @@ like that invites two fair questions that it cannot answer.
 
 1. **Why 27%?** If the rate is an accident of the grid, the finding is an
    artefact. If it is a value of a function, the finding is a law.
-2. **Why is the rate at the *feature* level (0.017% of cells, in
+2. **Why is the rate at the *feature* level (0.012% of cells, in
    ``results/qk_attribution.json``) three orders of magnitude below the rate at
-   the *rotary-pair* level (21.4%, same file)?** Both are measured on
-   ``pythia-70m``; a reader who compares them will conclude that one of them is
-   broken, or that the paper is choosing whichever number suits it.
+   the *rotary-pair* level (21.5%, same file)?** Both are measured on
+   ``pythia-70m-deduped``; a reader who compares them will conclude that one of
+   them is broken, or that the paper is choosing whichever number suits it.
 
 This module answers both with one object. For a single rotary pair the exact
 contribution is ``c(delta) = rho * cos(theta*delta - psi)`` with ``rho`` and

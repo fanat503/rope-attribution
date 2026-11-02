@@ -60,7 +60,7 @@ the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1741 tests (CPU-only install)
+pytest -q                                        # 1747 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -129,7 +129,8 @@ The measurement suite runs on checkpoints others trained. `train.py` trains the
 same object -- a bias-free RMSNorm decoder with a tied head and full RoPE at
 head dimension 64 -- and logs every metric, including the attribution
 diagnostics, at each evaluation. The loader contract --- pre-tokenized shards,
-atomic writes, SHA-256, resume and a `uint16` memmap --- is in `docs/DATA.md`:
+atomic writes, SHA-256, resume and a `uint16` memmap --- is in `docs/DATA.md`;
+the Kaggle-specific preparation recipe is in `docs/KAGGLE.md`:
 
 ```bash
 pip install -r train_requirements.txt
@@ -236,7 +237,7 @@ projects/rope_attribution/
   attention_cost.py what the best position-free surrogate costs at the
                   attention level: top-1 flips, top-5 overlap, KL
   qk_attribution.py exact per-distance QK attribution on a public sparse
-                  dictionary (pythia-70m, layer 3)
+                  dictionary (pythia-70m-deduped, layer 3)
   qk_depth.py     the same measurement at every layer of that checkpoint that
                   has an attention block after it (five dictionaries)
   qk_trajectory.py the feature-pair block swept over the full distance grid,
@@ -251,7 +252,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1741 tests (CPU-only install)
+tests/            1747 tests (CPU-only install)
 figures/          fourteen figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
@@ -272,8 +273,11 @@ results/          measurements.json  (structural facts)
                                               position-free, on the three
                                               checkpoints)
                     qk_attribution.json      (per-distance QK attribution on a
-                                              public 32k SAE over pythia-70m,
-                                              layer 3)
+                                              public 32k SAE over
+                                              pythia-70m-deduped, layer 3)
+                    qk_attribution_p2.json   (the same sweep with an independent
+                                              EleutherAI TopK dictionary, as the
+                                              external-validity check)
                     qk_depth.json            (the same sweep with one dictionary
                                               per attributable layer, layers 0-4
                                               of the same checkpoint)
@@ -420,19 +424,24 @@ matters for the mechanism:
   9 of 32 pairs are bit-for-bit unchanged and 21 of 32 differ from uniform
   interpolation. Both `yarn` and `position_interpolation` are computed in
   `experiments.method_spectrum` so the two can be compared directly.
-- **The fixed-content QK sweep rotated the key the wrong way.** The earlier
-  drafts evaluated the profile at angle `+delta`; a key sits *behind* its query,
-  so the checkpoint rotates by `n - m = -delta`. The error flips the sign of
-  every sine term, and it is not cosmetic: on `pythia-70m` the rotary sign-flip
-  rate moves from `22.4%` to `21.4%`, the total rate from `0.03%` to `0.02%`,
-  and the per-layer depth profile from `22.0/23.5/21.3/22.4/27.5%` to
-  `27.4/27.2/21.9/21.4/22.0%`. The qualitative contrast survives — the rotary
-  subspace reverses roughly three orders of magnitude more often than the total
-  — but the earlier layer ordering, and the sentence that tied the layer-4
+- **The fixed-content QK sweep rotated the key the wrong way, and the
+  dictionary was applied to the wrong checkpoint.** The earlier drafts evaluated
+  the profile at angle `+delta`; a key sits *behind* its query, so the checkpoint
+  rotates by `n - m = -delta`. The error flips the sign of every sine term.
+  Separately, the public `ctigges` dictionary was trained on
+  `pythia-70m-deduped`, but the sweep loaded `pythia-70m`; the two releases share
+  an architecture but not weights, and the mismatch produced a reconstruction
+  error of `10.05` and a mean of `10,556` active units. With both corrected, on
+  `pythia-70m-deduped` the rotary sign-flip rate is `21.5%`, the total rate
+  `0.01%`, and the per-layer depth profile is
+  `26.0/27.7/22.8/21.5/22.9%`. The qualitative contrast survives — the rotary
+  subspace reverses roughly three orders of magnitude more often than the total —
+  but the earlier layer ordering, and the sentence that tied the layer-4
   trajectory outlier to the highest rotary rate, were wrong and have been
   removed. `qk_attribution.json`, `qk_depth.json` and `qk_trajectory.json` were
-  regenerated, and three tests now pin the convention against the checkpoint's
-  own `apply_rotary_pos_emb`.
+  regenerated, three tests pin the rotation convention against the checkpoint's
+  own `apply_rotary_pos_emb`, and `measure_model` now refuses a dictionary that
+  reconstructs its residual stream worse than `0.75` relative error.
 
 ## Figures
 
@@ -540,7 +549,7 @@ python -m projects.rope_attribution.usefulness   # ~4 min, CPU only
   not a proof of absence.
 - **Trained sparse dictionaries are measured on one model, one input.**
   `qk_attribution.py` runs the per-distance decomposition on a public
-  32,768-unit ReLU dictionary for `pythia-70m` layer 3, and that is the
+  32,768-unit ReLU dictionary for `pythia-70m-deduped` layer 3, and that is the
   evidence behind the trained-dictionary result. `qk_depth.py` repeats it with
   the matching dictionary at every layer of the same checkpoint that still has
   an attention block after it (five dictionaries, layers 0--4, one 320-token

@@ -87,7 +87,13 @@ __all__ = [
 #: attention layer 4 of a 6-layer checkpoint, i.e. the middle of the network.
 #: Chosen before any attribution number was computed, and not swept.
 DEFAULT_SAE_LAYER = 3
-DEFAULT_MODEL_ID = "EleutherAI/pythia-70m"
+
+#: The checkpoint the public ctigges dictionary was trained on. The two Pythia
+#: releases share an architecture but not weights: applying a dictionary to the
+#: non-deduplicated checkpoint gives a reconstruction error of order ten and a
+#: mean of ten thousand active units, so the pairing is checked rather than
+#: assumed (see ``measure_model``).
+DEFAULT_MODEL_ID = "EleutherAI/pythia-70m-deduped"
 
 #: Features kept per token before the tail is folded into the base bucket. The
 #: decomposition is exact for any value; this one bounds the pair matrix.
@@ -206,19 +212,32 @@ def layernorm_affine(
 
 @dataclass
 class SparseDictionary:
-    """A ReLU dictionary with a decoder bias, in the ``sae_lens`` convention.
+    """A sparse dictionary with a decoder bias, in the ``sae_lens`` convention.
 
     ``apply_b_dec_to_input=True`` means the bias is subtracted *before* the
     encoder, so ``x_hat = f W_dec + b_dec`` and ``f = relu((x - b_dec) W_enc +
     b_enc)``. Both conventions exist in the wild; getting this one wrong produces
     a plausible-looking decomposition of the wrong vector, so the loader records
     which one it assumed.
+
+    ``activation="topk"`` keeps the ``top_k`` largest latents and zeroes the
+    rest, the convention of the EleutherAI TopK releases. The decomposition is
+    still exact for any activation rule: the tail below ``top_k`` is part of the
+    base bucket, exactly as the ReLU tail is.
+
+    ``format`` records the on-disk tensor layout (``"sae_lens"`` for
+    ``W_enc/b_enc/W_dec/b_dec``, ``"eleuther"`` for
+    ``encoder.weight/encoder.bias/W_dec/b_dec``); it is provenance, never a
+    numerical switch.
     """
 
     W_enc: np.ndarray  # (d_model, d_sae)
     b_enc: np.ndarray  # (d_sae,)
     W_dec: np.ndarray  # (d_sae, d_model)
     b_dec: np.ndarray  # (d_model,)
+    activation: str = "relu"
+    top_k: int | None = None
+    format: str = "sae_lens"
 
     def __post_init__(self) -> None:
         if self.W_enc.shape[1] != self.W_dec.shape[0]:
@@ -228,6 +247,15 @@ class SparseDictionary:
             )
         if self.W_enc.shape[0] != self.b_dec.shape[0]:
             raise ValueError("W_enc and b_dec disagree on the model width")
+        if self.activation not in {"relu", "topk"}:
+            raise ValueError(f"unknown activation {self.activation!r}")
+        if self.activation == "topk":
+            if self.top_k is None or int(self.top_k) < 1:
+                raise ValueError("a top-k dictionary needs top_k >= 1")
+            if int(self.top_k) > self.n_features:
+                raise ValueError(
+                    f"top_k={self.top_k} exceeds the {self.n_features} features"
+                )
 
     @property
     def n_features(self) -> int:
@@ -238,26 +266,59 @@ class SparseDictionary:
         return int(self.W_dec.shape[1])
 
     def encode(self, x: np.ndarray) -> np.ndarray:
-        return np.maximum((x - self.b_dec) @ self.W_enc + self.b_enc, 0.0)
+        latents = (x - self.b_dec) @ self.W_enc + self.b_enc
+        if self.activation == "relu":
+            return np.maximum(latents, 0.0)
+        k = min(int(self.top_k), latents.shape[-1])
+        index = np.argpartition(-latents, k - 1, axis=-1)[..., :k]
+        out = np.zeros_like(latents)
+        np.put_along_axis(out, index, np.take_along_axis(latents, index, axis=-1), axis=-1)
+        return out
 
     def decode(self, f: np.ndarray) -> np.ndarray:
         return f @ self.W_dec + self.b_dec
 
     @classmethod
-    def load_safetensors(cls, path: str | Path) -> SparseDictionary:
-        """Load the four tensors from a ``safetensors`` file, no unpickling."""
+    def load_safetensors(
+        cls, path: str | Path, *, top_k: int | None = None
+    ) -> SparseDictionary:
+        """Load a dictionary from ``safetensors``, no unpickling.
+
+        Two layouts are accepted. The ``sae_lens`` layout names the encoder
+        ``W_enc``; the EleutherAI layout names it ``encoder.weight`` and stores
+        it transposed. A TopK file has no activation width in the tensors, so
+        ``top_k`` is required unless a sibling ``cfg.json`` supplies ``"k"``.
+        """
         from safetensors import safe_open
 
+        path = Path(path)
         with safe_open(str(path), framework="np") as handle:
             keys = set(handle.keys())
+            if {"W_enc", "b_enc", "W_dec", "b_dec"} <= keys:
+                arrays = {
+                    name: handle.get_tensor(name).astype(np.float64)
+                    for name in ("W_enc", "b_enc", "W_dec", "b_dec")
+                }
+                return cls(**arrays)
+            if {"encoder.weight", "encoder.bias", "W_dec", "b_dec"} <= keys:
+                if top_k is None:
+                    cfg = path.parent / "cfg.json"
+                    if cfg.is_file():
+                        top_k = int(json.loads(cfg.read_text(encoding="utf-8"))["k"])
+                if top_k is None:
+                    raise ValueError(
+                        f"{path}: a TopK dictionary needs top_k, or a sibling "
+                        "cfg.json with a 'k' field"
+                    )
+                arrays = {
+                    "W_enc": handle.get_tensor("encoder.weight").astype(np.float64).T,
+                    "b_enc": handle.get_tensor("encoder.bias").astype(np.float64),
+                    "W_dec": handle.get_tensor("W_dec").astype(np.float64),
+                    "b_dec": handle.get_tensor("b_dec").astype(np.float64),
+                }
+                return cls(**arrays, activation="topk", top_k=int(top_k), format="eleuther")
             missing = {"W_enc", "b_enc", "W_dec", "b_dec"} - keys
-            if missing:
-                raise ValueError(f"{path}: missing tensors {sorted(missing)}")
-            arrays = {
-                name: handle.get_tensor(name).astype(np.float64)
-                for name in ("W_enc", "b_enc", "W_dec", "b_dec")
-            }
-        return cls(**arrays)
+            raise ValueError(f"{path}: missing tensors {sorted(missing)}")
 
     @classmethod
     def random(
@@ -878,18 +939,21 @@ def measure_model(
     deltas: Sequence[int] = DEFAULT_DELTAS,
     seed: int = 0,
     sae_layer: int = DEFAULT_SAE_LAYER,
+    sae_top_k: int | None = None,
 ) -> dict[str, Any]:
     """Full attribution sweep on one checkpoint and one passage.
 
     ``sae_layer`` selects which public dictionary is applied; the attention
     block attributed is the one after it (see ``_attention_index``).
+    ``sae_top_k`` is the activation width of a TopK dictionary; it is read from
+    a sibling ``cfg.json`` when available and otherwise required.
     """
     if sae_path is None:
         raise ValueError(
             "measure_model needs a sparse dictionary; pass the safetensors path "
             "of the public SAE (see results/qk_attribution.json provenance)"
         )
-    dictionary = SparseDictionary.load_safetensors(sae_path)
+    dictionary = SparseDictionary.load_safetensors(sae_path, top_k=sae_top_k)
     loaded = RM.load_model(model_id, seed=seed)
     model, tokenizer = loaded.model, loaded.tokenizer
     attn_index = _attention_index(len(model.gpt_neox.layers), sae_layer)
@@ -930,7 +994,27 @@ def measure_model(
     freqs = R.inv_freq(rotary_dim, float(cfgv["rope_theta_declared"]))
 
     f = dictionary.encode(x)
+    reconstruction = dictionary.decode(f)
+    denominator = float(np.linalg.norm(x - dictionary.b_dec))
+    reconstruction_error = (
+        float(np.linalg.norm(x - reconstruction) / denominator)
+        if denominator > 0.0
+        else float("inf")
+    )
+    if reconstruction_error > 0.75:
+        raise ValueError(
+            f"the dictionary reconstructs the residual stream at {reconstruction_error:.3f} "
+            "relative error; this is the signature of a dictionary applied to a "
+            "checkpoint it was not trained on (Pythia deduplicated vs not), or of "
+            "the wrong layer. Refusing to attribute a vector the dictionary does "
+            "not describe."
+        )
     active_per_token = (f > 0).sum(axis=1)
+    effective_top_k = (
+        min(int(top_k), int(dictionary.top_k))
+        if dictionary.activation == "topk"
+        else int(top_k)
+    )
     grid = distance_grid(n_tokens - 1, deltas)
 
     heads = []
@@ -949,7 +1033,7 @@ def measure_model(
                 b_q[head],
                 w_k[head],
                 b_k[head],
-                top_k,
+                effective_top_k,
             )
             for t in range(n_tokens)
         ]
@@ -1013,8 +1097,14 @@ def measure_model(
         "deltas": [int(d) for d in grid],
         "sweep_deltas": [int(d) for d in sweep],
         "text": text,
-        "top_k": int(top_k),
+        "top_k": int(effective_top_k),
         "pairs_per_delta": int(n_pairs),
+        "dictionary_format": dictionary.format,
+        "dictionary_activation": dictionary.activation,
+        "dictionary_top_k": (
+            int(dictionary.top_k) if dictionary.top_k is not None else None
+        ),
+        "sae_reconstruction_relative_error": reconstruction_error,
         "rotary_dim": rotary_dim,
         "head_dim": head_dim,
         "n_heads": n_heads,
@@ -1074,16 +1164,32 @@ def run_all(
     text: str = DEFAULT_TEXT,
     seed: int = 0,
     sae_layer: int = DEFAULT_SAE_LAYER,
+    sae_top_k: int | None = None,
+    dictionary_label: str | None = None,
 ) -> dict[str, Any]:
-    measured = measure_model(model_id, sae_path, text, seed=seed, sae_layer=sae_layer)
+    measured = measure_model(
+        model_id,
+        sae_path,
+        text,
+        seed=seed,
+        sae_layer=sae_layer,
+        sae_top_k=sae_top_k,
+    )
     measured["aggregate"] = aggregate_heads(measured["heads"])
     measured["schema"] = "qk-attribution/v1"
-    measured["dictionary"] = (
-        f"ctigges/pythia-70m-deduped__res-sm_processed, {int(sae_layer)}-res-sm "
-        f"(d_sae=32768, ReLU, apply_b_dec_to_input=true)"
-        if sae_path is not None
-        else None
-    )
+    if dictionary_label is not None:
+        measured["dictionary"] = dictionary_label
+    elif measured["dictionary_format"] == "eleuther":
+        measured["dictionary"] = (
+            f"EleutherAI TopK dictionary, {int(sae_layer)}-res-sm "
+            f"(k={measured['dictionary_top_k']}, d_sae=32768, "
+            f"encoder.weight/encoder.bias layout)"
+        )
+    else:
+        measured["dictionary"] = (
+            f"ctigges/pythia-70m-deduped__res-sm_processed, {int(sae_layer)}-res-sm "
+            f"(d_sae=32768, ReLU, apply_b_dec_to_input=true)"
+        ) if sae_path is not None else None
     measured["estimand"] = (
         "mean contribution of a feature pair to the attention score at a fixed "
         "distance, averaged over content pairs sampled from one passage"
@@ -1114,6 +1220,20 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument(
+        "--sae-k",
+        type=int,
+        default=None,
+        help=(
+            "activation width of a TopK dictionary. Read from the sibling "
+            "cfg.json when present; required for a bare EleutherAI file."
+        ),
+    )
+    parser.add_argument(
+        "--sae-label",
+        default=None,
+        help="provenance string recorded in the artifact (default: inferred)",
+    )
+    parser.add_argument(
         "--sae-layer",
         type=int,
         default=DEFAULT_SAE_LAYER,
@@ -1127,7 +1247,13 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = _parse_args(argv)
-    data = run_all(args.model, args.sae, sae_layer=args.sae_layer)
+    data = run_all(
+        args.model,
+        args.sae,
+        sae_layer=args.sae_layer,
+        sae_top_k=args.sae_k,
+        dictionary_label=args.sae_label,
+    )
     path = write_results(data, args.out)
     aggregate = data["aggregate"]
     print(

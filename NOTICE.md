@@ -57,19 +57,20 @@ report on them), matched case-insensitively:
 
 | Pattern | Hits | Reading |
 | --- | ---: | --- |
-| `inv_freq` | 254 | This project's own code, tests and measured artifacts. |
-| `rotary` | 435 | This project's own code, tests and measured artifacts. |
+| `inv_freq` | 273 | This project's own code, tests and measured artifacts. |
+| `rotary` | 645 | This project's own code, tests and measured artifacts. |
 | `mscale` | 290 | This project's own code, tests and measured artifacts. |
 | `rotary_emb` | 4 | Two are the upstream config keyword `rotary_emb_base` in synthetic test models; two are this project's own fallback lookup for that keyword in `downstream.py`. Not an implementation. |
-| `apply_rotary` | 3 | A test monkeypatches `transformers`' `apply_rotary_pos_emb` to a no-op to compare against a no-RoPE model; no upstream code is shipped. |
+| `apply_rotary` | 4 | A test monkeypatches `transformers`' `apply_rotary_pos_emb` to a no-op to compare against a no-RoPE model; no upstream code is shipped. |
 | `attention_scaling` | 0 | — |
 | `ntk` | 0 | — |
 | `copied from` | 1 | A comment in `tpu_configs.py` saying the learning rates are *not* copied from the CPU ladder. |
 | `ported from` | 0 | — |
 | `taken from` | 0 | — |
 
-The table is a re-measurement on 2026-10-23, after the dataset-preparation
-module and the Gemma 4 / partial-rotation architecture guards were added.
+The table is a re-measurement on 2026-11-02, after the dataset-preparation
+module, the QK/intervention/collapse artifacts and the Gemma 4 /
+partial-rotation architecture guards were added.
 Earlier figures attributed 13 `inv_freq` and 3 `mscale` hits to `verify_rope*.py`
 scripts that do not exist in this repository. Patterns are matched
 case-insensitively over `.py`, `.md`, `.json` and `.txt` files, with `.git/`,
