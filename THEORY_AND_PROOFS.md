@@ -434,6 +434,55 @@ where it saturates, and the ratio between the rotary-pair rate and the
 feature-level rate is the rotary fraction. Those are checkable statements about
 this object, and `results/collapse.json` checks them on three checkpoints.
 
+### 6.1 The same threshold as a design test for context extension
+
+The threshold is not only a diagnostic of the measured rate; it also answers a
+design question. A scheme is *globally attributable at length `L`* when every
+rotary channel satisfies
+
+```text
+theta_k * L < 2*pi.
+```
+
+The predicate is evaluated on the published frequency ladders by
+`projects/rope_attribution/extension_law.py`, which writes
+`results/extension_law.json`. For `d = 64`, `base = 10^4`, original context
+`2048` and extension factor `s = 32`, at `L = 4096` the number of channels past
+the threshold is:
+
+```text
+plain RoPE                 23 / 32
+YaRN, s = 32               18 / 32
+position interpolation     11 / 32
+base = 5 * 10^5            16 / 32
+```
+
+Two facts are exact and explain the order. First, YaRN's ramp multiplies the
+interpolation branch by zero on the fastest channels, so those channels are
+bit-for-bit equal to plain RoPE; at this configuration the fastest `9` of `32`
+are untouched, and all `9` are already past the threshold at `L = 4096`. No
+finite scale can take YaRN below that floor without changing the fastest
+channel. The raised base has the same obstruction on channel `0`, whose inverse
+frequency is `base^0 = 1` for every base; it leaves exactly that one channel
+untouched. Position interpolation is the only one of the four that divides the
+fastest channel as well. It reaches zero only for
+
+```text
+s > L / (2*pi),
+```
+
+which is `651.8986...` at `L = 4096`; the condition is strict because a channel
+exactly on the threshold is already past it. That scale maps the whole context
+onto about six positions.
+
+The counts are a property of the ladders, not a benchmark: they say which
+channels a single position-free constant cannot track over the full window, and
+therefore which channels no amount of per-channel attribution can summarize
+without a distance argument. The `mean_minimax_error` column of the artifact
+prices the same rows; the `canonical_channels_4096` block carries one row per
+channel for each scheme, so the counts can be recomputed from the artifact
+without rerunning the module.
+
 ## 7. What the measurements check, and what they do not
 
 The paper's numerical checks instantiate the statements above:
@@ -451,6 +500,10 @@ The paper's numerical checks instantiate the statements above:
   sub-threshold floor `(1 - cos(x/2))/2` is respected by every measured pair,
   and the score-level rate is the channel-level rate diluted by the unrotated
   tail share.
+- `results/extension_law.json` applies Section 6.1 to four frequency ladders:
+  it records the per-channel phase, the threshold predicate, the minimax and
+  worst-placement errors, and the exact YaRN floor and position-interpolation
+  critical scale.
 
 What the theory does **not** establish:
 

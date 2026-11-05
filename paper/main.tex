@@ -652,10 +652,12 @@ use; we do not measure that trade-off.
 \begin{remark}
 Context extension changes \emph{which} channels admit a linearization and
 \emph{when}, but not the fact that the worst channel is out of range. Nor do the
-schedules tested here rescue position-free attribution: \yarn, interpolation and
-a raised base all leave large angles at long distances, so the failure is the
-one in R2. A scheme that damped every angle far enough would make the constant
-exact, but it would have removed the position dependence as well.
+schedules tested here rescue position-free attribution: at $L=4096$ the number
+of channels past $\theta L=2\pi$ is $23/32$ under plain RoPE, $18/32$ under
+\yarn\ at $s=32$ and $11/32$ under position interpolation; \yarn's nine
+untouched fast channels put a floor of $9/32$ on its count (Appendix~\ref{app:extension-law}).
+A scheme that damped every angle far enough would make the constant exact, but
+it would have removed the position dependence as well.
 \end{remark}
 
 \section{Limitations}
@@ -672,7 +674,8 @@ are not evaluated on a task. Neither connects to a task: no retrieval benchmark,
 no language-modelling evaluation, no causal patching. The five layers describe
 that one checkpoint's depth, and none of its content is evaluated downstream. One
 input and $24$ content pairs per head remain an existence proof, not a population
-estimate. There is no retrieval benchmark, no accuracy figure.
+estimate. There is no retrieval benchmark, no accuracy figure: a task result at
+70M--410M would be underpowered, so we report none rather than a misleading null.
 
 \textbf{Single synthetic configuration.} The main synthetic experiments use
 $d = 64$, $\mathrm{base} = 10000$, $s = 32$, pre-extension context $2048$,
@@ -830,6 +833,7 @@ Sec.~\ref{sec:intervention} & $96$, $25$, $7$; $13$/$5$, $9$/$2$, $3$/$0$ & \tex
  & $-92.9$; $1.5\!\times\!10^{-5}$, $2.5\!\times\!10^{-5}$ & same, \texttt{pooled} \\
 App.~\ref{app:qkcase} & $21.5$--$27.7\%$ rotary; total $\le 7.32\%$ & \texttt{results/qk\_depth.json :: layers} \\
  & $17$, $79.1\%$, $52.3\%$ & \texttt{results/qk\_trajectory.json :: pooled} \\
+App.~\ref{app:extension-law} & $23$, $18$, $11$, $16$ of $32$; $9$ floor; $651.90$ & \texttt{results/extension\_law.json :: headline} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1482,6 +1486,7 @@ window. That is why a rate quoted without its window is not a property of RoPE,
 only of the grid it was measured on.
 
 \subsection{Context extension, and what \yarn\ actually does}
+\label{app:extension-law}
 
 \yarn\ \citep{peng2023yarn} leaves $\mathrm{base}$ alone and modifies the
 inverse frequencies per channel: high-frequency channels keep their $\invf$,
@@ -1501,6 +1506,54 @@ by $s$, differs from RoPE in all $32$ entries. Raising $
 $s^{-2k/d}$ rather than by $s^{-1}$, so it leaves $\theta_0 = 1$ and hence
 $\max_k |D_k|$ unchanged, while dividing positions divides it. The three are
 routinely conflated, so all four are measured as separate rows.
+
+Table~\ref{tab:extension-law} applies the threshold to the four schemes. A
+channel is counted when its window sweeps at least $2\pi$ radians, which is the
+point past which no constant can be sign-correct on the whole window; the count
+is therefore the number of rotary pairs a single constant cannot track over the
+window, not a measure of average error. At $L=4096$ the count is $23$ of $32$ for
+plain RoPE, $18$ for \yarn\ at $s=32$, $11$ for position interpolation and $16$
+for the raised base. \yarn's floor is exact: the fastest $9$ channels are
+bit-for-bit equal to RoPE, and all $9$ are already past threshold at this
+length, so no finite scale can take \yarn\ below $9/32$ without changing the
+fastest channel. Position interpolation is the only scheme here that divides the
+fastest channel as well, and it reaches zero only at
+$s > L/(2\pi) = 651.90$, which maps a $4096$-token context onto six positions.
+The raised base leaves $\theta_0 = 1$, so it has the same obstruction as \yarn.
+The schemes change which slow channels are describable; they do not change the
+fast ones that dominate the error.
+
+\begin{table*}[t]
+  \centering
+  \small
+  \setlength{\tabcolsep}{2.5pt}
+  \caption{The threshold law applied to context extension: the number of rotary
+    channels (of $32$) whose window sweeps at least $2\pi$ radians at each
+    context length, for four schemes. ``Untouched'' is the number of channels a
+    scheme leaves bit-for-bit equal to plain RoPE. Source:
+    \texttt{results/extension\_law.json}.}
+  \label{tab:extension-law}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+    scheme & untouched & $L=2048$ & $L=4096$ & $L=8192$ & $L=16384$ & $L=32768$ \\
+    \midrule
+    plain RoPE & $32$ & $21$ & $23$ & $25$ & $28$ & $30$ \\
+    \yarn, $s=32$ & $9$ & $17$ & $18$ & $19$ & $20$ & $21$ \\
+    position interpolation, $s=32$ & $0$ & $9$ & $11$ & $13$ & $16$ & $18$ \\
+    base $5\times10^5$ & $1$ & $15$ & $16$ & $18$ & $20$ & $21$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\paperfigure{fig15_extension_law}{%
+  The threshold law under context extension. Left: the number of rotary
+  channels past $\theta L=2\pi$ against context length for the four schemes at
+  $s=32$; the dashed line is \yarn's untouched-channel floor. Right: the mean
+  best-placement minimax error of the same rows. The schemes move the count,
+  not the fast channels that carry the error. Read from
+  \texttt{results/extension\_law.json}; no value is typed into either panel.%
+}{fig:extension-law}
+
 The full derivation, the frequency ladder of
 Figure~\ref{app:fig:ladder}, and the algebra of why they never coincide on
 any channel are in Appendix~\ref{app:context}.

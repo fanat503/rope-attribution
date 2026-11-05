@@ -49,6 +49,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from rope_attribution import extension_law as EL  # noqa: E402
 from rope_attribution.experiments import (  # noqa: E402
     PairTerms,
     method_spectrum,
@@ -1598,7 +1599,7 @@ def fig13_collapse_law() -> FigureRecord:
             centres, y, color=_colour(index), marker="o", ms=3.0,
             label=model["model_id"], zorder=3,
         )
-        for b, cxx, yy in zip(bins, centres, y, strict=True):
+        for b, cxx, _yy in zip(bins, centres, y, strict=True):
             rows.append(
                 [
                     model["model_id"], float(b["x_lo"]), float(b["x_hi"]), float(cxx),
@@ -1792,6 +1793,112 @@ def fig14_intervention() -> FigureRecord:
     )
 
 
+def fig15_extension_law() -> FigureRecord:
+    """Context extension against the threshold, not against a vibe.
+
+    Left: the fraction of rotary channels whose window sweeps at least
+    ``2*pi`` radians, for the four schemes the paper compares. The dashed line
+    is YaRN's floor: the fastest nine channels are bit-for-bit untouched, so
+    YaRN cannot go below nine past-threshold channels at ``L = 4096`` no matter
+    how large the scale is.
+
+    Right: the mean best-placement minimax error of the same rows. It is a
+    smooth consequence of the same counts, and it makes the cost of a scheme
+    visible: a scheme can lower the count and still leave the mean error high
+    because the channels it does not touch are the ones with the largest
+    amplitude.
+
+    Both panels read ``results/extension_law.json``; no number is typed in.
+    """
+    data = _load_json_artifact("extension_law.json", "rope-extension-law/v1")
+    rows = [row for row in data["rows"] if row["scale"] == 32.0]
+    schemes = list(EL.SCHEMES)
+    labels = {
+        "rope": "plain RoPE",
+        "yarn": "YaRN, $s=32$",
+        "position_interpolation": "position interpolation, $s=32$",
+        "base_500k": "base $5\\times10^5$",
+    }
+    fig, (ax_count, ax_error) = plt.subplots(
+        1, 2, figsize=(10.6, 4.2), gridspec_kw={"width_ratios": [1.0, 1.0]}
+    )
+    csv_rows: list[list[object]] = []
+    for index, scheme in enumerate(schemes):
+        group = sorted(
+            [row for row in rows if row["scheme"] == scheme],
+            key=lambda row: row["context"],
+        )
+        contexts = np.asarray([row["context"] for row in group], dtype=np.float64)
+        counts = np.asarray([row["n_past_threshold"] for row in group], dtype=np.float64)
+        errors = np.asarray([row["mean_minimax_error"] for row in group])
+        ax_count.plot(
+            contexts, counts, marker="o", ms=4.0, color=_colour(index),
+            label=labels[scheme],
+        )
+        ax_error.plot(
+            contexts, errors, marker="o", ms=4.0, color=_colour(index),
+            label=labels[scheme],
+        )
+        for row in group:
+            csv_rows.append(
+                [
+                    scheme, row["context"], row["n_past_threshold"],
+                    row["fraction_past_threshold"], row["mean_minimax_error"],
+                    row["mean_worst_case_error"], row["untouched_channels"],
+                    row["untouched_past_threshold"],
+                ]
+            )
+    floor = data["headline"]["yarn_floor"]["untouched_past_threshold_4096"]
+    ax_count.axhline(
+        floor, color="#8A8A8A", lw=1.0, ls="--",
+        label=f"YaRN floor ({floor}/32)",
+    )
+    ax_count.set_xscale("log", base=2)
+    ax_count.set_xlabel("context length $L$ (tokens)")
+    ax_count.set_ylabel("channels past $\\theta L = 2\\pi$ (of 32)")
+    ax_count.set_title("How many channels a constant cannot describe", fontsize=9)
+    ax_count.set_ylim(0, 32)
+    ax_count.legend(fontsize=6.5, loc="lower right")
+
+    ax_error.set_xscale("log", base=2)
+    ax_error.set_xlabel("context length $L$ (tokens)")
+    ax_error.set_ylabel("mean minimax relative error")
+    ax_error.set_ylim(0.0, 1.05)
+    ax_error.set_title("The best constant's price", fontsize=9)
+    ax_error.legend(fontsize=6.5, loc="upper left")
+
+    stem = "fig15_extension_law"
+    png = _save(fig, stem, "No practical extension scheme makes a constant exact")
+    csv_path = _write_csv(
+        stem,
+        [
+            "scheme", "context", "n_past_threshold", "fraction_past_threshold",
+            "mean_minimax_error", "mean_worst_case_error", "untouched_channels",
+            "untouched_past_threshold",
+        ],
+        csv_rows,
+    )
+    at_4096 = data["headline"]["context_4096"]
+    critical = data["headline"]["position_interpolation_critical_scale_4096"]
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/extension_law.json (four schemes, seven scales, five context "
+            "lengths; the plotted rows are scale 32)"
+        ),
+        headline=(
+            f"at L=4096, {at_4096['rope']['n_past_threshold']}/32 channels are past "
+            f"threshold under plain RoPE, {at_4096['yarn']['n_past_threshold']}/32 "
+            f"under YaRN (floor {at_4096['yarn']['untouched_past_threshold']}/32), "
+            f"{at_4096['position_interpolation']['n_past_threshold']}/32 under "
+            f"position interpolation and {at_4096['base_500k']['n_past_threshold']}/32 "
+            f"under base 5e5; position interpolation needs s={critical:.2f} to reach "
+            f"zero"
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
+
+
 def _method_rows() -> dict[str, list[dict]]:
     """Call ``experiments.method_spectrum`` once and group it by method."""
     rows = method_spectrum(
@@ -1816,11 +1923,12 @@ def _write_readme(records: Sequence[FigureRecord]) -> Path:
         "`projects/rope_attribution/figures.py`. No number in these PNGs, in the",
         "CSV sidecars, or in the table below is typed into the source: each one is",
         "returned at run time by `rope_attribution.experiments`,",
-        "`rope_attribution.rope` or `rope_attribution.statistics` -- except fig11,",
-        "which reads `results/sensitivity.json`, the artifact that `make results`",
-        "regenerates and CI diff-reports; the figure asserts the artifact's grid",
-        "against `sensitivity.BASES`/`HEAD_DIMS` before plotting, and fig12, which",
-        "reads `results/qk_attribution.json` and asserts its schema and head count.",
+        "`rope_attribution.rope` or `rope_attribution.statistics` -- except fig11",
+        "to fig15, which read committed artifacts under `results/`: fig11 the",
+        "sensitivity sweep, fig12 the QK case study, fig13 the collapse law, fig14",
+        "the intervention and fig15 the extension law. Each asserts its artifact's",
+        "schema and grid before plotting, so a stale or renamed artifact fails the",
+        "regeneration.",
         "The literals",
         "that do appear in `figures.py` are",
         "configuration (head dim, RoPE base, extension scale, seeds), the distance",
@@ -1879,6 +1987,9 @@ def _write_readme(records: Sequence[FigureRecord]) -> Path:
         "read from its artifact; the artifact's grid is asserted against the module.",
         "fig12 is the trained-dictionary case study: the same feature's total and",
         "rotary profiles, read from `results/qk_attribution.json`.",
+        "fig15 is the design consequence of the threshold law: how many channels",
+        "each context-extension scheme leaves past `theta L = 2 pi`, read from",
+        "`results/extension_law.json`.",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
@@ -1909,6 +2020,7 @@ def main() -> int:
         fig12_qk_case_study(),
         fig13_collapse_law(),
         fig14_intervention(),
+        fig15_extension_law(),
     ]
     readme = _write_readme(records)
 

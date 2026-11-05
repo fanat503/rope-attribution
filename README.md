@@ -14,6 +14,18 @@ error of `1.13` against a peak of `1`. The well-posed object is per-feature and
 per-distance — and it is closed-form, so it costs the same as the scalar it
 replaces.
 
+That rate is not a constant: it is one value of an exact law. Replacing the
+per-pair sinusoid by the best constant over a window of `L` positions has minimax
+relative sup-error exactly `1` once the window sweeps `x = θL ≥ 2π`, and below
+the threshold the attainable set is exactly
+`[(1 − cos(x/2)) / 2, sin(min(x, π) / 2)]`; at `x = 2π` the band collapses to
+`1`. The law also prices context extension: at `L = 4096`, `23/32` channels are
+past the threshold under plain RoPE, `18/32` under YaRN at `s = 32`, `11/32`
+under position interpolation and `16/32` under a raised base. YaRN cannot go
+below `9/32` at that length, because its nine fastest channels are bit-for-bit
+plain RoPE; position interpolation reaches zero only at `s ≥ L/(2π) = 651.90`,
+which maps `4096` tokens onto six positions.
+
 We explicitly do **not** claim novelty for the algebra: it is already published
 (arXiv:2607.25507, Sections 3–4). Nor do we claim that RoPE internals are
 under-explored in general, or that anything here evaluates a downstream task.
@@ -42,7 +54,7 @@ hand.
         │                          │
         ▼                          ▼
    figures/*.png  ◄──── figures.py ────┘
-   + CSV sidecars  (14 figures, every array plotted is shipped)
+   + CSV sidecars  (15 figures, every array plotted is shipped)
         │
         ▼
    tests/test_paper_claims.py   parses paper/main.tex, re-derives every literal
@@ -51,7 +63,7 @@ hand.
 ```
 
 The claim registry in `tests/test_paper_claims.py` is the audit: it locates each
-inline-math number and each cell of the four measured tables in `paper/main.tex`
+inline-math number and each cell of the five measured tables in `paper/main.tex`
 by pattern, compares it against the artefact, and fails if a covered number has
 no claim behind it. Adding such a number to the paper without a test for it fails
 the suite.
@@ -60,7 +72,7 @@ the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1747 tests (CPU-only install)
+pytest -q                                        # 1757 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -242,6 +254,8 @@ projects/rope_attribution/
                   has an attention block after it (five dictionaries)
   qk_trajectory.py the feature-pair block swept over the full distance grid,
                   per layer and head
+  extension_law.py the threshold law applied to context-extension schemes:
+                  how many channels each one leaves past `theta*L = 2*pi`
   train.py        trains 100M-300M models, logging every metric including the
                   attribution diagnostics; periodic resumable checkpoints
   data.py         tokenizes once into checksummed shards and a mmapped stream
@@ -252,8 +266,8 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1747 tests (CPU-only install)
-figures/          fourteen figures, each with a CSV sidecar
+tests/            1757 tests (CPU-only install)
+figures/          fifteen figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
                     real_model.json          (three trained checkpoints)
@@ -284,6 +298,10 @@ results/          measurements.json  (structural facts)
                     qk_trajectory.json       (the feature-pair block swept over
                                               the full distance grid, for every
                                               layer and head)
+                    extension_law.json       (the threshold law applied to RoPE,
+                                              YaRN, position interpolation and a
+                                              raised base, over five context
+                                              lengths)
 ```
 
 The early exploratory material that used to live under
@@ -389,6 +407,18 @@ of fast channels dominate it. Linearization of the *whole* head is not rescued b
 any of these methods; what YaRN buys is a larger linearizable majority
 (`figures/fig03`, `figures/fig04`, `figures/fig05`).
 
+**No practical extension scheme makes a position-free table valid.** Apply the
+threshold law to the frequency ladder: at `L = 4096`, `23/32` channels sweep at
+least `2π` under plain RoPE, `18/32` under YaRN at `s = 32`, `11/32` under
+position interpolation and `16/32` under `base = 5×10^5`. YaRN cannot go below
+`9/32` at that length: its nine fastest channels are bit-for-bit equal to plain
+RoPE and all nine are already past the threshold. The raised base has the same
+obstruction, with one untouched channel. Position interpolation divides the
+fastest channel too, but needs `s ≥ L/(2π) = 651.90` to reach zero, which maps
+`4096` tokens onto six positions. The schemes move which slow channels are
+describable; they do not move the fast ones that carry the error
+(`results/extension_law.json`, `figures/fig15_extension_law.png`).
+
 **Partial RoPE yields an exactly position-free sub-score.** At `p = 0.25` the
 unrotated 75% of channels contribute a sub-score whose spread across distance is
 exactly `0.0`, while the rotated quarter varies by `20.65`. This is a clean
@@ -461,6 +491,7 @@ matters for the mechanism:
 | `fig12_qk_case_study` | one trained-dictionary feature: flat total profile, sign-changing rotary sub-score, and per-head flip rates |
 | `fig13_collapse_law` | the minimax collapse law and its 44 measured bins, with the pair-level and score-level error against window length |
 | `fig14_intervention` | achieved over intended suppression for the exact and position-free rules, plus the closed-form post-softmax prediction |
+| `fig15_extension_law` | channels past `θL = 2π` under four extension schemes, with YaRN's untouched-channel floor, and the mean minimax error those rows imply |
 
 Each figure ships the plotted data as a CSV beside it, and `figures/README.md`
 records which function produced it and its headline number.

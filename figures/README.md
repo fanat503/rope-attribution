@@ -4,11 +4,12 @@ Everything in this directory is written by
 `projects/rope_attribution/figures.py`. No number in these PNGs, in the
 CSV sidecars, or in the table below is typed into the source: each one is
 returned at run time by `rope_attribution.experiments`,
-`rope_attribution.rope` or `rope_attribution.statistics` -- except fig11,
-which reads `results/sensitivity.json`, the artifact that `make results`
-regenerates and CI diff-reports; the figure asserts the artifact's grid
-against `sensitivity.BASES`/`HEAD_DIMS` before plotting, and fig12, which
-reads `results/qk_attribution.json` and asserts its schema and head count.
+`rope_attribution.rope` or `rope_attribution.statistics` -- except fig11
+to fig15, which read committed artifacts under `results/`: fig11 the
+sensitivity sweep, fig12 the QK case study, fig13 the collapse law, fig14
+the intervention and fig15 the extension law. Each asserts its artifact's
+schema and grid before plotting, so a stale or renamed artifact fails the
+regeneration.
 The literals
 that do appear in `figures.py` are
 configuration (head dim, RoPE base, extension scale, seeds), the distance
@@ -47,6 +48,7 @@ plotted, so no claim has to be read off a pixel. Log axes clip at
 | `fig12_qk_case_study.png` | results/qk_attribution.json (pythia-70m-deduped + public 32k SAE, layer 3); head 0, feature 458223 | the total profile stays within 0.20% of its mean absolute value while the rotary sub-score runs -56.4 to 82.6 and changes sign; pooled sign-flip fractions are 0.01% (total), 21.52% (rotary), 8.52% (pair) |
 | `fig13_collapse_law.png` | results/collapse.json (three checkpoints, 32 content pairs per head, windows 8..4096); the band is Proposition 5(3), drawn from the formula | every checkpoint reaches a pair-level error of exactly 1.000 at the threshold and stays there; at L=4096 the score-level error is 0.052 on partial-RoPE pythia-160m against 0.905 on full-RoPE llama-160m |
 | `fig14_intervention.png` | results/intervention.json (three checkpoints, one 320-token passage, 32 heads per checkpoint, one pair ablated in q_proj only) | 7 of 96 edits suppress the score with the wrong sign; the exact and surrogate selections differ in 25 cells, and the closed form reproduces every intervened forward pass to 6e-04 |
+| `fig15_extension_law.png` | results/extension_law.json (four schemes, seven scales, five context lengths; the plotted rows are scale 32) | at L=4096, 23/32 channels are past threshold under plain RoPE, 18/32 under YaRN (floor 9/32), 11/32 under position interpolation and 16/32 under base 5e5; position interpolation needs s=651.90 to reach zero |
 
 ## Shared configuration
 
@@ -69,3 +71,6 @@ fig11 is the configuration sweep behind the paper's robustness paragraph,
 read from its artifact; the artifact's grid is asserted against the module.
 fig12 is the trained-dictionary case study: the same feature's total and
 rotary profiles, read from `results/qk_attribution.json`.
+fig15 is the design consequence of the threshold law: how many channels
+each context-extension scheme leaves past `theta L = 2 pi`, read from
+`results/extension_law.json`.

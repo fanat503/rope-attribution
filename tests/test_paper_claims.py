@@ -85,6 +85,9 @@ if str(_PROJECTS) not in sys.path:
     sys.path.insert(0, str(_PROJECTS))
 
 from rope_attribution import experiments as E  # noqa: E402  (needs the sys.path tweak)
+from rope_attribution import (  # noqa: E402  (needs the sys.path tweak)
+    extension_law as XL,
+)
 from rope_attribution import rope as R  # noqa: E402  (needs the sys.path tweak)
 
 # --------------------------------------------------------------------------
@@ -1402,6 +1405,60 @@ CLAIMS += (
         r"band; at \$x=2\\pi\$ the band collapses to the single point \$(\d+)\$",
     ),
     Claim("threshold_r2_heading", r"phase swept, with a threshold at \$(\d+)\\pi\$"),
+    # ---- the extension-law consequence (Appendix~\ref{app:extension-law}) ----
+    Claim(
+        "ext_threshold",
+        r"window sweeps at least \$(\d+)\\pi\$ radians",
+    ),
+    Claim(
+        "ext_caption_scale",
+        r"for the four schemes at \$s=(\d+)\$",
+    ),
+    Claim(
+        "ext_caption_channels",
+        r"the number of rotary channels \(of \$(\d+)\$\)",
+    ),
+    Claim(
+        "ext_figcap_threshold",
+        r"channels past \$\\theta L=(\d+)\\pi\$ against context length",
+    ),
+    # R3 restates the same counts in the main text, at a different position from
+    # the appendix paragraph. A pattern that matched only one of the two would
+    # let the other drift, so both are registered.
+    Claim(
+        "ext_remark_counts",
+        r"at \$L=(\d+)\$ the number of channels past \$\\theta L=2\\pi\$ is "
+        r"\$(\d+)/(\d+)\$ under plain RoPE, \$(\d+)/(\d+)\$ under \\yarn\\ at "
+        r"\$s=(\d+)\$ and \$(\d+)/(\d+)\$ under position interpolation",
+    ),
+    Claim(
+        "ext_remark_floor",
+        r"\\yarn's nine untouched fast channels put a floor of \$(\d+)/(\d+)\$",
+    ),
+    Claim(
+        "prov_extension_row",
+        r"App\.~\\ref\{app:extension-law\} & \$(\d+)\$, \$(\d+)\$, \$(\d+)\$, "
+        r"\$(\d+)\$ of \$(\d+)\$; \$(\d+)\$ floor; \$(\d+\.\d+)\$ & "
+        r"\\texttt\{results/extension\\_law\.json :: headline\}",
+    ),
+    Claim(
+        "ext_counts",
+        r"At \$L=(\d+)\$ the count is \$(\d+)\$ of \$(\d+)\$ for plain RoPE, "
+        r"\$(\d+)\$ for \\yarn\\ at \$s=(\d+)\$, \$(\d+)\$ for position "
+        r"interpolation and \$(\d+)\$ for the raised base",
+    ),
+    Claim(
+        "ext_floor",
+        r"the fastest \$(\d+)\$ channels are bit-for-bit equal to RoPE, and all "
+        r"\$(\d+)\$ are already past threshold at this length, so no finite scale "
+        r"can take \\yarn\\ below \$(\d+)/(\d+)\$",
+    ),
+    Claim(
+        "ext_critical",
+        r"\$s > L/\(2\\pi\) = (\d+\.\d+)\$, which maps a \$(\d+)\$-token "
+        r"context onto six positions",
+    ),
+    Claim("ext_theta_zero", r"leaves \$\\theta_0 = (\d+)\$"),
     Claim(
         "threshold_amplitude",
         r"content amplitude \$\\rho\\ge(\d+)\$ and phase \$\\psi\$",
@@ -3873,7 +3930,13 @@ def test_no_model_or_activation_is_reported_anywhere_outside_a_denial() -> None:
 EXEMPT_ALGEBRA: frozenset[str] = frozenset()
 
 # `tabular` blocks whose every cell is verified by a dedicated test.
-VERIFIED_TABLES = ("tab:spectrum", "tab:exact", "tab:qk-depth", "tab:qk-trajectory")
+VERIFIED_TABLES = (
+    "tab:spectrum",
+    "tab:exact",
+    "tab:qk-depth",
+    "tab:qk-trajectory",
+    "tab:extension-law",
+)
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 
@@ -4019,6 +4082,7 @@ UNCERTAINTY_PATH = _REPO / "results" / "uncertainty.json"
 AGREEMENT_PATH = _REPO / "results" / "agreement.json"
 COLLAPSE_PATH = _REPO / "results" / "collapse.json"
 INTERVENTION_PATH = _REPO / "results" / "intervention.json"
+EXTENSION_PATH = _REPO / "results" / "extension_law.json"
 
 
 def _artifact(path: Path) -> dict:
@@ -5043,6 +5107,181 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
         models[0]["pooled"]["baseline_prediction_error_median"], prov[3], int(prov[4]),
         "provenance baseline error",
     )
+
+
+def _extension_row(artifact: dict, scheme: str, context: int) -> dict:
+    """The one row of ``extension_law.json`` at the paper's canonical scale."""
+    rows = [
+        row
+        for row in artifact["rows"]
+        if row["scheme"] == scheme
+        and row["context"] == context
+        and row["scale"] == EXT_SCALE
+    ]
+    assert len(rows) == 1, (scheme, context, len(rows))
+    return rows[0]
+
+
+def test_the_extension_table_restates_the_extension_artifact() -> None:
+    """Every cell of Table~\\ref{tab:extension-law} is recomputed from its row.
+
+    Mutation verdict: moving one count by one channel fails the per-row
+    comparison against ``results/extension_law.json``; swapping the untouched
+    column with the ``L=4096`` column fails because the untouched count is a
+    different field; editing the appendix sentence, the R3 remark, the critical
+    scale or the figure caption without regenerating the artifact fails the
+    corresponding claim comparison. A stale artifact after a re-run fails at
+    the first cell whose row moved.
+    """
+    artifact = _artifact(EXTENSION_PATH)
+    assert artifact["schema"] == "rope-extension-law/v1"
+    contexts = [int(value) for value in artifact["configuration"]["context_lengths"]]
+    assert contexts == list(XL.CONTEXT_LENGTHS)
+
+    parsed: list[tuple[str, list[str]]] = []
+    header: list[str] = []
+    labels = {
+        "plain RoPE": "rope",
+        r"\yarn": "yarn",
+        "position interpolation": "position_interpolation",
+        "base": "base_500k",
+    }
+    for chunk in table_block("tab:extension-law").split(r"\\"):
+        cells = chunk.split("&")
+        if len(cells) != 7:
+            continue
+        first = cells[0]
+        if "scheme" in first:
+            header = [_tex_plain(cell) for cell in cells[1:]]
+            continue
+        for needle, key in labels.items():
+            if needle in first:
+                parsed.append((key, [_tex_plain(cell) for cell in cells[1:]]))
+                break
+        else:
+            raise AssertionError(f"unrecognised extension-table row: {first!r}")
+    assert [key for key, _ in parsed] == list(XL.SCHEMES), parsed
+
+    # The header names the untouched column and the five context lengths.
+    assert header[0].lower() == "untouched", header
+    header_contexts = [int(re.search(r"(\d+)", cell).group(1)) for cell in header[1:]]
+    assert header_contexts == contexts, (header_contexts, contexts)
+
+    for key, values in parsed:
+        assert len(values) == 6, (key, values)
+        untouched = _extension_row(artifact, key, contexts[0])["untouched_channels"]
+        assert int(values[0]) == untouched, (key, values[0], untouched)
+        for context, cell in zip(contexts, values[1:], strict=True):
+            row = _extension_row(artifact, key, context)
+            assert int(cell) == row["n_past_threshold"], (
+                key,
+                context,
+                cell,
+                row["n_past_threshold"],
+            )
+            assert row["n_channels"] == int(literal("ext_caption_channels"))
+
+    # The caption is a literal equality statement: plain RoPE leaves every one
+    # of its own channels unchanged, so its untouched count is the full ladder.
+    # A convention that reported zero here would contradict the caption.
+    rope_untouched = _extension_row(artifact, "rope", contexts[0])
+    assert rope_untouched["untouched_channels"] == rope_untouched["n_channels"] == int(
+        literal("ext_caption_channels")
+    )
+
+    headline = artifact["headline"]["context_4096"]
+    assert int(literal("ext_caption_scale")) == EXT_SCALE
+    assert int(literal("ext_caption_scale")) == int(
+        _extension_row(artifact, "rope", 4096)["scale"]
+    )
+    assert int(literal("ext_threshold")) * math.pi == pytest.approx(
+        artifact["configuration"]["threshold_radians"], rel=0, abs=1e-12
+    )
+    assert int(literal("ext_threshold")) == int(literal("ext_figcap_threshold"))
+
+    # The appendix paragraph: counts, the YaRN floor and the critical scale.
+    (
+        claimed_context,
+        rope_count,
+        n_channels,
+        yarn_count,
+        claimed_scale,
+        pi_count,
+        base_count,
+    ) = (int(value) for value in groups("ext_counts")[0])
+    assert claimed_context == 4096
+    assert n_channels == int(literal("ext_caption_channels"))
+    assert rope_count == headline["rope"]["n_past_threshold"]
+    assert yarn_count == headline["yarn"]["n_past_threshold"]
+    assert pi_count == headline["position_interpolation"]["n_past_threshold"]
+    assert base_count == headline["base_500k"]["n_past_threshold"]
+    assert claimed_scale == EXT_SCALE == int(
+        artifact["headline"]["yarn_floor"]["scale"]
+    )
+
+    fastest, all_past, floor, denominator = (int(v) for v in groups("ext_floor")[0])
+    assert fastest == headline["yarn"]["untouched_channels"]
+    assert all_past == headline["yarn"]["untouched_past_threshold"]
+    assert floor == all_past == artifact["headline"]["yarn_floor"][
+        "untouched_past_threshold_4096"
+    ]
+    assert denominator == int(literal("ext_caption_channels"))
+
+    critical, critical_context = groups("ext_critical")[0]
+    assert int(critical_context) == 4096
+    assert_paper_number_matches(
+        artifact["headline"]["position_interpolation_critical_scale_4096"],
+        critical,
+        "position-interpolation critical scale",
+    )
+    assert float(literal("ext_theta_zero")) == pytest.approx(
+        artifact["canonical_channels_4096"]["rope"][0]["inv_freq"], rel=0, abs=1e-12
+    )
+
+    (
+        prov_rope,
+        prov_yarn,
+        prov_pi,
+        prov_base,
+        prov_channels,
+        prov_floor,
+        prov_critical,
+    ) = (int(value) if value.isdigit() else value for value in groups("prov_extension_row")[0])
+    assert prov_channels == int(literal("ext_caption_channels"))
+    assert prov_rope == headline["rope"]["n_past_threshold"]
+    assert prov_yarn == headline["yarn"]["n_past_threshold"]
+    assert prov_pi == headline["position_interpolation"]["n_past_threshold"]
+    assert prov_base == headline["base_500k"]["n_past_threshold"]
+    assert prov_floor == headline["yarn"]["untouched_past_threshold"]
+    assert_paper_number_matches(
+        artifact["headline"]["position_interpolation_critical_scale_4096"],
+        prov_critical,
+        "provenance critical scale",
+    )
+
+    # The R3 remark restates the same counts in the main text.
+    (
+        remark_context,
+        remark_rope,
+        remark_denominator,
+        remark_yarn,
+        remark_denominator_again,
+        remark_scale,
+        remark_pi,
+        remark_denominator_last,
+    ) = (int(value) for value in groups("ext_remark_counts")[0])
+    assert remark_context == claimed_context == 4096
+    assert remark_denominator == remark_denominator_again == remark_denominator_last
+    assert remark_denominator == int(literal("ext_caption_channels"))
+    assert remark_rope == headline["rope"]["n_past_threshold"]
+    assert remark_yarn == headline["yarn"]["n_past_threshold"]
+    assert remark_pi == headline["position_interpolation"]["n_past_threshold"]
+    assert remark_scale == EXT_SCALE
+    remark_floor, remark_floor_denominator = (
+        int(value) for value in groups("ext_remark_floor")[0]
+    )
+    assert remark_floor == floor
+    assert remark_floor_denominator == remark_denominator
 
 
 def test_the_context_summary_restates_the_spectrum_table() -> None:
