@@ -212,7 +212,6 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("abstract_additivity", r"we measure the residual at \$(3\.9)\\times10\^\{-14\}\$"),
     Claim("r1_additivity", r"additive decomposition holds to \$(3\.9)\\times10\^\{-14\}\$"),
-    Claim("conclusion_additivity", r"is exact for a fixed position pair, to \$(3\.9)\\times10\^\{-14\}\$"),
     Claim(
         "corr_bilinearity",
         r"doubles the score to a relative error of \$(7\.4)\\times10\^\{-16\}\$",
@@ -633,6 +632,53 @@ CLAIMS += (
         r"densities \$(9)\$, \$(17)\$ and \$(65)\$ do not all survive integer "
         r"rounding, so the realized span is below the nominal \$(7)\\times\$\. "
         r"An earlier version claimed a \$(14)\\times\$ span",
+    ),
+    # The spacing sensitivity. The canonical grid is log-spaced; the paper
+    # reports the uniform-grid rate next to it so the headline cannot be
+    # mistaken for the only weighting. All numbers come from
+    # results/usefulness_spacing.json and are re-derived in
+    # test_the_spacing_sensitivity_matches_its_artifact below.
+    Claim(
+        "abstract_spacing",
+        r"\$(27\.0)\\%\$ on our log grid, \$(\d+\.\d+)\\%\$ "
+        r"under uniform weighting",
+    ),
+    Claim(
+        "worth_spacing_grid",
+        r"Distance weighting matters: a \$(\d+)\$-point uniform grid gives a\s+"
+        r"sign-error rate of\s+\$(\d+\.\d+)\\%\$",
+    ),
+    Claim(
+        "worth_spacing_compare",
+        r"against \$(\d+\.\d+)\\%\$ on the pre-registered \$(\d+)\$-point log "
+        r"grid, and the\s+median relative error falls from \$(\d+\.\d+)\$ to "
+        r"\$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "app_spacing_head",
+        r"The \$(\d+\.\d+)\\%\$ headline is measured on the pre-registered "
+        r"\$(\d+)\$-point log-spaced grid\.",
+    ),
+    Claim(
+        "app_spacing_uniform",
+        r"At \$(\d+)\$ points the equal-weight rate is \$(\d+\.\d+)\\%\$ "
+        r"\(\$(\d+\.\d+)\\%\$,\s+\$(\d+\.\d+)\\%\$,\s+\$(\d+\.\d+)\\%\$ per model\);\s+"
+        r"at \$(\d+)\$ points it is \$(\d+\.\d+)\\%\$",
+    ),
+    Claim(
+        "app_spacing_conservative",
+        r"the log-grid \$(\d+\.\d+)\\%\$ is the conservative value",
+    ),
+    Claim(
+        "app_spacing_rel",
+        r"The median sup-error is \$(\d+\.\d+)\$ on the log grid and "
+        r"\$(\d+\.\d+)\$ on the uniform \$(\d+)\$-point grid\.",
+    ),
+    Claim(
+        "prov_spacing_row",
+        r"App\.~\\ref\{app:spacing\} & \$(\d+\.\d+)\\%\$; \$(\d+\.\d+)\$, "
+        r"\$(\d+\.\d+)\$, \$(\d+\.\d+)\$; \$(\d+\.\d+)\$ & "
+        r"\\texttt\{results/usefulness\\_spacing\.json :: pooled\}",
     ),
     # The qualifications the paper puts on the 27.0% headline: which
     # estimator it is, the interval around it, and the pairwise
@@ -1318,7 +1364,7 @@ CLAIMS += (
     ),
     Claim(
         "collapse_score_abstract",
-        r"score-level error is \$(\d+\.\d+)\$ on partial-RoPE "
+        r"rotary fraction: \$(\d+\.\d+)\$\s+on partial-RoPE "
         r"\\texttt\{pythia-160m\} against \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$",
     ),
     Claim(
@@ -1490,10 +1536,6 @@ CLAIMS += (
         r"--- \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ per checkpoint, because the bin grid",
     ),
     Claim(
-        "collapse_score_window_abstract",
-        r"at \$L=(\d+)\$ the score-level error is",
-    ),
-    Claim(
         "figure_threshold_line",
         r"the dotted line is \$\\theta L=(\d+)\\pi\$",
     ),
@@ -1527,11 +1569,7 @@ CLAIMS += (
         r"On three checkpoints all \$(\d+)\$ measured bins lie inside it, and the "
         r"pair-level error is \$(\d+\.\d+)\$ at \$L=(\d+)\$",
     ),
-    Claim(
-        "collapse_score_conclusion",
-        r"rotary fraction: \$(\d+\.\d+)\$ on partial-RoPE pythia against "
-        r"\$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ on full-RoPE models",
-    ),
+
     Claim(
         "yarn_ratio_abstract",
         r"the amplitude-weighted error ratio is \$(\d+\.\d+)\$",
@@ -1609,8 +1647,8 @@ CLAIMS += (
     ),
     Claim(
         "intervention_conclusion",
-        r"Acting on the attribution costs \$(\d+)\$ differing selections and "
-        r"\$(\d+)\$ sign reversals in \$(\d+)\$ interventions, and the exact rule "
+        r"Acting on it costs \$(\d+)\$ differing selections and "
+        r"\$(\d+)\$ sign reversals in \$(\d+)\$ interventions; the exact rule "
         r"remains a \$(\d+\.\d+)\$ oracle",
     ),
     # ---- provenance rows for the two new artifacts ---------------------------
@@ -2298,7 +2336,7 @@ def test_feature_additivity_claim_on_the_5_point_grid() -> None:
     assert_paper_asserts_below(
         coarse, "additivity_5pt_ceiling", "feature additivity, 5-point grid"
     )
-    for name in ("abstract_additivity", "r1_additivity", "conclusion_additivity"):
+    for name in ("abstract_additivity", "r1_additivity"):
         assert_paper_sci_matches(coarse, literal(name), -14, name)
     assert_paper_sci_matches(
         coarse, literal("eq_additivity_grids", 1), -14, "the 5-point residual in the prose"
@@ -4849,7 +4887,6 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
     for name in (
         "collapse_score_abstract",
         "collapse_score_body",
-        "collapse_score_conclusion",
     ):
         captured = groups(name)[0]
         if name == "collapse_score_body":
@@ -5282,6 +5319,79 @@ def test_the_extension_table_restates_the_extension_artifact() -> None:
     )
     assert remark_floor == floor
     assert remark_floor_denominator == remark_denominator
+
+
+def test_the_spacing_sensitivity_matches_its_artifact() -> None:
+    """Every spacing number in the paper is recomputed from its artifact.
+
+    Mutation verdict: replacing the uniform grid with the log grid makes the
+    per-model rates fall toward 0.28, 0.26, 0.26 and fails the comparisons;
+    changing the pooled 39.8 or the 38.5 at 13 points fails the corresponding
+    ``assert_paper_number_matches``; editing the provenance row without moving
+    the artifact fails the last block.
+    """
+    path = _REPO / "results" / "usefulness_spacing.json"
+    artifact = json.loads(path.read_text(encoding="utf-8"))
+    assert artifact["schema"] == "rope_attribution/usefulness_spacing/v1"
+    models = artifact["models"]
+    assert len(models) == 3
+    uniform65 = [m["uniform65"]["sign_flip_fraction_pooled"] * 100 for m in models]
+    uniform13 = artifact["pooled"]["uniform13"] * 100
+    log13 = artifact["pooled"]["log13"] * 100
+    rel_log = float(np.median([m["log13"]["rel_err_median"] for m in models]))
+    rel_uniform = float(np.median([m["uniform65"]["rel_err_median"] for m in models]))
+
+    abstract = groups("abstract_spacing")[0]
+    assert_paper_number_matches(log13, abstract[0], "abstract log-grid rate")
+    assert_paper_number_matches(
+        artifact["pooled"]["uniform65"] * 100, abstract[1], "abstract uniform rate"
+    )
+
+    grid = groups("worth_spacing_grid")[0]
+    assert int(grid[0]) == 65
+    assert_paper_number_matches(
+        artifact["pooled"]["uniform65"] * 100, grid[1], "main uniform pooled rate"
+    )
+
+    compare = groups("worth_spacing_compare")[0]
+    assert_paper_number_matches(log13, compare[0], "main log-grid rate")
+    assert int(compare[1]) == 13
+    assert_paper_number_matches(rel_log, compare[2], "main log-grid rel error")
+    assert_paper_number_matches(rel_uniform, compare[3], "main uniform rel error")
+
+    head = groups("app_spacing_head")[0]
+    assert_paper_number_matches(log13, head[0], "appendix log-grid rate")
+    assert int(head[1]) == 13
+
+    uniform = groups("app_spacing_uniform")[0]
+    assert int(uniform[0]) == 65
+    assert_paper_number_matches(
+        artifact["pooled"]["uniform65"] * 100, uniform[1], "appendix uniform rate"
+    )
+    for actual, written, what in zip(
+        uniform65, uniform[2:5], ("pythia", "llama", "SmolLM"), strict=True
+    ):
+        assert_paper_number_matches(actual, written, f"appendix uniform {what}")
+    assert int(uniform[5]) == 13
+    assert_paper_number_matches(uniform13, uniform[6], "appendix 13-point uniform rate")
+
+    assert_paper_number_matches(
+        log13, groups("app_spacing_conservative")[0][0], "appendix conservative rate"
+    )
+    rel = groups("app_spacing_rel")[0]
+    assert_paper_number_matches(rel_log, rel[0], "appendix log-grid rel error")
+    assert_paper_number_matches(rel_uniform, rel[1], "appendix uniform rel error")
+    assert int(rel[2]) == 65
+
+    prov = groups("prov_spacing_row")[0]
+    assert_paper_number_matches(
+        artifact["pooled"]["uniform65"] * 100, prov[0], "provenance uniform rate"
+    )
+    for actual, written, what in zip(
+        uniform65, prov[1:4], ("pythia", "llama", "SmolLM"), strict=True
+    ):
+        assert_paper_number_matches(actual, written, f"provenance uniform {what}")
+    assert_paper_number_matches(rel_uniform, prov[4], "provenance rel error")
 
 
 def test_the_context_summary_restates_the_spectrum_table() -> None:

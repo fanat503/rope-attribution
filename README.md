@@ -10,9 +10,11 @@ grid all 8 of 8 features change sign somewhere in `δ ∈ [1, 8192]`. So a
 position-free per-feature scalar is not merely inaccurate, it is *backwards*:
 replacing `c_i(δ)` with its per-feature mean gets the sign wrong on **27.0%** of
 per-pair, per-distance cells of three trained checkpoints, with a median relative
-error of `1.13` against a peak of `1`. The well-posed object is per-feature and
-per-distance — and it is closed-form, so it costs the same as the scalar it
-replaces.
+error of `1.13` against a peak of `1`. That is the pre-registered log-grid value
+and the conservative one: on a uniform 65-point grid over the same range the
+equal-weight rate is **39.8%**, while the median relative error falls to `1.01`.
+The well-posed object is per-feature and per-distance — and it is closed-form, so
+it costs the same as the scalar it replaces.
 
 That rate is not a constant: it is one value of an exact law. Replacing the
 per-pair sinusoid by the best constant over a window of `L` positions has minimax
@@ -72,7 +74,7 @@ the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1757 tests (CPU-only install)
+pytest -q                                        # 1762 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -92,6 +94,7 @@ a test dependency:
 pip install -r real_model_requirements.txt
 python -m projects.rope_attribution.real_model    # results/real_model.json
 python -m projects.rope_attribution.usefulness    # results/usefulness.json
+python -m projects.rope_attribution.usefulness --spacing  # + usefulness_spacing.json
 python -m projects.rope_attribution.uncertainty   # results/uncertainty.json
 python -m projects.rope_attribution.seed_variance # + results/usefulness_seeds.json
 python -m projects.rope_attribution.agreement     # results/agreement.json
@@ -266,13 +269,15 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1757 tests (CPU-only install)
+tests/            1762 tests (CPU-only install)
 figures/          fifteen figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
                     real_model.json          (three trained checkpoints)
                     usefulness.json          (cost of the position-free scalar,
                                               clustered at 558 layer-heads)
+                    usefulness_spacing.json  (the same sign-error rate under the
+                                              log and uniform distance weightings)
                     uncertainty.json         (head-clustered interval and the
                                               pairwise checkpoint comparison)
                     usefulness_seeds.json    (the same cost under three
@@ -563,6 +568,19 @@ the other two checkpoints while llama and SmolLM are not distinguishable
 
 ```bash
 python -m projects.rope_attribution.usefulness   # ~4 min, CPU only
+```
+
+That rate is a functional of the distance weighting, and the paper reports the
+gap rather than only the favourable value. On the pre-registered 13-point log
+grid it is `27.0%`; on a uniform 65-point grid over the same interval it is
+`39.8%` (`40.4%`, `39.5%`, `39.6%` per checkpoint), and on a uniform 13-point
+grid `38.5%`, so the gap is spacing rather than resolution. The median relative
+error moves the other way, from `1.13` to `1.01`, because the sign rate and the
+sup-error are different functionals of the same profile. The per-checkpoint
+record is `results/usefulness_spacing.json`:
+
+```bash
+python -m projects.rope_attribution.usefulness --spacing   # ~8 min, CPU only
 ```
 
 ### What this repository does not claim

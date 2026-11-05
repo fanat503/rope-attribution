@@ -27,6 +27,7 @@ from rope_attribution.rope import inv_freq  # noqa: E402
 
 _JSON = _REPO / "results" / "usefulness.json"
 _GI_JSON = _REPO / "results" / "usefulness_grid_independence.json"
+_SPACING_JSON = _REPO / "results" / "usefulness_spacing.json"
 
 
 @pytest.fixture(scope="module")
@@ -427,6 +428,101 @@ def test_the_sign_flip_rate_itself_is_stable_across_densities(
     ]
     assert len(rates) == 3, rates
     assert all(0.15 < r < 0.45 for r in rates), rates
+
+
+# ---------------------------------------------------------------------------
+# the spacing sensitivity artefact
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def spacing() -> dict:
+    if not _SPACING_JSON.exists():
+        pytest.skip("results/usefulness_spacing.json is absent; run usefulness.py --spacing")
+    return json.loads(_SPACING_JSON.read_text(encoding="utf-8"))
+
+
+def test_the_uniform_grid_is_evenly_spaced_and_closed(spacing: dict) -> None:
+    """The alternative weighting must be the one its name claims.
+
+    Mutation verdict: a geometric grid, or a half-open range, changes the
+    gaps or the endpoints and fails the arithmetic below.
+    """
+    grid = U._uniform_grid(13)
+    assert grid[0] == 1 and grid[-1] == 4096
+    assert np.all(np.diff(grid) > 0)
+    gaps = np.diff(grid)
+    assert gaps.max() - gaps.min() <= 1, gaps
+    assert list(grid) == sorted(set(grid.tolist()))
+
+
+def test_the_spacing_artefact_is_self_describing(spacing: dict) -> None:
+    """The paper's alternative rate must be traceable to its own record.
+
+    Mutation verdict: dropping a checkpoint, changing a grid's length, or
+    swapping the log and uniform labels makes the shape or the arithmetic
+    below fail.
+    """
+    assert spacing["schema"] == "rope_attribution/usefulness_spacing/v1"
+    assert spacing["log_grid"] == list(U.DISTANCE_GRID)
+    assert spacing["uniform_densities"] == list(U.UNIFORM_DENSITIES)
+    assert len(spacing["models"]) == 3
+    for model in spacing["models"]:
+        for label, n_deltas in (
+            ("log13", 13),
+            ("uniform13", 13),
+            ("uniform65", 65),
+        ):
+            row = model[label]
+            assert row["n_deltas"] == n_deltas, (model["model_id"], label)
+            assert 0.0 < row["sign_flip_fraction_pooled"] < 1.0
+            assert 0.0 < row["rel_err_median"] < 2.0
+    for label in ("log13", "uniform13", "uniform65"):
+        expected = float(
+            np.mean([m[label]["sign_flip_fraction_pooled"] for m in spacing["models"]])
+        )
+        assert spacing["pooled"][label] == pytest.approx(expected, rel=0, abs=1e-12)
+
+
+def test_uniform_weighting_raises_the_sign_error_rate(spacing: dict) -> None:
+    """The 27.0% headline is the conservative value, not the largest one.
+
+    Mutation verdict: replacing the uniform grid with the log grid makes every
+    difference zero and fails; changing a pinned rate by more than the
+    artifact's float32 noise fails.
+    """
+    expected = {
+        "EleutherAI/pythia-160m": 0.4038754846119156,
+        "JackFram/llama-160m": 0.3951780286557848,
+        "HuggingFaceTB/SmolLM-135M": 0.3956455241924834,
+    }
+    for model in spacing["models"]:
+        log_rate = model["log13"]["sign_flip_fraction_pooled"]
+        uniform_rate = model["uniform65"]["sign_flip_fraction_pooled"]
+        assert uniform_rate - log_rate > 0.05, (model["model_id"], log_rate, uniform_rate)
+        assert uniform_rate == pytest.approx(
+            expected[model["model_id"]], rel=0, abs=1e-6
+        )
+    assert spacing["pooled"]["uniform65"] == pytest.approx(
+        0.39823301248672793, rel=0, abs=1e-6
+    )
+    assert spacing["pooled"]["uniform65_minus_log13"] > 0.10
+
+
+def test_the_spacing_gap_is_not_just_grid_density(spacing: dict) -> None:
+    """Uniform 13 and uniform 65 agree; the gap is weighting, not resolution.
+
+    The relative-error ordering moves the other way, which is the paper's
+    point that the sign rate and the sup-error are different functionals.
+    Mutation verdict: if the spacing sweep silently used the log grid for
+    ``uniform65``, its rate would fall toward 0.32 and the first assertion
+    would fail.
+    """
+    for model in spacing["models"]:
+        u13 = model["uniform13"]["sign_flip_fraction_pooled"]
+        u65 = model["uniform65"]["sign_flip_fraction_pooled"]
+        assert abs(u65 - u13) < 0.03, (model["model_id"], u13, u65)
+        assert model["uniform65"]["rel_err_median"] < model["log13"]["rel_err_median"]
 
 
 def test_a_zero_surrogate_is_not_counted_as_a_sign_flip(

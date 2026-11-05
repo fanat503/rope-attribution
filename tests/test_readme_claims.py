@@ -1463,3 +1463,73 @@ def test_quoted_test_count_matches_what_pytest_collects() -> None:
         f"them this file, {len(torch_only)} torch-only). If a test was added or "
         f"removed, update the README."
     )
+
+
+# ==========================================================================
+# the spacing sensitivity
+# ==========================================================================
+
+
+def test_the_spacing_sensitivity_is_restated_in_the_readme() -> None:
+    """Both README passages quote ``results/usefulness_spacing.json``.
+
+    The headline is the log-grid value; the uniform-grid value is the
+    conservative check that stops a reader from treating ``27.0%`` as the only
+    weighting. Mutation verdict: swapping the two grids, editing one per-model
+    rate, or changing ``1.13``/``1.01`` without regenerating the artifact fails
+    the corresponding comparison; deleting either passage fails
+    ``readme_groups``, which demands exactly one match.
+    """
+    artifact = json.loads(
+        (_REPO / "results" / "usefulness_spacing.json").read_text(encoding="utf-8")
+    )
+    assert artifact["schema"] == "rope_attribution/usefulness_spacing/v1"
+    pooled = artifact["pooled"]
+    models = artifact["models"]
+    assert len(models) == 3
+    uniform65 = [m["uniform65"]["sign_flip_fraction_pooled"] * 100 for m in models]
+    rel_log = float(np.median([m["log13"]["rel_err_median"] for m in models]))
+    rel_uniform = float(np.median([m["uniform65"]["rel_err_median"] for m in models]))
+
+    tldr = readme_groups(
+        r"sign wrong on \*\*(27\.0)%\*\* of\s+"
+        r"per-pair, per-distance cells[\s\S]*?"
+        r"error of `(1\.13)` against a peak of `1`\. That is the pre-registered "
+        r"log-grid value\s+and the conservative one: on a uniform (65)-point grid "
+        r"over the same range the\s+equal-weight rate is \*\*(39\.8)%\*\*, while "
+        r"the median relative error falls to `(1\.01)`",
+        "the TL;DR spacing passage",
+    )
+    assert_readme_number_matches(pooled["log13"] * 100, tldr[0], "TL;DR log-grid rate")
+    assert_readme_number_matches(rel_log, tldr[1], "TL;DR log-grid rel error")
+    assert int(tldr[2]) == 65
+    assert_readme_number_matches(
+        pooled["uniform65"] * 100, tldr[3], "TL;DR uniform-grid rate"
+    )
+    assert_readme_number_matches(rel_uniform, tldr[4], "TL;DR uniform rel error")
+
+    results = readme_groups(
+        r"On the pre-registered (13)-point log\s+grid it is `(27\.0)%`; on a "
+        r"uniform (65)-point grid over the same interval it is\s+"
+        r"`(39\.8)%` \(`(40\.4)%`, `(39\.5)%`, `(39\.6)%` per checkpoint\), and "
+        r"on a uniform (13)-point\s+grid `(38\.5)%`, so the gap is spacing rather "
+        r"than resolution\. The median relative\s+"
+        r"error moves the other way, from `(1\.13)` to `(1\.01)`",
+        "the Results spacing passage",
+    )
+    assert int(results[0]) == 13
+    assert_readme_number_matches(pooled["log13"] * 100, results[1], "results log-grid rate")
+    assert int(results[2]) == 65
+    assert_readme_number_matches(
+        pooled["uniform65"] * 100, results[3], "results uniform-grid rate"
+    )
+    for actual, written, what in zip(
+        uniform65, results[4:7], ("pythia", "llama", "SmolLM"), strict=True
+    ):
+        assert_readme_number_matches(actual, written, f"results uniform {what}")
+    assert int(results[7]) == 13
+    assert_readme_number_matches(
+        pooled["uniform13"] * 100, results[8], "results uniform-13 rate"
+    )
+    assert_readme_number_matches(rel_log, results[9], "results log-grid rel error")
+    assert_readme_number_matches(rel_uniform, results[10], "results uniform rel error")

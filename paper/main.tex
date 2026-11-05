@@ -126,11 +126,11 @@ $[(1-\cos(x/2))/2,\ \sin(\min(x,\pi)/2)]$. The threshold, not a percentage, is
 the invariant. On three $135$--$160$M checkpoints every one of $44$ measured
 bins lies inside the band, the median per-pair error is $1.000000$ at $L=4096$,
 and the fraction of pairs past threshold there is $0.750$, $0.719$ and $0.719$.
-The $27.0\%$ sign-error rate is a different functional of the same profile ---
-the sign of a least-squares constant, not its sup error --- and its grid
-sensitivity follows from the oscillation the law makes exact. Dilution is the
-architecture's rotary fraction: at $L=4096$ the score-level error is $0.052$ on
-partial-RoPE \texttt{pythia-160m} against $0.905$ and $0.915$ on two full-RoPE
+The $27.0\%$ sign-error rate is a different functional --- the sign of a
+least-squares constant, not its sup error --- and its grid sensitivity follows
+from the oscillation the law makes exact: $27.0\%$ on our log grid, $39.8\%$
+under uniform weighting. Dilution is the architecture's rotary fraction: $0.052$
+on partial-RoPE \texttt{pythia-160m} against $0.905$ and $0.915$ on full-RoPE
 checkpoints.
 
 Third, we act on the attribution. Over $96$ single-pair interventions the
@@ -534,6 +534,10 @@ indistinguishable from zero and sign is not meaningful. The pooled rate
 moves from $24.4\%$ to $32.1\%$ over the three grids actually run
 (Appendix~\ref{app:stats}).
 
+Distance weighting matters: a $65$-point uniform grid gives a sign-error rate of
+$39.8\%$, against $27.0\%$ on the pre-registered $13$-point log grid, and the
+median relative error falls from $1.13$ to $1.01$ (Appendix~\ref{app:spacing}).
+
 Beyond sign, the position-free ranking names the same leading pair as the exact
 one on $49.4\%$--$60.1\%$ of triples, against $3.1\%$--$12.5\%$ for chance
 (Appendix~\ref{app:stats}).
@@ -717,32 +721,21 @@ ablation spends.
 % =====================================================================
 \section{Conclusion}
 
-RoPE's effect on the score-level decomposition is exactly characterizable
-in the relative frame: the score is $q^{\!\top}\R_{\delta}k$, and each of the
+In the relative frame the score is $q^{\!\top}\R_{\delta}k$, and each of the
 $\half$ rotary pairs contributes a sinusoid with a position-independent amplitude
-and a linear phase. Attribution is exact for a fixed position pair, to
-$3.9\times10^{-14}$, and the query and key magnitudes are exactly
-position-independent. The
-obstruction is position-conditionality: a feature's
+and a linear phase. The query and key magnitudes are exactly position-independent.
+The obstruction is position-conditionality: a feature's
 contribution reverses sign across distance while the total stays additive to
 $5.0\times10^{-14}$. Its price
 is a law rather than a rate: the minimax error of the best position-free summary
 is exactly $1$ once the window sweeps $2\pi$ of phase, and below that threshold
 the attainable set is the exact band of Proposition~\ref{prop:threshold}. On
 three checkpoints all $44$ measured bins lie inside it, and the pair-level error
-is $1.000000$ at $L=4096$. The score dilutes that error by the architecture's
-rotary fraction: $0.052$ on partial-RoPE pythia against $0.905$ and $0.915$ on
-full-RoPE models. Acting on the attribution costs $25$ differing selections and
-$7$ sign reversals in $96$ interventions, and the exact rule remains a $1.000$
-oracle by construction. Feature-level attribution of attention \emph{weights}
-inherits neither exactness nor additivity: the softmax is a second obstruction.
-Context extension changes which
-channels can be linearized without touching the worst one: \yarn\ buys a
-larger linearizable majority at an amplitude-weighted error ratio of only
-$0.996840$, not a safe global linearization. Partial RoPE is the clean
-exception: its unrotated sub-score is exactly position-free. On a trained
-dictionary the rotary subspace reverses sign on one cell in five while the total
-profile hides it.
+is $1.000000$ at $L=4096$. Acting on it costs $25$ differing selections and $7$ sign
+reversals in $96$ interventions; the exact rule remains a $1.000$ oracle.
+Context extension cannot touch the worst channel: \yarn's amplitude-weighted
+error ratio of only $0.996840$. On a trained dictionary the rotary subspace
+reverses sign on one cell in five.
 
 % =====================================================================
 % Force the appendix onto a fresh page, so the page-limit check measures the
@@ -834,6 +827,7 @@ Sec.~\ref{sec:intervention} & $96$, $25$, $7$; $13$/$5$, $9$/$2$, $3$/$0$ & \tex
 App.~\ref{app:qkcase} & $21.5$--$27.7\%$ rotary; total $\le 7.32\%$ & \texttt{results/qk\_depth.json :: layers} \\
  & $17$, $79.1\%$, $52.3\%$ & \texttt{results/qk\_trajectory.json :: pooled} \\
 App.~\ref{app:extension-law} & $23$, $18$, $11$, $16$ of $32$; $9$ floor; $651.90$ & \texttt{results/extension\_law.json :: headline} \\
+App.~\ref{app:spacing} & $39.8\%$; $40.4$, $39.5$, $39.6$; $1.01$ & \texttt{results/usefulness\_spacing.json :: pooled} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1951,6 +1945,30 @@ cover checkpoint selection. Per-head rates are in
 \texttt{results/uncertainty.json} and the ranking rows in
 \texttt{results/agreement.json}. The interval is quoted next to the $27.0\%$
 itself, not instead of it: the two summaries answer different questions.
+
+\section{Distance weighting, and why the rate is not the invariant}
+\label{app:spacing}
+
+The $27.0\%$ headline is measured on the pre-registered $13$-point log-spaced
+grid. That grid samples short distances more densely than long ones, and a
+least-squares constant is closest to the exact profile where the phase has moved
+least, so the log grid is the favourable weighting for the sign-error rate. The
+alternative is a uniform grid over the same closed interval, which gives every
+distance equal weight. At $65$ points the equal-weight rate is $39.8\%$
+($40.4\%$, $39.5\%$, $39.6\%$ per model); at $13$ points it is $38.5\%$, so the
+gap is spacing, not resolution. The sign-error rate is therefore grid-conditional
+in the direction the main text already states: the log-grid $27.0\%$ is the
+conservative value, and uniform weighting raises it by about thirteen points.
+
+The relative error moves the other way. The median sup-error is $1.13$ on the
+log grid and $1.01$ on the uniform $65$-point grid. That is not a contradiction:
+the sign rate counts disagreements at material cells, while the sup-error is a
+maximum over the window, and the two functionals weight the near-zero crossings
+differently. The law of Proposition~\ref{prop:threshold} prices the sup-error,
+not the sign rate; the measurement is reported for both weightings so that
+neither is mistaken for the invariant. The per-model record is
+\texttt{results/usefulness\_spacing.json}; the command
+\texttt{python -m rope\_attribution.usefulness --spacing} regenerates it.
 
 \section{The trained-dictionary case study}
 \label{app:qkcase}

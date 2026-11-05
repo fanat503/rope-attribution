@@ -66,6 +66,9 @@ from rope_attribution.rope import inv_freq
 __all__ = [
     "DISTANCE_GRID",
     "GRID_DENSITIES",
+    "UNIFORM_DENSITIES",
+    "_uniform_grid",
+    "spacing_sensitivity",
     "cos_sin_means",
     "measure_pair_cost",
     "measure_head_cost",
@@ -84,6 +87,13 @@ DISTANCE_GRID: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2
 # what the 18%-drift claim rests on; a wider sweep only costs runtime and
 # the extra rows are not cited anywhere.
 GRID_DENSITIES: tuple[int, ...] = (9, 17, 65)
+
+# The spacing check: the canonical grid is log-spaced, so it samples short
+# distances far more densely than long ones. A uniform grid over the same
+# closed interval gives every distance equal weight. Both are reported; the
+# spacing artifact exists so the paper cannot quote only the lower one.
+UNIFORM_DENSITIES: tuple[int, ...] = (13, 65)
+SPACING_SCHEMA = "rope_attribution/usefulness_spacing/v1"
 
 DEFAULT_SEED = RM.DEFAULT_SEED
 DEFAULT_MODEL_IDS = RM.DEFAULT_MODEL_IDS
@@ -474,6 +484,83 @@ def grid_independence(
 
 
 
+def _uniform_grid(n_points: int, lo: int = 1, hi: int = 4096) -> np.ndarray:
+    """``n_points`` evenly spaced integer distances in ``[lo, hi]``.
+
+    The canonical grid is log-spaced, so it samples the short-distance regime
+    much more densely than the long-distance one. This grid is the alternative
+    weighting: every distance in the window contributes one point. It is a
+    sensitivity check, not the pre-registered primary grid.
+    """
+    if n_points < 2:
+        raise ValueError("a uniform grid needs at least two points")
+    if lo < 1 or hi <= lo:
+        raise ValueError(f"invalid uniform range [{lo}, {hi}]")
+    return np.unique(np.round(np.linspace(lo, hi, n_points)).astype(np.int64))
+
+
+def spacing_sensitivity(
+    model_ids: Sequence[str] = DEFAULT_MODEL_IDS,
+    seed: int = DEFAULT_SEED,
+) -> dict:
+    """Compare the canonical log grid with a uniform grid over the same range.
+
+    The sign-error rate is a functional of the distance weighting, not a
+    constant. Reporting only the log-spaced value would be a favourable
+    choice: short distances contribute most of that grid's points, and a
+    least-squares constant is closest to the exact profile there. This function
+    measures the same statistic under uniform weighting and writes both, so the
+    gap is part of the record rather than a caveat a reader has to reconstruct.
+
+    The relative-error ordering can move in the opposite direction: uniform
+    weighting raises the sign-error rate while it slightly lowers the median
+    sup-error, because those are different functionals of the same profile.
+    That is the paper's point, not a contradiction, and the artifact keeps both.
+
+    Expensive: it loads each checkpoint twice more than ``run_all``. The
+    command is therefore opt-in (``--spacing``), not part of the default run.
+    """
+    models = []
+    for model_id in model_ids:
+        rows = {}
+        for label, deltas in (
+            ("log13", np.array(DISTANCE_GRID, dtype=np.int64)),
+            ("uniform13", _uniform_grid(13)),
+            ("uniform65", _uniform_grid(65)),
+        ):
+            rec = measure_model(model_id, seed=seed, deltas=deltas)
+            rows[label] = {
+                "n_deltas": int(deltas.size),
+                "sign_flip_fraction_pooled": rec["sign_flip_fraction_pooled"],
+                "rel_err_median": rec["rel_err_median"],
+            }
+        models.append({"model_id": model_id, **rows})
+    pooled = {
+        label: float(
+            np.mean([row[label]["sign_flip_fraction_pooled"] for row in models])
+        )
+        for label in ("log13", "uniform13", "uniform65")
+    }
+    return {
+        "schema": SPACING_SCHEMA,
+        "seed": int(seed),
+        "log_grid": list(DISTANCE_GRID),
+        "uniform_densities": list(UNIFORM_DENSITIES),
+        "models": models,
+        "pooled": {
+            **pooled,
+            "uniform13_minus_log13": pooled["uniform13"] - pooled["log13"],
+            "uniform65_minus_log13": pooled["uniform65"] - pooled["log13"],
+        },
+        "note": (
+            "Sign-error rate under two distance weightings. The log grid is the "
+            "pre-registered primary and gives the conservative (lower) rate; "
+            "uniform weighting gives every distance in the window equal weight. "
+            "The law, not the percentage, is the invariant."
+        ),
+    }
+
+
 def run_all(model_ids: Sequence[str] = DEFAULT_MODEL_IDS, seed: int = DEFAULT_SEED) -> dict:
     """The whole sweep; ``seed`` drives the content-pair draws only.
 
@@ -492,7 +579,26 @@ def run_all(model_ids: Sequence[str] = DEFAULT_MODEL_IDS, seed: int = DEFAULT_SE
     }
 
 
-def main() -> None:
+def main(spacing: bool = False) -> None:
+    if spacing:
+        result = spacing_sensitivity()
+        out = (
+            Path(__file__).resolve().parents[2]
+            / "results"
+            / "usefulness_spacing.json"
+        )
+        out.write_text(
+            json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8"
+        )
+        print(
+            "spacing: log13 "
+            f"{result['pooled']['log13']:.4f}, uniform13 "
+            f"{result['pooled']['uniform13']:.4f}, uniform65 "
+            f"{result['pooled']['uniform65']:.4f}"
+        )
+        print("wrote", out)
+        return
+
     data = run_all()
     p = data["pooled"]
     print(f"distance grid: {data['distance_grid']}")
@@ -525,4 +631,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--spacing",
+        action="store_true",
+        help="write results/usefulness_spacing.json (log vs uniform grid)",
+    )
+    main(spacing=parser.parse_args().spacing)
