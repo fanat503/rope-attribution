@@ -28,6 +28,12 @@
 % The vendored style file is byte-identical to the official one; see BUILD.md.
 \documentclass{article}
 \usepackage[preprint,position]{neurips_2026}
+% The official preprint option prints only "Preprint." at the foot of page 1.
+% Name the track as well, without touching the vendored style file: the
+% position option already selects it, and a reader of the PDF should see it.
+\makeatletter
+\renewcommand{\@noticestring}{Preprint. NeurIPS 2026 Position Paper Track.}
+\makeatother
 \usepackage{amsmath,amssymb,amsthm,bm}
 \usepackage{graphicx}
 \usepackage{booktabs}
@@ -136,14 +142,16 @@ checkpoints.
 Third, we act on the attribution. Over $96$ single-pair interventions the
 position-free table selects a different pair in $25$ cells and reverses the sign
 of the suppression in $7$, while the exact rule is a $1.000$ oracle by
-construction and the closed form predicts every intervened forward pass no worse
-than it predicts the unedited one. Fourth, context extension buys a larger
+construction and the closed form predicts the intervened attention about as
+accurately as the unedited attention. Fourth, context extension buys a larger
 linearizable majority, not a global one: \yarn\ leaves the fastest channel
 untouched, so $\max_k|\D|$ is bit-identical to plain RoPE at every one of $54$
 tested distances, the median angle falls by a constant factor of $0.4464$, and
-the amplitude-weighted error ratio is $0.99684$. Partial RoPE is the clean
-exception: at $p = 0.25$ the unrotated sub-score is position-free to exactly
-zero spread.
+the amplitude-weighted error ratio is $0.99684$. Under those ladders the
+measured sign-error rate falls from $27.0\%$ to $21.5\%$ (\yarn) and $11.9\%$
+(position interpolation), not to zero. Partial RoPE is the clean exception: at
+$p = 0.25$ the unrotated
+sub-score is position-free to exactly zero spread.
 
 We then carry the attribution to a public $32$k dictionary on
 \texttt{pythia-70m-deduped}, where the bucket identity closes to
@@ -627,10 +635,11 @@ One check makes the intervention causal rather than correlational. The per-pair
 decomposition plus softmax predicts the post-softmax attention of the
 \emph{intervened} model in closed form. Its median absolute prediction error is
 $1.5\times10^{-5}$ on \texttt{pythia-160m} and $1.0$--$1.2\times10^{-7}$ on the
-two Llama-family models, at or below the same closed form's error on the
+two Llama-family models, comparable to the same closed form's error on the
 unedited forward pass ($2.5\times10^{-5}$, $1.1\times10^{-7}$,
-$8.0\times10^{-8}$). The edit therefore adds no error of its own: the mechanism
-is the one the decomposition names. This is one forward pass per cell, not a
+$8.0\times10^{-8}$); the median is $17$--$27\%$ higher on the two Llama-family
+models and lower on \texttt{pythia-160m}. The edit therefore adds no material
+error of its own: the mechanism is the one the decomposition names. This is one forward pass per cell, not a
 fine-tune, so it measures immediate causal contribution, not necessity after
 adaptation.
 
@@ -663,6 +672,11 @@ untouched fast channels put a floor of $9/32$ on its count (Appendix~\ref{app:ex
 A scheme that damped every angle far enough would make the constant exact, but
 it would have removed the position dependence as well.
 \end{remark}
+
+The channel count predicts the measured cost: re-pricing the same pairs under
+each ladder cuts the sign-error rate from $27.0\%$ to $21.5\%$ under \yarn\ at
+$s=32$ and $11.9\%$ under position interpolation, not to zero
+(Appendix~\ref{app:extension-cost}).
 
 \section{Limitations}
 
@@ -721,21 +735,14 @@ ablation spends.
 % =====================================================================
 \section{Conclusion}
 
-In the relative frame the score is $q^{\!\top}\R_{\delta}k$, and each of the
-$\half$ rotary pairs contributes a sinusoid with a position-independent amplitude
-and a linear phase. The query and key magnitudes are exactly position-independent.
-The obstruction is position-conditionality: a feature's
-contribution reverses sign across distance while the total stays additive to
-$5.0\times10^{-14}$. Its price
-is a law rather than a rate: the minimax error of the best position-free summary
-is exactly $1$ once the window sweeps $2\pi$ of phase, and below that threshold
-the attainable set is the exact band of Proposition~\ref{prop:threshold}. On
-three checkpoints all $44$ measured bins lie inside it, and the pair-level error
-is $1.000000$ at $L=4096$. Acting on it costs $25$ differing selections and $7$ sign
-reversals in $96$ interventions; the exact rule remains a $1.000$ oracle.
-Context extension cannot touch the worst channel: \yarn's amplitude-weighted
-error ratio of only $0.996840$. On a trained dictionary the rotary subspace
-reverses sign on one cell in five.
+In the relative frame the score is $q^{\!\top}\R_{\delta}k$: each rotary pair
+contributes a sinusoid with a position-independent amplitude and a linear phase,
+while the query and key magnitudes are exactly position-independent. The
+obstruction is that a feature's contribution reverses sign across distance, and
+its price is a law, not a rate: the minimax error is exactly $1$ once the window
+sweeps $2\pi$, all $44$ measured bins lie inside the exact band below it, and
+the pair-level error is $1.000000$ at $L=4096$. Acting on the attribution costs
+$25$ differing selections and $7$ sign reversals in $96$ interventions.
 
 % =====================================================================
 % Force the appendix onto a fresh page, so the page-limit check measures the
@@ -794,7 +801,7 @@ Sec.~\ref{sec:cond} & $8/8$ features cross zero; $\mathrm{CV}=0.70$, drift $0$ &
 Sec.~\ref{sec:context} & Tab.~\ref{tab:spectrum} & \texttt{measurements.json :: method\_spectrum} \\
  & $0.000\rad$ agreement & \texttt{fig03} CSV, \texttt{max\_abs\_angle\_rad} \\
  & $0.4464$, $1.0000$ & ratios of fig03 medians and maxima \\
- & $\delta = 861$, $4/32$ & \texttt{fig04} CSV \\
+ & $\delta = 861$: $0/32$ and $11/32$; $\delta = 8192$: $4/32$ & \texttt{fig04} CSV \\
  & $1.24572\!\times\!10^{6}$ etc. & \texttt{fig05} CSV \\
  & $1225.06$, $\delta = 8192$ & \texttt{fig05} CSV \\
 App.~\ref{app:context} & $9$ of $32$, $32.00\times$ & \texttt{fig01} CSV, unchanged-pair count \\
@@ -827,6 +834,7 @@ Sec.~\ref{sec:intervention} & $96$, $25$, $7$; $13$/$5$, $9$/$2$, $3$/$0$ & \tex
 App.~\ref{app:qkcase} & $21.5$--$27.7\%$ rotary; total $\le 7.32\%$ & \texttt{results/qk\_depth.json :: layers} \\
  & $17$, $79.1\%$, $52.3\%$ & \texttt{results/qk\_trajectory.json :: pooled} \\
 App.~\ref{app:extension-law} & $23$, $18$, $11$, $16$ of $32$; $9$ floor; $651.90$ & \texttt{results/extension\_law.json :: headline} \\
+App.~\ref{app:extension-cost} & $27.0\%$, $21.5\%$, $11.9\%$; $0.729$, $0.583$, $0.354$ & \texttt{results/usefulness\_extension.json :: pooled} \\
 App.~\ref{app:spacing} & $39.8\%$; $40.4$, $39.5$, $39.6$; $1.01$ & \texttt{results/usefulness\_spacing.json :: pooled} \\
 \bottomrule
 \end{tabular}
@@ -1552,6 +1560,34 @@ The full derivation, the frequency ladder of
 Figure~\ref{app:fig:ladder}, and the algebra of why they never coincide on
 any channel are in Appendix~\ref{app:context}.
 
+\subsection{What extension does to the measured cost}
+\label{app:extension-cost}
+
+The channel count above is a statement about the geometry. To ask what it buys
+in the currency the paper uses, the same three checkpoints, prompts, content
+pairs and $13$-point grid are re-priced under each ladder; only the inverse
+frequencies change, and the plain-RoPE row reproduces the headline artifact
+exactly. Figure~\ref{fig:extension-cost} shows both panels. At $s=32$ the pooled
+sign-error rate is $21.5\%$ under \yarn\ (per-checkpoint range $20.8$--$22.5\%$)
+and $11.9\%$ under position interpolation ($11.5$--$12.7\%$), against $27.0\%$
+under plain RoPE. The corresponding past-threshold fractions at $L=4096$ are
+$0.583$ and $0.354$ against $0.729$. The ordering is the one the channel count
+predicts, and the residual is the part no extension removes: even the most
+aggressive interpolation tested still mis-signs roughly one material cell in
+eight. This is a counterfactual geometry probe, not a YaRN-trained model: the
+weights are the checkpoint's own, so it isolates the part of the cost that the
+ladder controls.
+
+\paperfigure{fig16_extension_cost}{%
+  Extension lowers the price but does not remove it. Left: the measured
+  sign-error rate of the same three checkpoints and content pairs, re-priced
+  under the \yarn\ and position-interpolation ladders at scales $2$--$32$; the
+  dotted line is the plain-RoPE control. Right: the fraction of rotary channels
+  past $\theta L=2\pi$ at $L=4096$ for the same ladders. Both panels read
+  \texttt{results/usefulness\_extension.json}; the shaded band is the
+  per-checkpoint range.% 
+}{fig:extension-cost}
+
 
 % =====================================================================
 % Content below was moved out of the main text to respect the nine-page
@@ -1998,7 +2034,7 @@ realized distances from $1$ to $128$ we sample $24$ content pairs, and the
 least-squares constant mis-signs $3.9\%$ of material feature cells, or $12.5\%$
 restricted to the rotary channels --- averaging over content at fixed distance
 removes most of the oscillation before the constant is fitted. Holding each of
-$24$ pairs fixed and sweeping $\delta$ over the paper's $48$-point grid from $1$
+$24$ pairs fixed and sweeping $\delta$ over the QK sweep's $48$-point grid from $1$
 to $8192$ gives the per-feature analogue of the per-pair rate in
 Section~\ref{sec:worth}; the units differ, so the two are not directly
 comparable. The attribution

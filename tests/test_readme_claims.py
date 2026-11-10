@@ -79,7 +79,7 @@ _WORD_NUMBERS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
     "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
-    "fifteen": 15,
+    "fifteen": 15, "sixteen": 16,
 }
 
 # README scheme label -> the `method` key measurements.json uses.
@@ -1334,12 +1334,16 @@ def test_readme_trained_statistics_match_the_artifact() -> None:
         r"only (0\.\d+)-(0\.\d+)%\s+of pairs meet the cutoff",
         "the position-blind percentage range",
     )
-    # The band is deliberately wider than the printed per-model values, so it
-    # must contain the measurements without relying on rounding. An absurdly
-    # wide band would also "contain" them, hence the width cap.
     lo_f, hi_f = float(lo), float(hi)
-    assert lo_f <= min(blind) <= max(blind) <= hi_f, (blind, lo, hi)
-    assert hi_f - lo_f < 0.5, (lo, hi)
+    # The README quotes an enclosing band at two decimals of a percentage.
+    # Containment is the contract: 0.54-0.65 fails because llama's exact
+    # 0.6533% lies above the upper endpoint, even though it rounds to 0.65.
+    # The endpoints must also stay within 0.01 of the measured extremes, so a
+    # loose band like 0.6-0.7 fails.
+    assert lo_f <= min(blind) and max(blind) <= hi_f, (blind, lo, hi)
+    assert min(blind) - lo_f < 0.01, (blind, lo, hi)
+    assert hi_f - max(blind) < 0.01, (blind, lo, hi)
+    assert hi_f - lo_f < 0.2, "the band is too wide to be informative"
 
     quantiles = [
         trained["aggregates"][m]["share_quantiles_across_prompts"] for m in models
@@ -1533,3 +1537,66 @@ def test_the_spacing_sensitivity_is_restated_in_the_readme() -> None:
     )
     assert_readme_number_matches(rel_log, results[9], "results log-grid rel error")
     assert_readme_number_matches(rel_uniform, results[10], "results uniform rel error")
+
+
+# ==========================================================================
+# the measured extension cost
+# ==========================================================================
+
+
+def test_the_measured_extension_cost_is_restated_in_the_readme() -> None:
+    """The README paragraph quotes ``results/usefulness_extension.json``.
+
+    Mutation verdict: swapping the YaRN and position-interpolation rows,
+    editing a per-checkpoint bound, or changing a past-threshold fraction
+    without regenerating the artifact fails the corresponding comparison;
+    deleting the paragraph fails ``readme_groups``, which demands exactly one
+    match.  The plain-RoPE control is compared to the headline artifact, not to
+    this one, so a drift in either is caught.
+    """
+    artifact = json.loads(
+        (_REPO / "results" / "usefulness_extension.json").read_text(encoding="utf-8")
+    )
+    pooled = {(row["scheme"], row["scale"]): row for row in artifact["pooled"]}
+    rope = pooled[("rope", 1.0)]
+    yarn = pooled[("yarn", 32.0)]
+    pi = pooled[("position_interpolation", 32.0)]
+    passage = readme_groups(
+        r"the pooled sign-error rate falls from `(27\.0)%` under plain\s+"
+        r"RoPE to `(21\.5)%` under YaRN \(per-checkpoint range `(20\.8)-(22\.5)%`\) "
+        r"and `(11\.9)%` under\s+position interpolation \(`(11\.5)-(12\.7)%`\), "
+        r"while the past-threshold channel fractions\s+at `L = (4096)` fall from "
+        r"`(0\.729)` to `(0\.583)` and `(0\.354)`",
+        "the measured-extension passage",
+    )
+    assert_readme_number_matches(
+        rope["sign_flip_fraction_mean"] * 100, passage[0], "plain-RoPE rate"
+    )
+    assert_readme_number_matches(
+        yarn["sign_flip_fraction_mean"] * 100, passage[1], "YaRN rate"
+    )
+    assert_readme_number_matches(
+        yarn["sign_flip_fraction_min"] * 100, passage[2], "YaRN bound low"
+    )
+    assert_readme_number_matches(
+        yarn["sign_flip_fraction_max"] * 100, passage[3], "YaRN bound high"
+    )
+    assert_readme_number_matches(
+        pi["sign_flip_fraction_mean"] * 100, passage[4], "PI rate"
+    )
+    assert_readme_number_matches(
+        pi["sign_flip_fraction_min"] * 100, passage[5], "PI bound low"
+    )
+    assert_readme_number_matches(
+        pi["sign_flip_fraction_max"] * 100, passage[6], "PI bound high"
+    )
+    assert int(passage[7]) == 4096
+    assert_readme_number_matches(
+        rope["fraction_past_threshold_4096_mean"], passage[8], "plain-RoPE fraction"
+    )
+    assert_readme_number_matches(
+        yarn["fraction_past_threshold_4096_mean"], passage[9], "YaRN fraction"
+    )
+    assert_readme_number_matches(
+        pi["fraction_past_threshold_4096_mean"], passage[10], "PI fraction"
+    )

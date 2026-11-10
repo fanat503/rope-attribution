@@ -49,6 +49,7 @@ plotted, so no claim has to be read off a pixel. Log axes clip at
 | `fig13_collapse_law.png` | results/collapse.json (three checkpoints, 32 content pairs per head, windows 8..4096); the band is Proposition 5(3), drawn from the formula | every checkpoint reaches a pair-level error of exactly 1.000 at the threshold and stays there; at L=4096 the score-level error is 0.052 on partial-RoPE pythia-160m against 0.905 on full-RoPE llama-160m |
 | `fig14_intervention.png` | results/intervention.json (three checkpoints, one 320-token passage, 32 heads per checkpoint, one pair ablated in q_proj only) | 7 of 96 edits suppress the score with the wrong sign; the exact and surrogate selections differ in 25 cells, and the closed form reproduces every intervened forward pass to 6e-04 |
 | `fig15_extension_law.png` | results/extension_law.json (four schemes, seven scales, five context lengths; the plotted rows are scale 32) | at L=4096, 23/32 channels are past threshold under plain RoPE, 18/32 under YaRN (floor 9/32), 11/32 under position interpolation and 16/32 under base 5e5; position interpolation needs s=651.90 to reach zero |
+| `fig16_extension_cost.png` | results/usefulness_extension.json (three checkpoints, eleven scheme rows, 256 content pairs per head) | at s=32 the measured sign-error rate is 21.5% under YaRN (20.8--22.5) and 11.9% under position interpolation (11.5--12.7), against 27.0% under plain RoPE; the past-threshold channel fraction falls from 72.9% to 58.3% and 35.4% |
 
 ## Shared configuration
 
@@ -73,4 +74,7 @@ fig12 is the trained-dictionary case study: the same feature's total and
 rotary profiles, read from `results/qk_attribution.json`.
 fig15 is the design consequence of the threshold law: how many channels
 each context-extension scheme leaves past `theta L = 2 pi`, read from
-`results/extension_law.json`.
+`results/extension_law.json`. fig16 closes the loop: it re-prices the
+same content pairs under those ladders and shows that the measured
+sign-error rate falls with extension but does not reach zero, read from
+`results/usefulness_extension.json`.

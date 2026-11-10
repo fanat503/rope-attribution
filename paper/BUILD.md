@@ -39,9 +39,12 @@ unmodified so that `paper/` builds without network access. Its own header
 records that it is a partial rewrite of `nips15submit_e.sty`; it carries no
 copyright line or license header of its own. `../NOTICE.md` is the
 repository-level statement that names this exception, and nothing outside
-`paper/` imports or derives from it. The `preprint` option is deliberate: it
-produces a non-anonymous build for checking the formatting. The submission's
-anonymity requirement is an open decision, not something this file asserts.
+`paper/` imports or derives from it. The `preprint` option is deliberate: the
+paper is a non-anonymous preprint with the author of record visible, and the
+repository ships the same build. The `position` option selects the Position
+Paper Track; the two together are the decided configuration, not an open
+question. A submission that required anonymity would need a different build,
+and the repository does not claim to provide one.
 
 The official NeurIPS 2026 package ships `neurips_2026.sty`, `neurips_2026.tex`
 and `checklist.tex`; there is **no** `neurips_2026.cls`, so
@@ -118,6 +121,7 @@ public checkpoints (the first run downloads them):
 ```sh
 PYTHONPATH=../projects python -m rope_attribution.real_model    # real_model.json
 PYTHONPATH=../projects python -m rope_attribution.usefulness    # usefulness*.json
+PYTHONPATH=../projects python -m rope_attribution.usefulness_extension # usefulness_extension.json
 PYTHONPATH=../projects python -m rope_attribution.uncertainty   # uncertainty values
 PYTHONPATH=../projects python -m rope_attribution.seed_variance # usefulness_seeds.json
 PYTHONPATH=../projects python -m rope_attribution.agreement     # agreement.json

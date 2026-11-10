@@ -50,6 +50,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from rope_attribution import extension_law as EL  # noqa: E402
+from rope_attribution import usefulness_extension as UX  # noqa: E402
 from rope_attribution.experiments import (  # noqa: E402
     PairTerms,
     method_spectrum,
@@ -1899,6 +1900,252 @@ def fig15_extension_law() -> FigureRecord:
     )
 
 
+def fig16_extension_cost() -> FigureRecord:
+    """The measured price of a position-free summary under extension geometry.
+
+    Left: the same three checkpoints, the same content pairs and the same
+    13-point grid, re-priced under YaRN and position-interpolation ladders at
+    scales 2--32.  The plain-RoPE point at scale 1 is the control and reproduces
+    the headline artifact exactly.  Right: the fraction of rotary channels past
+    ``theta L = 2*pi`` at ``L = 4096`` for the same ladders, i.e. the geometric
+    quantity the law controls.  The two panels are deliberately side by side:
+    extension lowers both, but neither reaches zero.
+    """
+    data = _load_json_artifact("usefulness_extension.json", UX.SCHEMA)
+    scales = [2.0, 4.0, 8.0, 16.0, 32.0]
+    families = (
+        ("yarn", "YaRN", PALETTE[0]),
+        ("position_interpolation", "position interpolation", PALETTE[1]),
+    )
+    rope = next(
+        row
+        for row in data["pooled"]
+        if row["scheme"] == "rope" and row["scale"] == 1.0
+    )
+    fig, (ax_rate, ax_channels) = plt.subplots(
+        1, 2, figsize=(10.6, 4.0), gridspec_kw={"width_ratios": [1.15, 1.0]}
+    )
+
+    csv_rows: list[list[object]] = []
+    for ax, key, ylabel, title in (
+        (
+            ax_rate,
+            "sign_flip_fraction_mean",
+            "measured sign-error rate",
+            "What the summary costs",
+        ),
+        (
+            ax_channels,
+            "fraction_past_threshold_4096_mean",
+            r"channels past $\theta L=2\pi$ at $L=4096$",
+            "Why: the geometry",
+        ),
+    ):
+        if key == "sign_flip_fraction_mean":
+            baseline = rope[key]
+        else:
+            baseline = rope["fraction_past_threshold_4096_mean"]
+        ax.axhline(
+            baseline,
+            color="#444444",
+            lw=1.0,
+            ls=":",
+            label="plain RoPE (control)",
+            zorder=1,
+        )
+        for scheme, label, colour in families:
+            rows = [
+                next(
+                    row
+                    for row in data["pooled"]
+                    if row["scheme"] == scheme and row["scale"] == scale
+                )
+                for scale in scales
+            ]
+            means = np.asarray([row[key] for row in rows])
+            lows = np.asarray(
+                [
+                    row[
+                        "sign_flip_fraction_min"
+                        if key == "sign_flip_fraction_mean"
+                        else "fraction_past_threshold_4096_mean"
+                    ]
+                    for row in rows
+                ]
+            )
+            highs = np.asarray(
+                [
+                    row[
+                        "sign_flip_fraction_max"
+                        if key == "sign_flip_fraction_mean"
+                        else "fraction_past_threshold_4096_mean"
+                    ]
+                    for row in rows
+                ]
+            )
+            # The pooled rows only carry a min/max for the measured rate; the
+            # channel fraction is a property of the ladder and is identical
+            # across models with the same rotary width, so its band is a point.
+            if key != "sign_flip_fraction_mean":
+                lows = highs = means
+            ax.plot(
+                scales,
+                means,
+                color=colour,
+                marker="o",
+                ms=4.0,
+                label=label,
+                zorder=3,
+            )
+            ax.fill_between(scales, lows, highs, color=colour, alpha=0.16, zorder=2)
+            ax.annotate(
+                f"{100 * means[-1]:.1f}%",
+                xy=(scales[-1], means[-1]),
+                xytext=(4, 4),
+                textcoords="offset points",
+                color=colour,
+                fontsize=7.5,
+                ha="left",
+            )
+
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(scales)
+        ax.set_xticklabels([f"{scale:g}" for scale in scales])
+        ax.set_xlim(1.6, 40.0)
+        ax.set_xlabel("extension scale $s$ (dimensionless, log scale)")
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontsize=9)
+        ax.legend(fontsize=7, loc="lower left")
+
+    ax_rate.set_ylim(0.08, 0.32)
+    ax_channels.set_ylim(0.30, 0.80)
+    ax_rate.text(
+        0.02,
+        0.98,
+        "three checkpoints; same pairs, grid and seed",
+        transform=ax_rate.transAxes,
+        va="top",
+        ha="left",
+        fontsize=7.0,
+        family="monospace",
+        bbox={"facecolor": "white", "edgecolor": "#BBBBBB", "pad": 3.0},
+    )
+    # The sidecar carries every array the panels plot: the control at s=1, the
+    # pooled mean at each scale, and the per-model points behind the band.
+    for panel, key in (
+        ("rate", "sign_flip_fraction_mean"),
+        ("channels", "fraction_past_threshold_4096_mean"),
+    ):
+        csv_rows.append(
+            [
+                panel,
+                "rope",
+                1.0,
+                "pooled",
+                float(rope[key]),
+                float(rope[key]),
+                float(rope[key]),
+                float(rope[key]),
+            ]
+        )
+        for scheme, _label, _colour in families:
+            for scale in scales:
+                pooled = next(
+                    row
+                    for row in data["pooled"]
+                    if row["scheme"] == scheme and row["scale"] == scale
+                )
+                if key == "sign_flip_fraction_mean":
+                    low = pooled["sign_flip_fraction_min"]
+                    high = pooled["sign_flip_fraction_max"]
+                else:
+                    low = high = pooled[key]
+                csv_rows.append(
+                    [
+                        panel,
+                        scheme,
+                        float(scale),
+                        "pooled",
+                        float(pooled[key]),
+                        float(pooled[key]),
+                        float(low),
+                        float(high),
+                    ]
+                )
+                for model in data["models"]:
+                    row = next(
+                        row
+                        for row in model["rows"]
+                        if row["scheme"] == scheme and row["scale"] == scale
+                    )
+                    value = (
+                        row["sign_flip_fraction_pooled"]
+                        if key == "sign_flip_fraction_mean"
+                        else row["channels"]["4096"]["fraction_past_threshold"]
+                    )
+                    csv_rows.append(
+                        [
+                            panel,
+                            scheme,
+                            float(scale),
+                            model["model_id"],
+                            float(value),
+                            float(pooled[key]),
+                            float(low),
+                            float(high),
+                        ]
+                    )
+
+    stem = "fig16_extension_cost"
+    csv_path = _write_csv(
+        stem,
+        [
+            "panel",
+            "scheme",
+            "scale",
+            "model_id",
+            "value",
+            "pooled_mean",
+            "pooled_min",
+            "pooled_max",
+        ],
+        csv_rows,
+    )
+    png = _save(fig, stem, "Extension lowers the price; it does not remove it")
+    yarn32 = next(
+        row
+        for row in data["pooled"]
+        if row["scheme"] == "yarn" and row["scale"] == 32.0
+    )
+    pi32 = next(
+        row
+        for row in data["pooled"]
+        if row["scheme"] == "position_interpolation" and row["scale"] == 32.0
+    )
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/usefulness_extension.json (three checkpoints, eleven "
+            "scheme rows, 256 content pairs per head)"
+        ),
+        headline=(
+            f"at s=32 the measured sign-error rate is "
+            f"{100 * yarn32['sign_flip_fraction_mean']:.1f}% under YaRN "
+            f"({100 * yarn32['sign_flip_fraction_min']:.1f}--"
+            f"{100 * yarn32['sign_flip_fraction_max']:.1f}) and "
+            f"{100 * pi32['sign_flip_fraction_mean']:.1f}% under position "
+            f"interpolation ({100 * pi32['sign_flip_fraction_min']:.1f}--"
+            f"{100 * pi32['sign_flip_fraction_max']:.1f}), against "
+            f"{100 * rope['sign_flip_fraction_mean']:.1f}% under plain RoPE; "
+            f"the past-threshold channel fraction falls from "
+            f"{100 * rope['fraction_past_threshold_4096_mean']:.1f}% to "
+            f"{100 * yarn32['fraction_past_threshold_4096_mean']:.1f}% and "
+            f"{100 * pi32['fraction_past_threshold_4096_mean']:.1f}%"
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
+
+
 def _method_rows() -> dict[str, list[dict]]:
     """Call ``experiments.method_spectrum`` once and group it by method."""
     rows = method_spectrum(
@@ -1989,7 +2236,10 @@ def _write_readme(records: Sequence[FigureRecord]) -> Path:
         "rotary profiles, read from `results/qk_attribution.json`.",
         "fig15 is the design consequence of the threshold law: how many channels",
         "each context-extension scheme leaves past `theta L = 2 pi`, read from",
-        "`results/extension_law.json`.",
+        "`results/extension_law.json`. fig16 closes the loop: it re-prices the",
+        "same content pairs under those ladders and shows that the measured",
+        "sign-error rate falls with extension but does not reach zero, read from",
+        "`results/usefulness_extension.json`.",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
@@ -2021,6 +2271,7 @@ def main() -> int:
         fig13_collapse_law(),
         fig14_intervention(),
         fig15_extension_law(),
+        fig16_extension_cost(),
     ]
     readme = _write_readme(records)
 

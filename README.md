@@ -31,6 +31,8 @@ which maps `4096` tokens onto six positions.
 We explicitly do **not** claim novelty for the algebra: it is already published
 (arXiv:2607.25507, Sections 3–4). Nor do we claim that RoPE internals are
 under-explored in general, or that anything here evaluates a downstream task.
+The pre-registered design for the follow-up task-level test at 1B–8B is
+`docs/DOWNSTREAM_PROTOCOL.md`; it has no results yet and changes no number here.
 
 ## Dataflow
 
@@ -74,7 +76,7 @@ the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1762 tests (CPU-only install)
+pytest -q                                        # 1774 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -95,6 +97,7 @@ pip install -r real_model_requirements.txt
 python -m projects.rope_attribution.real_model    # results/real_model.json
 python -m projects.rope_attribution.usefulness    # results/usefulness.json
 python -m projects.rope_attribution.usefulness --spacing  # + usefulness_spacing.json
+python -m projects.rope_attribution.usefulness_extension  # results/usefulness_extension.json
 python -m projects.rope_attribution.uncertainty   # results/uncertainty.json
 python -m projects.rope_attribution.seed_variance # + results/usefulness_seeds.json
 python -m projects.rope_attribution.agreement     # results/agreement.json
@@ -105,7 +108,7 @@ The two artifacts that carry the structural claims - `measurements.json` and
 with the committed copies value by value: floats must agree to a relative
 `1e-12` (about 4500 ULP of float64), which tolerates the last-bit drift of a
 different BLAS build while still failing on any real change. Byte-identity
-across platforms is not claimed. The ten checkpoint-derived artifacts are
+across platforms is not claimed. The checkpoint-derived artifacts are
 larger and take minutes each (the seed-variance sweep re-runs the cost sweep
 three times, so about ten), and the same recompute-on-every-run check is not
 claimed for them. `make checkpoints` regenerates seven
@@ -269,8 +272,8 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1762 tests (CPU-only install)
-figures/          fifteen figures, each with a CSV sidecar
+tests/            1774 tests (CPU-only install)
+figures/          sixteen figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
                     real_model.json          (three trained checkpoints)
@@ -278,6 +281,9 @@ results/          measurements.json  (structural facts)
                                               clustered at 558 layer-heads)
                     usefulness_spacing.json  (the same sign-error rate under the
                                               log and uniform distance weightings)
+                    usefulness_extension.json (the same rate re-priced under the
+                                              YaRN and position-interpolation
+                                              frequency ladders)
                     uncertainty.json         (head-clustered interval and the
                                               pairwise checkpoint comparison)
                     usefulness_seeds.json    (the same cost under three
@@ -424,6 +430,18 @@ fastest channel too, but needs `s ≥ L/(2π) = 651.90` to reach zero, which map
 describable; they do not move the fast ones that carry the error
 (`results/extension_law.json`, `figures/fig15_extension_law.png`).
 
+**Extension lowers the measured price; it does not remove it.** The channel
+count is a prediction about geometry, so the same three checkpoints, prompts,
+content pairs and 13-point grid are re-priced under each ladder, with only the
+inverse frequencies changed. The plain-RoPE row reproduces the headline artifact
+exactly. At `s = 32` the pooled sign-error rate falls from `27.0%` under plain
+RoPE to `21.5%` under YaRN (per-checkpoint range `20.8-22.5%`) and `11.9%` under
+position interpolation (`11.5-12.7%`), while the past-threshold channel fractions
+at `L = 4096` fall from `0.729` to `0.583` and `0.354`. The ordering is the one
+the count predicts; the residual is the part no extension removes. This is a
+counterfactual geometry probe on the checkpoint's own weights, not a YaRN-trained
+model (`results/usefulness_extension.json`, `figures/fig16_extension_cost.png`).
+
 **Partial RoPE yields an exactly position-free sub-score.** At `p = 0.25` the
 unrotated 75% of channels contribute a sub-score whose spread across distance is
 exactly `0.0`, while the rotated quarter varies by `20.65`. This is a clean
@@ -497,6 +515,7 @@ matters for the mechanism:
 | `fig13_collapse_law` | the minimax collapse law and its 44 measured bins, with the pair-level and score-level error against window length |
 | `fig14_intervention` | achieved over intended suppression for the exact and position-free rules, plus the closed-form post-softmax prediction |
 | `fig15_extension_law` | channels past `θL = 2π` under four extension schemes, with YaRN's untouched-channel floor, and the mean minimax error those rows imply |
+| `fig16_extension_cost` | the measured sign-error rate re-priced under the YaRN and position-interpolation ladders, beside the past-threshold channel fraction those ladders imply |
 
 Each figure ships the plotted data as a CSV beside it, and `figures/README.md`
 records which function produced it and its headline number.

@@ -85,7 +85,7 @@ None is a fragment of an upstream implementation. The four identifier rows
 `attention_scaling`, `ntk`, `ported from` and `taken from` remain at zero. The
 four `rotary_emb` hits are one public Hugging Face configuration keyword: two
 occurrences in synthetic test models that set it, and two in this project's own
-fallback read of that keyword. The three `apply_rotary` hits are the name of a
+fallback read of that keyword. The four `apply_rotary` hits are the name of a
 public Hugging Face function used as a monkeypatch seam. Neither is a copied
 body or a vendored file.
 

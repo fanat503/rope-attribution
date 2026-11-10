@@ -224,8 +224,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("synthesis_additivity", r"is exact to \$(5\.0)\\times10\^\{-14\}\$"),
     Claim("abstract_additivity_54", r"the total remains additive to \$(5\.0)\\times10\^\{-14\}\$"),
     Claim("r2_additivity", r"additivity residual of \$(5\.0)\\times10\^\{-14\}\$"),
-    Claim("cond_additivity", r"total stays additive to \$(5\.0)\\times10\^\{-14\}\$"),
-    Claim("conclusion_additivity_54", r"the total stays additive to \$(5\.0)\\times10\^\{-14\}\$"),
+    Claim("cond_additivity", r"total (?:stays|remains) additive to \$(5\.0)\\times10\^\{-14\}\$"),
     # ---- how the structural tests are built ---------------------------------
     Claim(
         "relpos_pairs_prose",
@@ -323,7 +322,6 @@ CLAIMS: tuple[Claim, ...] = (
     Claim(
         "orders_claim_provenance",
         r"additive to \$5\.0\\times10\^\{-14\}\$",
-        2,
     ),
     # ---- YaRN ramp bookkeeping (fig01) --------------------------------------
     Claim("yarn_unchanged_caption", r"leaves the fastest \$(\d+)\$ of \$(\d+)\$ entries bit-for-bit identical"),
@@ -398,7 +396,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("amp_at_8192", r"amplitude-weighted error(?: at \$\\delta = \d+\$)? is \$(1\.24572)\\times10\^\{(6)\}\$ for RoPE (?:and|against) \$(1\.24179)\\times10\^\{(6)\}\$ for \\yarn"),
     Claim("amp_ratio", r"a ratio of \$(0\.996840)\$"),
     Claim("amp_ratio_r3", r"error ratio \\yarn/RoPE is \$(0\.99684)\$ at \$\\delta = (\d+)\$"),
-    Claim("amp_ratio_conclusion", r"amplitude-weighted error ratio of only \$(0\.996840)\$"),
+    Claim("amp_ratio_conclusion", r"amplitude-weighted error ratio is \$(0\.99684)\$"),
     Claim("amp_percent", r"buys less than \$(-?\d+(?:\.\d+)?)\\%\$"),
     Claim("rms_ratio", r"per-pair RMS ratio is \$(0\.999977)\$"),
     Claim("pi_amp", r"here \(\$(-?\d+(?:\.\d+)?)\$ at \$\\delta = (-?\d+(?:\.\d+)?)\$, roughly \$(-?\d+(?:\.\d+)?)\\times\$ below RoPE\)"),
@@ -449,7 +447,11 @@ CLAIMS: tuple[Claim, ...] = (
     # ---- the appendix's restatements -------------------------------------------
     Claim("prov_max_agreement", r"&\s*\$(0\.000)\\rad\$ agreement & \\texttt\{fig03\}"),
     Claim("prov_ratios", r"&\s*\$(0\.4464)\$, \$(1\.0000)\$ & ratios of fig03"),
-    Claim("prov_fig04", r"&\s*\$\\delta = (\d+)\$, \$(\d+)/(\d+)\$ & \\texttt\{fig04\}"),
+    Claim(
+        "prov_fig04",
+        r"&\s*\$\\delta = (\d+)\$: \$(\d+)/(\d+)\$ and \$(\d+)/(\d+)\$; "
+        r"\$\\delta = (\d+)\$: \$(\d+)/(\d+)\$ & \\texttt\{fig04\}",
+    ),
     Claim("prov_amp", r"&\s*\$(1\.24572)\\\!\\times\\\!10\^\{(6)\}\$ etc\."),
     Claim("prov_pi_amp", r"&\s*\$(\d+\.\d+)\$, \$\\delta = (\d+)\$ & \\texttt\{fig05\}"),
     Claim("prov_ramp", r"&\s*\$(\d+)\$ of \$(\d+)\$, \$(\d+\.\d+)\\times\$ & \\texttt\{fig01\}"),
@@ -1130,7 +1132,7 @@ CLAIMS += (
     ),
     Claim(
         "feat_sweep_setup",
-        r"Holding each of \$(\d+)\$ pairs fixed and sweeping \$\\delta\$ over the paper's "
+        r"Holding each of \$(\d+)\$ pairs fixed and sweeping \$\\delta\$ over the QK sweep's "
         r"\$(\d+)\$-point grid from \$(\d+)\$ to \$(\d+)\$",
     ),
     Claim(
@@ -1505,6 +1507,57 @@ CLAIMS += (
         r"context onto six positions",
     ),
     Claim("ext_theta_zero", r"leaves \$\\theta_0 = (\d+)\$"),
+    # ---- the measured cost under extension geometry -------------------------
+    # Same three checkpoints, pairs and grid as the headline, re-priced under
+    # each ladder.  The abstract, the R3 paragraph, the appendix section, the
+    # figure caption and the provenance row all state the same six numbers, so
+    # each location is registered rather than one shared pattern.
+    Claim(
+        "extcost_abstract",
+        r"Under those ladders the measured sign-error rate falls from "
+        r"\$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$ \(\\yarn\) and "
+        r"\$(\d+\.\d+)\\%\$ \(position interpolation\), not to zero",
+    ),
+    Claim(
+        "extcost_main",
+        r"cuts the sign-error rate from \$(\d+\.\d+)\\%\$ to "
+        r"\$(\d+\.\d+)\\%\$ under \\yarn\\ at \$s=(\d+)\$ and "
+        r"\$(\d+\.\d+)\\%\$ under position interpolation, not to zero",
+    ),
+    Claim(
+        "extcost_grid",
+        r"pairs and \$(\d+)\$-point grid are re-priced under each ladder",
+    ),
+    Claim(
+        "extcost_appendix",
+        r"At \$s=(\d+)\$ the pooled sign-error rate is \$(\d+\.\d+)\\%\$ under "
+        r"\\yarn\\ \(per-checkpoint range \$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$\) and "
+        r"\$(\d+\.\d+)\\%\$ under position interpolation "
+        r"\(\$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$\), against "
+        r"\$(\d+\.\d+)\\%\$ under plain RoPE\. The corresponding past-threshold "
+        r"fractions at \$L=(\d+)\$ are \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ against "
+        r"\$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "extcost_figcap_scale",
+        r"ladders at scales \$(\d+)\$--\$(\d+)\$",
+    ),
+    Claim(
+        "extcost_figcap_threshold",
+        r"past \$\\theta L=(\d+)\\pi\$ at \$L=(\d+)\$",
+    ),
+    Claim(
+        "prov_extension_cost_row",
+        r"App\.~\\ref\{app:extension-cost\} & \$(\d+\.\d+)\\%\$, "
+        r"\$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\\%\$; \$(\d+\.\d+)\$, "
+        r"\$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & "
+        r"\\texttt\{results/usefulness\\_extension\.json :: pooled\}",
+    ),
+    Claim(
+        "intervention_error_ratio",
+        r"the median is \$(\d+)\$--\$(\d+)\\%\$ higher on the two Llama-family "
+        r"models",
+    ),
     Claim(
         "threshold_amplitude",
         r"content amplitude \$\\rho\\ge(\d+)\$ and phase \$\\psi\$",
@@ -1515,8 +1568,7 @@ CLAIMS += (
     ),
     Claim(
         "threshold_conclusion",
-        r"minimax error of the best position-free summary is exactly \$(\d+)\$ "
-        r"once the window sweeps \$(\d+)\\pi\$ of phase",
+        r"minimax error is exactly \$(\d+)\$ once the window sweeps \$(\d+)\\pi\$",
     ),
     Claim("threshold_related", r"it saturates at \$x=(\d+)\\pi\$"),
     Claim(
@@ -1566,7 +1618,7 @@ CLAIMS += (
     ),
     Claim(
         "collapse_conclusion",
-        r"On three checkpoints all \$(\d+)\$ measured bins lie inside it, and the "
+        r"all \$(\d+)\$ measured bins lie inside the exact band below it, and the "
         r"pair-level error is \$(\d+\.\d+)\$ at \$L=(\d+)\$",
     ),
 
@@ -1647,9 +1699,8 @@ CLAIMS += (
     ),
     Claim(
         "intervention_conclusion",
-        r"Acting on it costs \$(\d+)\$ differing selections and "
-        r"\$(\d+)\$ sign reversals in \$(\d+)\$ interventions; the exact rule "
-        r"remains a \$(\d+\.\d+)\$ oracle",
+        r"Acting on the attribution costs \$(\d+)\$ differing selections and "
+        r"\$(\d+)\$ sign reversals in \$(\d+)\$ interventions",
     ),
     # ---- provenance rows for the two new artifacts ---------------------------
     Claim(
@@ -2362,7 +2413,6 @@ def test_feature_additivity_claim_on_the_54_point_grid() -> None:
         "r2_additivity",
         "cond_additivity",
         "synthesis_additivity",
-        "conclusion_additivity_54",
     ):
         assert_paper_sci_matches(fine, literal(name), -14, name)
     csv_residual = max(
@@ -2931,9 +2981,22 @@ def test_plain_rope_collapses_to_zero_exactly_from_delta_861() -> None:
         f"fig04 says {yarn[first_zero] * N_PAIRS}"
     )
     assert yarn[int(delta_end)] * N_PAIRS == int(end)
-    prov_delta, prov_end, prov_denom = groups("prov_fig04")[0]
+    (
+        prov_delta,
+        prov_rope,
+        prov_denom,
+        prov_yarn,
+        prov_denom_again,
+        prov_far_delta,
+        prov_far,
+        prov_far_denom,
+    ) = groups("prov_fig04")[0]
     assert int(prov_delta) == first_zero
-    assert int(prov_end) == int(end) and int(prov_denom) == N_PAIRS
+    assert int(prov_rope) == round(rope[first_zero] * N_PAIRS) == 0
+    assert int(prov_yarn) == int(here)
+    assert int(prov_denom) == int(prov_denom_again) == int(prov_far_denom) == N_PAIRS
+    assert int(prov_far_delta) == int(delta_end)
+    assert int(prov_far) == int(end)
 
 
 def test_the_synthesis_ramp_from_zero_to_eleven_out_of_thirty_two() -> None:
@@ -3921,7 +3984,15 @@ def test_the_only_accuracy_number_in_the_paper_is_the_one_it_refuses_to_report()
 # Sections that report checkpoint measurements and may therefore name a checkpoint
 # affirmatively. Everything else in the paper must speak about checkpoints only to
 # disclaim them, which is the rule this list carves the exception out of.
-CHECKPOINT_REPORTING_SECTIONS = ("sec:trained", "sec:worth")
+CHECKPOINT_REPORTING_SECTIONS = (
+    "sec:trained",
+    "sec:worth",
+    # The appendix section that re-prices the same checkpoints under each
+    # extension ladder.  It reports a measurement on trained weights, so it
+    # owns an affirmative checkpoint mention exactly as the two sections above
+    # do; the guard still rejects one anywhere else.
+    "app:extension-cost",
+)
 
 
 def test_no_model_or_activation_is_reported_anywhere_outside_a_denial() -> None:
@@ -5100,7 +5171,6 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
 
     conclusion = [int(v) for v in groups("intervention_conclusion")[0][:3]]
     assert conclusion == [25, 7, 96]
-    assert_paper_number_matches(1.0, groups("intervention_conclusion")[0][3], "conclusion oracle")
 
     prov = groups("prov_collapse_row")[0]
     assert int(prov[0]) == 44
@@ -5319,6 +5389,110 @@ def test_the_extension_table_restates_the_extension_artifact() -> None:
     )
     assert remark_floor == floor
     assert remark_floor_denominator == remark_denominator
+
+
+def test_the_measured_extension_cost_matches_its_artifact() -> None:
+    """Every literal of Appendix~\\ref{app:extension-cost} is recomputed.
+
+    Mutation verdict: changing a pooled rate, a per-checkpoint bound, a
+    past-threshold fraction or the grid size without re-running
+    ``usefulness_extension`` fails the corresponding comparison.  Swapping the
+    YaRN and position-interpolation rows fails because the two rates differ by
+    a factor of nearly two, and reinstating the old ``no worse'' intervention
+    claim fails the ratio test, which is the only place the 17--27\\% is
+    allowed to come from.
+    """
+    artifact = _artifact(_REPO / "results" / "usefulness_extension.json")
+    pooled = {(row["scheme"], row["scale"]): row for row in artifact["pooled"]}
+    rope = pooled[("rope", 1.0)]
+    yarn = pooled[("yarn", 32.0)]
+    pi = pooled[("position_interpolation", 32.0)]
+    rates = {
+        "rope": rope["sign_flip_fraction_mean"] * 100.0,
+        "yarn": yarn["sign_flip_fraction_mean"] * 100.0,
+        "pi": pi["sign_flip_fraction_mean"] * 100.0,
+    }
+    bounds = {
+        "yarn_low": yarn["sign_flip_fraction_min"] * 100.0,
+        "yarn_high": yarn["sign_flip_fraction_max"] * 100.0,
+        "pi_low": pi["sign_flip_fraction_min"] * 100.0,
+        "pi_high": pi["sign_flip_fraction_max"] * 100.0,
+    }
+    fractions = {
+        "rope": rope["fraction_past_threshold_4096_mean"],
+        "yarn": yarn["fraction_past_threshold_4096_mean"],
+        "pi": pi["fraction_past_threshold_4096_mean"],
+    }
+
+    abstract = groups("extcost_abstract")[0]
+    assert_paper_number_matches(rates["rope"], abstract[0], "abstract plain-RoPE rate")
+    assert_paper_number_matches(rates["yarn"], abstract[1], "abstract YaRN rate")
+    assert_paper_number_matches(rates["pi"], abstract[2], "abstract PI rate")
+
+    main = groups("extcost_main")[0]
+    assert_paper_number_matches(rates["rope"], main[0], "R3 plain-RoPE rate")
+    assert_paper_number_matches(rates["yarn"], main[1], "R3 YaRN rate")
+    assert int(main[2]) == 32
+    assert_paper_number_matches(rates["pi"], main[3], "R3 PI rate")
+
+    assert int(literal("extcost_grid")) == len(artifact["distance_grid"])
+
+    appendix = groups("extcost_appendix")[0]
+    assert int(appendix[0]) == 32
+    assert_paper_number_matches(rates["yarn"], appendix[1], "appendix YaRN rate")
+    assert_paper_number_matches(bounds["yarn_low"], appendix[2], "YaRN bound low")
+    assert_paper_number_matches(bounds["yarn_high"], appendix[3], "YaRN bound high")
+    assert_paper_number_matches(rates["pi"], appendix[4], "appendix PI rate")
+    assert_paper_number_matches(bounds["pi_low"], appendix[5], "PI bound low")
+    assert_paper_number_matches(bounds["pi_high"], appendix[6], "PI bound high")
+    assert_paper_number_matches(rates["rope"], appendix[7], "appendix plain-RoPE rate")
+    assert int(appendix[8]) == 4096
+    assert_paper_number_matches(fractions["yarn"], appendix[9], "appendix YaRN fraction")
+    assert_paper_number_matches(fractions["pi"], appendix[10], "appendix PI fraction")
+    assert_paper_number_matches(fractions["rope"], appendix[11], "appendix RoPE fraction")
+
+    scale_low, scale_high = (int(value) for value in groups("extcost_figcap_scale")[0])
+    assert (scale_low, scale_high) == (2, 32)
+    threshold, context = (int(value) for value in groups("extcost_figcap_threshold")[0])
+    assert threshold * math.pi == pytest.approx(XL.THRESHOLD, rel=0, abs=1e-12)
+    assert context == 4096
+
+    prov = groups("prov_extension_cost_row")[0]
+    assert_paper_number_matches(rates["rope"], prov[0], "provenance plain-RoPE rate")
+    assert_paper_number_matches(rates["yarn"], prov[1], "provenance YaRN rate")
+    assert_paper_number_matches(rates["pi"], prov[2], "provenance PI rate")
+    for value, written, what in zip(
+        (fractions["rope"], fractions["yarn"], fractions["pi"]),
+        prov[3:],
+        ("provenance RoPE fraction", "provenance YaRN fraction", "provenance PI fraction"),
+        strict=True,
+    ):
+        assert_paper_number_matches(value, written, what)
+
+    # The 17--27% is the ratio of the intervened pass's prediction error to the
+    # unedited pass's, on the two Llama-family checkpoints.  Pythia is the
+    # exception and the paper says so; both directions are pinned here.
+    intervention = _artifact(INTERVENTION_PATH)
+    low_ratio, high_ratio = (int(value) for value in groups("intervention_error_ratio")[0])
+    measured = []
+    for model in intervention["models"][1:]:
+        row = model["pooled"]
+        measured.append(
+            100.0
+            * (
+                row["exact_prediction_error_median"]
+                / row["baseline_prediction_error_median"]
+                - 1.0
+            )
+        )
+    assert sorted(round(value) for value in measured) == sorted(
+        (low_ratio, high_ratio)
+    ), (measured, low_ratio, high_ratio)
+    pythia = intervention["models"][0]["pooled"]
+    assert (
+        pythia["exact_prediction_error_median"]
+        < pythia["baseline_prediction_error_median"]
+    )
 
 
 def test_the_spacing_sensitivity_matches_its_artifact() -> None:
