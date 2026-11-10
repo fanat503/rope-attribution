@@ -22,6 +22,12 @@ import pytest
 _REPO = Path(__file__).resolve().parents[1]
 
 EXPECTED_AUTHOR = "Slyatski Ilya"
+# The address is the stable identity. GitHub's squash-merge commits carry the
+# account's display name ("Ilya") rather than the configured full name, so the
+# name alone is not a reliable key; a commit with a foreign address still fails.
+EXPECTED_EMAIL = "ilasergeev316@gmail.com"
+# Display-name variants of the same account that the git record may contain.
+AUTHOR_NAME_VARIANTS = frozenset({EXPECTED_AUTHOR, "Ilya"})
 
 # Subject of the earliest commit written for the paper. Located by subject rather
 # than by a hard-coded hash, so that a reworded history does not silently move
@@ -153,13 +159,14 @@ def test_the_commits_written_for_the_paper_name_only_the_author() -> None:
             "check owns cannot be located"
         )
     out = _git(
-        "log", "--format=%h%x01%an%x01%(trailers:key=Co-Authored-By,valueonly)",
+        "log", "--format=%h%x01%an%x01%ae%x01%(trailers:key=Co-Authored-By,valueonly)",
         f"{base}^..HEAD",
     )
     rows = [r.split("\x01") for r in out.splitlines() if r.strip()]
     assert len(rows) >= 26, f"expected at least 26 paper commits, found {len(rows)}"
-    for sha, author, trailers in rows:
-        assert author == EXPECTED_AUTHOR, f"{sha} is attributed to {author!r}"
+    for sha, author, email, trailers in rows:
+        assert email == EXPECTED_EMAIL, f"{sha} is attributed to {email!r}"
+        assert author in AUTHOR_NAME_VARIANTS, f"{sha} is attributed to {author!r}"
         assert trailers.strip() == "", f"{sha} carries a co-author trailer: {trailers!r}"
 
 
@@ -170,6 +177,11 @@ def test_the_local_identity_produces_the_right_attribution() -> None:
         pytest.skip("no git identity configured in this checkout")
     name = out.strip()
     assert name == EXPECTED_AUTHOR, f"user.name is {name!r}; expected {EXPECTED_AUTHOR!r}"
+    ok, out = _git_ok("config", "user.email")
+    if ok and out.strip():
+        assert out.strip() == EXPECTED_EMAIL, (
+            f"user.email is {out.strip()!r}; expected {EXPECTED_EMAIL!r}"
+        )
 
 
 # ---------------------------------------------------------------------------
