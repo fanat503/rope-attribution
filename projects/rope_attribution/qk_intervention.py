@@ -89,7 +89,6 @@ import numpy as np
 from rope_attribution import qk_attribution as QA
 from rope_attribution import real_model as RM
 from rope_attribution.experiments import pair_terms
-from rope_attribution.qk_attribution import rotated_dot
 from rope_attribution.rope import inv_freq
 
 __all__ = [
@@ -322,8 +321,7 @@ def select_pairs(values: np.ndarray, budget: int) -> list[int]:
     entry has nothing to suppress and the caller skips it.
     """
     order = np.argsort(-values)
-    chosen = [int(i) for i in order[:budget] if values[i] > 0.0]
-    return chosen
+    return [int(i) for i in order[:budget] if values[i] > 0.0]
 
 
 def _surrogate_vector(
@@ -400,7 +398,6 @@ def measure_cell(
     k = hv.k_hat[layer, head, :, :rope_dim]
     q_full = hv.q_hat[layer, head]
     k_full = hv.k_hat[layer, head]
-    n_tokens = q.shape[0]
 
     base_attn = baseline["attentions"][layer][head]
     # Mask the diagonal before taking the argmax: a head that attends to itself
@@ -514,14 +511,16 @@ def measure_model(
                     row = attn[query].copy()
                     row[query:] = 0.0
                     peak = float(row.max())
-                    if MIN_PEAK_ATTENTION <= peak <= MAX_CELL_PEAK:
-                        if best is None or peak > best[0]:
-                            best = (peak, layer, head, query)
+                    if (
+                        MIN_PEAK_ATTENTION <= peak <= MAX_CELL_PEAK
+                        and (best is None or peak > best[0])
+                    ):
+                        best = (peak, layer, head, query)
                 if best is not None:
                     candidates.append(best)
         candidates.sort(reverse=True)
         taken = 0
-        for peak, layer, head, query in candidates:
+        for _peak, layer, head, query in candidates:
             if taken >= cells_per_prompt:
                 break
             record = measure_cell(

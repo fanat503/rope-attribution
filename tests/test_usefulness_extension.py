@@ -180,7 +180,7 @@ def test_position_interpolation_is_monotone_in_scale(artifact: dict) -> None:
         _pooled(artifact, "position_interpolation", scale)["sign_flip_fraction_mean"]
         for scale in (2.0, 4.0, 8.0, 16.0, 32.0)
     ]
-    assert all(a > b for a, b in zip(rates, rates[1:]))
+    assert all(a > b for a, b in zip(rates, rates[1:], strict=False))
 
 
 def test_yarn_plateaus_above_position_interpolation(artifact: dict) -> None:
@@ -194,7 +194,7 @@ def test_yarn_plateaus_above_position_interpolation(artifact: dict) -> None:
         _pooled(artifact, "position_interpolation", scale)["sign_flip_fraction_mean"]
         for scale in (2.0, 4.0, 8.0, 16.0, 32.0)
     ]
-    assert all(p < y for p, y in zip(pi, yarn))
+    assert all(p < y for p, y in zip(pi, yarn, strict=True))
     # The last two YaRN points are within 0.003 of one another: the ramp has
     # saturated, while PI is still falling by more than 0.02 per step.
     assert abs(yarn[-1] - yarn[-2]) < 0.003

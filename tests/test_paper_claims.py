@@ -4882,8 +4882,7 @@ def test_the_compressed_statistics_restate_the_two_artifacts() -> None:
 
 
 def _window_row(model: dict, span: int) -> dict:
-    row = next(r for r in model["by_window"] if int(r["span"]) == span)
-    return row
+    return next(r for r in model["by_window"] if int(r["span"]) == span)
 
 
 def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
@@ -4935,7 +4934,7 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
 
     for name in ("collapse_past_abstract", "collapse_past_body"):
         written = groups(name)[0]
-        for model, value in zip(models, written):
+        for model, value in zip(models, written, strict=True):
             assert_paper_number_matches(
                 _window_row(model, 4096)["past_threshold_fraction"],
                 value,
@@ -4965,7 +4964,7 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
             assert span == 4096
         else:
             written = captured
-        for model, value in zip(models, written):
+        for model, value in zip(models, written, strict=True):
             assert_paper_number_matches(
                 _window_row(model, 4096)["score_rel_median"],
                 value,
@@ -5116,7 +5115,9 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
 
     per_model = [int(v) for v in groups("intervention_per_model")[0]]
     assert per_model == [13, 5, 9, 2, 3, 0]
-    for model, (differ, reversed_count) in zip(models, ((13, 5), (9, 2), (3, 0))):
+    for model, (differ, reversed_count) in zip(
+        models, ((13, 5), (9, 2), (3, 0)), strict=True
+    ):
         assert model["n_selection_differs"] == differ
         assert sum(
             1 for cell in model["cells"]
@@ -5124,7 +5125,7 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
             and cell["surrogate"]["suppression_ratio"] < 0.0
         ) == reversed_count
 
-    for model, written in zip(models, groups("intervention_medians")[0]):
+    for model, written in zip(models, groups("intervention_medians")[0], strict=True):
         assert_paper_number_matches(
             model["pooled"]["surrogate_suppression_ratio_median"],
             written,
@@ -5156,7 +5157,9 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
 
     control = groups("intervention_control")[0]
     for model, (mantissa, exponent) in zip(
-        models, ((control[0], control[1]), (control[2], control[3]), (control[4], control[5]))
+        models,
+        ((control[0], control[1]), (control[2], control[3]), (control[4], control[5])),
+        strict=True,
     ):
         assert_paper_sci_matches(
             model["pooled"]["baseline_prediction_error_median"],
@@ -5177,12 +5180,14 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
     assert_paper_number_matches(1.0, prov[1], "provenance pair-level error")
     assert int(prov[2]) == 1
     collapse = _artifact(COLLAPSE_PATH)
-    for model, value in zip(collapse["models"], groups("prov_collapse_past_row")[0]):
+    for model, value in zip(
+        collapse["models"], groups("prov_collapse_past_row")[0], strict=True
+    ):
         assert_paper_number_matches(
             _window_row(model, 4096)["past_threshold_fraction"], value, "provenance past fraction"
         )
     score_row = groups("prov_collapse_score_row")[0]
-    for model, value in zip(collapse["models"], score_row[:3]):
+    for model, value in zip(collapse["models"], score_row[:3], strict=True):
         assert_paper_number_matches(
             _window_row(model, 4096)["score_rel_median"], value, "provenance score error"
         )
@@ -5196,7 +5201,7 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
     assert prov[3:] == [13, 5, 9, 2, 3, 0]
     prov = groups("prov_intervention_medians_row")[0]
     assert_paper_number_matches(1.0, prov[0], "provenance oracle")
-    for model, value in zip(models, prov[1:]):
+    for model, value in zip(models, prov[1:], strict=True):
         assert_paper_number_matches(
             model["pooled"]["surrogate_suppression_ratio_median"], value, "provenance median"
         )

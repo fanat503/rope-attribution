@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from rope_attribution import qk_intervention as I
 from rope_attribution.experiments import pair_terms
 from rope_attribution.qk_attribution import rotated_dot

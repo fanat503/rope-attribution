@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from rope_attribution import position_free_collapse as C
 
 
