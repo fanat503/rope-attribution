@@ -6,11 +6,16 @@
 # and compares them with the committed copies value by value (floats to
 # a relative 1e-12).
 #
-# The checkpoint measurements (real_model.py, usefulness.py, agreement.py) are
-# deliberately not part of `all`: they need CPU torch, which is not a test
-# dependency, and they take about four minutes each. The seed-variance sweep
-# (seed_variance.py) re-runs the cost sweep three times, so about ten minutes.
-# Run `make checkpoints` when you want them.
+# The checkpoint measurements (real_model.py, usefulness.py, agreement.py,
+# attention_cost.py) are deliberately not part of `all`: they need CPU torch,
+# which is not a test dependency, and they take minutes each. The seed-variance
+# sweep (seed_variance.py) re-runs the cost sweep three times, so about ten
+# minutes. The trained-dictionary QK attribution (qk_attribution.py) also needs
+# a public SAE file supplied with SAE=<path>; the depth and trajectory profiles
+# (qk_depth.py, qk_trajectory.py) need the per-layer tree supplied with
+# SAE_DIR=<path>. Run `make checkpoints`, `make qk SAE=...`,
+# `make qk-depth SAE_DIR=...` and `make qk-trajectory SAE_DIR=...` when you want
+# them.
 
 # `-m` takes a DOTTED module path, not a filesystem path. This Makefile shipped
 # `projects/rope_attribution.experiments` with slashes and CI rejected it with a
@@ -22,7 +27,7 @@
 PYTHON  ?= python
 PKG      = projects.rope_attribution
 
-.PHONY: all test results figures paper checkpoints postedit clean help
+.PHONY: all test results figures paper checkpoints qk qk-depth qk-trajectory postedit clean help
 
 ## all: test + results + figures + paper
 all: test results figures paper
@@ -57,8 +62,35 @@ postedit:
 checkpoints:
 	$(PYTHON) -m $(PKG).real_model
 	$(PYTHON) -m $(PKG).usefulness
+	$(PYTHON) -m $(PKG).uncertainty
 	$(PYTHON) -m $(PKG).seed_variance
 	$(PYTHON) -m $(PKG).agreement
+	$(PYTHON) -m $(PKG).attention_cost
+
+## qk: re-run the trained-dictionary QK attribution; pass SAE=<public SAE file>
+# The dictionary is not vendored. It is the public
+# ctigges/pythia-70m-deduped__res-sm_processed, 3-res-sm (d_sae=32768), named in
+# results/qk_attribution.json. Download it from the SAE Lens release and point
+# SAE at the safetensors file.
+qk:
+	@test -n "$(SAE)" || { echo "usage: make qk SAE=path/to/sae.safetensors"; exit 2; }
+	$(PYTHON) -m $(PKG).qk_attribution --sae "$(SAE)"
+
+## qk-depth: re-run the depth profile; pass SAE_DIR=<tree like the HF repo>
+# SAE_DIR must contain {layer}-res-sm/sae_weights.safetensors for layers 0-4,
+# the layout `hf download` produces for
+# ctigges/pythia-70m-deduped__res-sm_processed. The dictionaries are ~134 MB
+# each and are not vendored.
+qk-depth:
+	@test -n "$(SAE_DIR)" || { echo "usage: make qk-depth SAE_DIR=path/to/sae/tree"; exit 2; }
+	$(PYTHON) -m $(PKG).qk_depth --sae-dir "$(SAE_DIR)"
+
+## qk-trajectory: re-run the feature-pair trajectory; pass SAE_DIR=<tree like the HF repo>
+# The committed artifact sweeps the feature-pair block over the full distance
+# grid for layers 0-4, using the same per-layer dictionary tree as qk-depth.
+qk-trajectory:
+	@test -n "$(SAE_DIR)" || { echo "usage: make qk-trajectory SAE_DIR=path/to/sae/tree"; exit 2; }
+	$(PYTHON) -m $(PKG).qk_trajectory --sae-template "$(SAE_DIR)/{layer}-res-sm/sae_weights.safetensors" --layers 0,1,2,3,4
 
 ## clean: remove generated build output (never touches committed artefacts)
 clean:

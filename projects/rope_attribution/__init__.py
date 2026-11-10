@@ -1,6 +1,6 @@
 """Faithful, computed RoPE / YaRN / partial-RoPE machinery.
 
-See `rope.py` for the transcriptions and their original sources.
+See `rope.py` for the re-derivations and their original sources.
 """
 
 from rope_attribution.rope import (

@@ -124,12 +124,17 @@ def usefulness() -> dict:
 
 @pytest.fixture(scope="module")
 def per_head(usefulness: dict) -> tuple[list[str], list[list[float]]]:
+    """The layer-head rates, not the head-prompt instances.
+
+    v1 of the artifact had no ``head_rates`` field; this fixture would fail
+    loudly rather than fall back to the five-fold over-count.
+    """
     ids = [m["model_id"] for m in usefulness["models"]]
     rates = [
         [
-            h["sign_flip_fraction_pooled"]
-            for entry in m["per_prompt"]
-            for h in entry["heads"]
+            float(h["sign_flip_fraction"])
+            for h in m["head_rates"]
+            if h["sign_flip_fraction"] is not None
         ]
         for m in usefulness["models"]
     ]
@@ -139,78 +144,111 @@ def per_head(usefulness: dict) -> tuple[list[str], list[list[float]]]:
 def test_the_paper_quotes_the_checkpoint_mean_not_the_head_mean(
     per_head: tuple[list[str], list[list[float]]],
 ) -> None:
-    """A real methodological distinction the paper left implicit.
+    """The headline is the equal-weight mean; the interval is head-pooled.
 
-    The paper's headline "26.8%" is the *unweighted mean of the three
-    per-checkpoint means*. The mean over all 2790 heads is 26.70% - lower,
-    because SmolLM contributes 1350 heads against 720 each for the other two.
-    Both are defensible summaries; they are not the same number, and the paper
-    does not say which it used.
+    The paper's headline "27.0%" is the *unweighted mean of the three
+    per-checkpoint means*. The mean over all 558 layer-heads is 26.90% - lower,
+    because SmolLM contributes 270 heads against 144 each for the other two.
+    Both are defensible summaries; they are not the same number.
 
-    This test pins both, and states that they differ by about 0.08 percentage
-    points, so a reader cannot quietly swap one for the other.
+    The two differ by about 0.14 percentage points, which is *about one*
+    half-width of the pooled interval, not more than two: the corrected
+    interval includes the equal-weight headline. The earlier test claimed the
+    opposite because it resampled 2790 head-prompt instances, which made the
+    interval about sqrt(5) too narrow. This test now pins the corrected
+    comparison rather than the old overstatement.
     """
     _ids, rates = per_head
     head_mean = sum(r for model in rates for r in model) / sum(len(m) for m in rates)
     checkpoint_mean = sum(sum(m) / len(m) for m in rates) / len(rates)
 
-    assert abs(checkpoint_mean - 0.2678) < 0.0005, checkpoint_mean
-    assert abs(head_mean - 0.2670) < 0.0005, head_mean
+    assert abs(checkpoint_mean - 0.2704) < 0.0005, checkpoint_mean
+    assert abs(head_mean - 0.2690) < 0.0005, head_mean
 
-    # The two differ by about 0.08 percentage points, which is LARGER than the
-    # half-width of the pooled interval - the checkpoint mean falls outside it.
-    # That is the substantive point: a reader who assumes the headline is the
-    # head-weighted mean, or vice versa, is not making a rounding-level mistake.
     out = UNC.bootstrap_ci([r for model in rates for r in model])
     assert out["ci_low"] < head_mean < out["ci_high"], out
-    assert not (out["ci_low"] < checkpoint_mean < out["ci_high"]), (
-        "the checkpoint mean is not expected to fall inside the head-weighted "
-        "CI; if it now does, the weighting gap has closed and this test should "
-        "be re-read rather than its assertion loosened"
+    # The corrected interval includes the equal-weight headline, by a hair.
+    assert out["ci_low"] < checkpoint_mean < out["ci_high"], (
+        checkpoint_mean,
+        out["ci_high"],
     )
-    assert checkpoint_mean > out["ci_high"], (checkpoint_mean, out["ci_high"])
+    ratio = (checkpoint_mean - head_mean) / out["half_width"]
+    assert 0.9 < ratio < 1.1, (ratio, checkpoint_mean, head_mean, out["half_width"])
 
 
 def test_the_head_count_is_the_one_the_paper_quotes(
     per_head: tuple[list[str], list[list[float]]],
 ) -> None:
+    """The replication unit. 2790 head-prompt instances are not 2790 heads.
+
+    Mutation verdict: reverting ``_cluster_heads`` to pooling instances makes
+    this assertion fail with 2790, which is exactly the defect the fix removes.
+    """
     _ids, rates = per_head
-    assert sum(len(r) for r in rates) == 2790, [len(r) for r in rates]
+    assert [len(r) for r in rates] == [144, 144, 270], [len(r) for r in rates]
+    assert sum(len(r) for r in rates) == 558
+
+
+def test_the_artifact_clusters_prompts_into_heads(usefulness: dict) -> None:
+    """One record per layer-head, carrying how many prompts contributed.
+
+    Mutation verdict: an unclustered artifact has 720 records per model where
+    ``n_heads`` says 144, so this fails before the interval is ever computed.
+    """
+    for model in usefulness["models"]:
+        assert model["n_heads"] == len(model["head_rates"]), model["model_id"]
+        assert {h["n_prompts"] for h in model["head_rates"]} == {
+            model["n_prompts"]
+        }, model["model_id"]
+        assert all(h["sign_flip_fraction"] is not None for h in model["head_rates"])
+
+
+def test_a_v1_artifact_is_refused_rather_than_reinterpreted(
+    usefulness: dict,
+) -> None:
+    """The schema gate that stops the old over-count from silently returning.
+
+    Mutation verdict: deleting the schema check makes this return 2790 rates
+    instead of raising, which is the exact regression the v2 bump prevents.
+    """
+    stale = dict(usefulness)
+    stale["schema"] = "rope_attribution/usefulness/v1"
+    with pytest.raises(ValueError, match="usefulness/v2"):
+        UNC.head_rates_from_artifact(stale)
 
 
 def test_the_three_checkpoints_differ_measurably(
     per_head: tuple[list[str], list[list[float]]],
 ) -> None:
-    """A finding the paper did not previously have: the three do not agree.
+    """Pythia differs from both; llama and SmolLM do not differ measurably.
 
-    Every pairwise interval excludes zero, so the per-checkpoint rates differ by
-    more than head-to-head variation can explain. The difference is small in
-    absolute terms - about 1.2 to 1.3 percentage points - but it is real, and the
-    paper's prose used to imply the three were interchangeable. This test fails if
-    that changes, which is the point: it pins the finding rather than the wording.
+    The earlier version of this test asserted that every pairwise interval
+    excluded zero. That was an artefact of the same five-fold over-count: with
+    the correct unit the llama--SmolLM interval straddles zero. A test that
+    keeps the old assertion would force the paper to keep a false claim.
     """
     ids, rates = per_head
     out = UNC.checkpoint_agreement(rates, ids)
     assert not out["all_agree"], out
-    for pair in out["pairs"]:
-        assert not pair["agrees_at_95"], pair
+    agreeing = [p for p in out["pairs"] if p["agrees_at_95"]]
+    assert len(agreeing) == 1, out["pairs"]
+    assert agreeing[0]["pair"] == "JackFram/llama-160m vs HuggingFaceTB/SmolLM-135M"
     # and the spread of the three means must be in the range the paper reports
     means = out["per_checkpoint_mean"]
-    assert min(means) > 0.26 and max(means) < 0.28, means
+    assert min(means) > 0.26 and max(means) < 0.29, means
 
 
 def test_the_interval_comes_from_heads_not_cells(per_head: tuple[list[str], list[list[float]]]) -> None:
-    """The methodological point: resampling cells would be wrong.
+    """The methodological point: resampling instances or cells would be wrong.
 
-    Cells inside a head share a query and a key. The bootstrap over heads is the
-    honest unit. Checked by confirming the head count is what drives ``n``, and
-    that the resulting interval is wider than a resample over the same number of
-    cells would be if the data were exchangeable.
+    Cells inside a head share a query and a key, and the five prompts are
+    repeated looks at the same weights. The bootstrap over layer-heads is the
+    honest unit. Checked by confirming the head count is what drives ``n``.
     """
     _ids, rates = per_head
     pooled = [r for model in rates for r in model]
     out = UNC.bootstrap_ci(pooled)
-    assert out["n"] == 2790
+    assert out["n"] == 558
     grand_mean = float(np.mean(pooled))
     # Each head's own cells are far more similar to each other than to another
     # head's, so between-model variance dominates the pooled SD. If that ever
@@ -223,19 +261,19 @@ def test_the_interval_comes_from_heads_not_cells(per_head: tuple[list[str], list
 
 
 def test_the_two_means_the_paper_distinguishes(usefulness: dict) -> None:
-    """26.8% is the equal-weight mean of per-checkpoint means; 26.70% is the
-    mean over all 2790 heads. Both are pinned, so the passage cannot collapse
+    """27.0% is the equal-weight mean of per-checkpoint means; 26.90% is the
+    mean over all 558 heads. Both are pinned, so the passage cannot collapse
     them into one number."""
     checkpoint, n, head = groups("boot_two_means")[0]
     rates = [
         [
-            h["sign_flip_fraction_pooled"]
-            for entry in m["per_prompt"]
-            for h in entry["heads"]
+            float(h["sign_flip_fraction"])
+            for h in m["head_rates"]
+            if h["sign_flip_fraction"] is not None
         ]
         for m in usefulness["models"]
     ]
-    assert sum(len(row) for row in rates) == int(n)
+    assert sum(len(row) for row in rates) == int(n) == 558
     assert_paper_number_matches(
         100.0 * float(np.mean([np.mean(row) for row in rates])),
         f"{float(checkpoint):.1f}",
@@ -254,24 +292,38 @@ def test_the_two_means_the_paper_distinguishes(usefulness: dict) -> None:
         f"{float(restated_head):.2f}",
         "the head-pooled mean where the paper restates it",
     )
-    # The passage's other quantitative claim: the two differ by more than
-    # the pooled interval's half-width. Re-derived here, and it is *less*
-    # than two half-widths --- which is what made the earlier "more than
-    # twice" wording wrong and why that phrase is now absent.
+    # The passage's other quantitative claim: the two differ by about one
+    # pooled interval half-width (0.142 vs 0.143 points), and the corrected
+    # interval therefore includes the equal-weight headline. Re-derived here
+    # rather than inferred from the wording.
     out = UNC.bootstrap_ci([rate for row in rates for rate in row])
     half_width = 100.0 * 0.5 * (out["ci_high"] - out["ci_low"])
     delta = 100.0 * float(np.mean([np.mean(row) for row in rates])) - head_mean
-    assert delta > half_width, (delta, half_width)
-    assert delta < 2.0 * half_width, (delta, half_width)
-    assert "twice that interval's half-width" not in TEX_FLAT
+    assert 0.9 < delta / half_width < 1.1, (delta, half_width)
+    gap_written = float(literal("boot_weighting_gap"))
+    assert_paper_number_matches(delta, f"{gap_written:.2f}", "the weighting gap")
+    unit_heads, unit_instances = (int(x) for x in groups("boot_interval_unit")[0])
+    assert unit_heads == 558
+    assert unit_instances == 2790
+    assert "about one pooled interval" in TEX_FLAT
+    assert "more than twice" not in TEX_FLAT
 
 
 def test_the_head_counts_are_the_ones_in_the_json(usefulness: dict) -> None:
     smol, each = (int(value) for value in groups("boot_head_counts")[0])
     counts = {m["model_id"]: m["n_heads"] for m in usefulness["models"]}
-    assert counts["HuggingFaceTB/SmolLM-135M"] == smol
+    assert counts["HuggingFaceTB/SmolLM-135M"] == smol == 270
     assert [n for name, n in counts.items() if "SmolLM" not in name] == [each, each]
+    assert each == 144
     assert sum(counts.values()) == int(literal("worth_head_count")) == smol + 2 * each
+    instances = {
+        m["model_id"]: m["n_head_prompt_instances"] for m in usefulness["models"]
+    }
+    assert sum(instances.values()) == 2790
+    for model in usefulness["models"]:
+        assert (
+            model["n_head_prompt_instances"] == model["n_heads"] * model["n_prompts"]
+        ), model["model_id"]
 
 
 def test_the_pooled_interval_is_as_printed(
@@ -286,7 +338,7 @@ def test_the_pooled_interval_is_as_printed(
     assert_paper_number_matches(out["ci_high"], f"{float(hi):.4f}", "the interval's upper end")
     assert_paper_number_matches(out["mean"], f"{float(mean):.4f}", "the pooled mean")
     # The number is the spread of the per-head rates, not the standard error of
-    # the mean, which is an order of magnitude smaller at n = 2790.
+    # the mean, which is an order of magnitude smaller at n = 558.
     sd = literal("boot_between_head_sd")
     assert_paper_number_matches(
         out["sd"], f"{float(sd):.4f}", "the between-head standard deviation"

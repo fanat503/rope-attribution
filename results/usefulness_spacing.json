@@ -1,0 +1,87 @@
+{
+  "schema": "rope_attribution/usefulness_spacing/v1",
+  "seed": 20260906,
+  "log_grid": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    128,
+    256,
+    512,
+    1024,
+    2048,
+    4096
+  ],
+  "uniform_densities": [
+    13,
+    65
+  ],
+  "models": [
+    {
+      "model_id": "EleutherAI/pythia-160m",
+      "log13": {
+        "n_deltas": 13,
+        "sign_flip_fraction_pooled": 0.2842077958035947,
+        "rel_err_median": 1.1138721580598727
+      },
+      "uniform13": {
+        "n_deltas": 13,
+        "sign_flip_fraction_pooled": 0.4036111369543895,
+        "rel_err_median": 1.0195957466628034
+      },
+      "uniform65": {
+        "n_deltas": 65,
+        "sign_flip_fraction_pooled": 0.4038754846119156,
+        "rel_err_median": 1.0113933019445969
+      }
+    },
+    {
+      "model_id": "JackFram/llama-160m",
+      "log13": {
+        "n_deltas": 13,
+        "sign_flip_fraction_pooled": 0.2629400766160485,
+        "rel_err_median": 1.126941457802174
+      },
+      "uniform13": {
+        "n_deltas": 13,
+        "sign_flip_fraction_pooled": 0.37541030547730414,
+        "rel_err_median": 1.0163086978713758
+      },
+      "uniform65": {
+        "n_deltas": 65,
+        "sign_flip_fraction_pooled": 0.3951780286557848,
+        "rel_err_median": 1.0071095159118788
+      }
+    },
+    {
+      "model_id": "HuggingFaceTB/SmolLM-135M",
+      "log13": {
+        "n_deltas": 13,
+        "sign_flip_fraction_pooled": 0.264112575209306,
+        "rel_err_median": 1.1272077623044194
+      },
+      "uniform13": {
+        "n_deltas": 13,
+        "sign_flip_fraction_pooled": 0.3758998103858385,
+        "rel_err_median": 1.0159729770708767
+      },
+      "uniform65": {
+        "n_deltas": 65,
+        "sign_flip_fraction_pooled": 0.3956455241924834,
+        "rel_err_median": 1.0071495964957708
+      }
+    }
+  ],
+  "pooled": {
+    "log13": 0.27042014920964974,
+    "uniform13": 0.38497375093917735,
+    "uniform65": 0.39823301248672793,
+    "uniform13_minus_log13": 0.11455360172952761,
+    "uniform65_minus_log13": 0.1278128632770782
+  },
+  "note": "Sign-error rate under two distance weightings. The log grid is the pre-registered primary and gives the conservative (lower) rate; uniform weighting gives every distance in the window equal weight. The law, not the percentage, is the invariant."
+}

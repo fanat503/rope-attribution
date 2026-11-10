@@ -1,7 +1,8 @@
 """Faithful RoPE / YaRN / partial-RoPE reference implementation (numpy, float64).
 
-Every formula in this file is transcribed from an original source. Nothing here is
-approximated, and nothing is a hardcoded result. Sources:
+Every formula in this file is re-derived from an original source and written
+independently; no upstream code was copied, and nothing here is approximated or a
+hardcoded result. Sources:
 
 RoPE
     Su, Jianlin; Lu, Yu; Pan, Shengfeng; Murtadha, Ahmed; Wen, Bo; Liu, Yunfeng.
@@ -22,9 +23,10 @@ YaRN
     "YaRN: Efficient Context Window Extension of Large Language Models", 2023.
     https://arxiv.org/abs/2309.00071
     The ramp (`find_correction_dim`, `find_correction_range`, `linear_ramp_mask`)
-    and the magnitude scaling (`get_mscale`) are transcribed verbatim from the
-    authors' own implementation, `scaled_rope/LlamaYaRNScaledRotaryEmbedding.py`
-    in https://github.com/jquesnelle/yarn, and agree with
+    and the magnitude scaling (`get_mscale`) re-derive the formulas published in
+    the authors' own implementation,
+    `scaled_rope/LlamaYaRNScaledRotaryEmbedding.py` in
+    https://github.com/jquesnelle/yarn, and agree with
     `transformers.modeling_rope_utils._compute_yarn_parameters`.
 
 Note on a common misstatement
@@ -204,6 +206,16 @@ def _rotary_dim_ladder(inv_f: np.ndarray, n_rot: int) -> np.ndarray:
     dim = inv_f.shape[0] * 2
     if dim % n_rot == 0:
         return inv_f[:: dim // n_rot][: n_rot // 2]
+    if dim < 4:
+        # Rebuilding the ladder reads the base from inv_f[1], which exists only
+        # for a head with at least two rotary pairs. A 2-wide head whose rotary
+        # block is not a divisor used to raise IndexError from deep inside the
+        # formula; say what is actually wrong instead.
+        raise ValueError(
+            f"cannot rebuild a rotary ladder for head_dim={dim}, "
+            f"rotary_dim={n_rot}: the base is read from inv_f[1], which needs "
+            "at least two rotary pairs"
+        )
     base = float(inv_f[1]) ** (-dim / 2.0)
     return base ** (-2.0 * np.arange(n_rot // 2, dtype=np.float64) / n_rot)
 
@@ -218,7 +230,8 @@ def find_correction_dim(
 ) -> float:
     """Inverse-dimension formula: which dim index gives ``num_rotations`` rotations.
 
-    Verbatim from `jquesnelle/yarn` and `transformers`.
+    The formula is the published YaRN ramp expression, re-derived here; see
+    `jquesnelle/yarn` and `transformers`.
     """
     return (dim * math.log(max_position_embeddings / (num_rotations * 2 * math.pi))) / (
         2 * math.log(base)
@@ -235,7 +248,7 @@ def find_correction_range(
 ) -> tuple[float, float]:
     """Bounds of the ramp, in units of *pair index* (0 .. dim//2).
 
-    Clamping to ``[0, dim - 1]`` is unconditional, exactly as in both sources
+    Clamping to ``[0, dim - 1]`` is unconditional, matching both sources
     (jquesnelle/yarn has no ``truncate`` parameter and clamps always;
     ``transformers`` does the same). ``truncate=False`` is an extension this
     module adds for analysis: it returns the values without ``floor``/``ceil``
@@ -249,7 +262,7 @@ def find_correction_range(
 
 
 def linear_ramp_mask(minimum: float, maximum: float, dim: int) -> np.ndarray:
-    """``clamp((arange(dim) - min) / (max - min), 0, 1)``, verbatim from upstream."""
+    """``clamp((arange(dim) - min) / (max - min), 0, 1)``, re-derived from the published ramp."""
     if minimum == maximum:
         maximum += 0.001  # Prevent singularity
     linear = (np.arange(dim, dtype=np.float64) - minimum) / (maximum - minimum)

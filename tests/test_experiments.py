@@ -559,6 +559,18 @@ def test_structural_facts_reports_the_documented_shape(structural):
     }
 
 
+def test_structural_facts_refuses_a_vacuous_bilinearity_check(monkeypatch):
+    """If every unit score is zero, a zero error must not be reported as a pass.
+
+    The old code skipped such a distance and still reported the planned
+    ``len(deltas) * len(scales)`` count, so a vacuous run and a complete one
+    were indistinguishable in the artifact.
+    """
+    monkeypatch.setattr(E, "score_relative", lambda *args, **kwargs: 0.0)
+    with pytest.raises(RuntimeError, match="evaluated no"):
+        E.structural_facts()
+
+
 def test_structural_facts_measures_machine_precision(structural):
     """Every claim in E1 is an *exact* property; only roundoff may show up."""
     for key in (

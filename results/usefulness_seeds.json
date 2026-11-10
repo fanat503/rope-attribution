@@ -16,124 +16,124 @@
     {
       "seed": 20260906,
       "pooled": {
-        "sign_flip_fraction": 0.26778187181112223,
-        "sign_flip_fraction_min_head": 0.223783202825119,
-        "sign_flip_fraction_max_head": 0.34858946537778657,
-        "rel_err_median": 1.1271909646727432,
-        "rel_err_p90": 1.1522562162964556
+        "sign_flip_fraction": 0.27042014920964974,
+        "sign_flip_fraction_min_head": 0.21267741661101486,
+        "sign_flip_fraction_max_head": 0.33913075389159475,
+        "rel_err_median": 1.1255347340474668,
+        "rel_err_p90": 1.149530086391523
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.2762929636080122,
-          "sign_flip_fraction_min_head": 0.223783202825119,
-          "sign_flip_fraction_max_head": 0.34858946537778657,
-          "rel_err_median": 1.1380029882476275,
-          "rel_err_p90": 1.2101356761839903
+          "sign_flip_fraction_pooled": 0.2842077958035947,
+          "sign_flip_fraction_min_head": 0.21267741661101486,
+          "sign_flip_fraction_max_head": 0.33913075389159475,
+          "rel_err_median": 1.1138721580598727,
+          "rel_err_p90": 1.1669587054174808
         },
         {
           "model_id": "JackFram/llama-160m",
           "sign_flip_fraction_pooled": 0.2629400766160485,
-          "sign_flip_fraction_min_head": 0.24290107522054366,
-          "sign_flip_fraction_max_head": 0.28649583985245203,
-          "rel_err_median": 1.1223959966591848,
-          "rel_err_p90": 1.1522562162964556
+          "sign_flip_fraction_min_head": 0.24752832616290252,
+          "sign_flip_fraction_max_head": 0.28150238426070945,
+          "rel_err_median": 1.126941457802174,
+          "rel_err_p90": 1.1527627257581805
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
           "sign_flip_fraction_pooled": 0.264112575209306,
-          "sign_flip_fraction_min_head": 0.24236287896320297,
-          "sign_flip_fraction_max_head": 0.29271979093533035,
-          "rel_err_median": 1.1271909646727432,
-          "rel_err_p90": 1.1518396492756615
+          "sign_flip_fraction_min_head": 0.24634177374549965,
+          "sign_flip_fraction_max_head": 0.2812598449184604,
+          "rel_err_median": 1.1272077623044194,
+          "rel_err_p90": 1.144358220658449
         }
       ]
     },
     {
       "seed": 20260907,
       "pooled": {
-        "sign_flip_fraction": 0.2677959294841779,
-        "sign_flip_fraction_min_head": 0.2241036617995566,
-        "sign_flip_fraction_max_head": 0.3491942596007376,
-        "rel_err_median": 1.1272984611948416,
-        "rel_err_p90": 1.1516423942681573
+        "sign_flip_fraction": 0.2704666247061382,
+        "sign_flip_fraction_min_head": 0.21211616119195797,
+        "sign_flip_fraction_max_head": 0.3386817409069035,
+        "rel_err_median": 1.1256349344893677,
+        "rel_err_p90": 1.148299646802725
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.27632395493732403,
-          "sign_flip_fraction_min_head": 0.2241036617995566,
-          "sign_flip_fraction_max_head": 0.3491942596007376,
-          "rel_err_median": 1.1379516025251342,
-          "rel_err_p90": 1.2095551125414117
+          "sign_flip_fraction_pooled": 0.2843360406032047,
+          "sign_flip_fraction_min_head": 0.21211616119195797,
+          "sign_flip_fraction_max_head": 0.3386817409069035,
+          "rel_err_median": 1.1124621402999286,
+          "rel_err_p90": 1.164827873772129
         },
         {
           "model_id": "JackFram/llama-160m",
-          "sign_flip_fraction_pooled": 0.2629971402996172,
-          "sign_flip_fraction_min_head": 0.2437975796011924,
-          "sign_flip_fraction_max_head": 0.28722923441547704,
-          "rel_err_median": 1.1233768513375733,
-          "rel_err_p90": 1.1516423942681573
+          "sign_flip_fraction_pooled": 0.2629971402996171,
+          "sign_flip_fraction_min_head": 0.2477441845532904,
+          "sign_flip_fraction_max_head": 0.2824449994849584,
+          "rel_err_median": 1.1265302223388756,
+          "rel_err_p90": 1.1502252350898623
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
           "sign_flip_fraction_pooled": 0.26406669321559256,
-          "sign_flip_fraction_min_head": 0.24164360845714064,
-          "sign_flip_fraction_max_head": 0.29286619237891043,
-          "rel_err_median": 1.1272984611948416,
-          "rel_err_p90": 1.1515373632816213
+          "sign_flip_fraction_min_head": 0.24615994055029353,
+          "sign_flip_fraction_max_head": 0.2810728875621914,
+          "rel_err_median": 1.1278162444790465,
+          "rel_err_p90": 1.1444335487931934
         }
       ]
     },
     {
       "seed": 20260908,
       "pooled": {
-        "sign_flip_fraction": 0.2677787938835605,
-        "sign_flip_fraction_min_head": 0.22559386973180076,
-        "sign_flip_fraction_max_head": 0.35009259624098665,
-        "rel_err_median": 1.1270316601911503,
-        "rel_err_p90": 1.1510159214227762
+        "sign_flip_fraction": 0.27037495619373525,
+        "sign_flip_fraction_min_head": 0.21047248247596523,
+        "sign_flip_fraction_max_head": 0.33935616430329285,
+        "rel_err_median": 1.1255079891545856,
+        "rel_err_p90": 1.1490185384867941
       },
       "models": [
         {
           "model_id": "EleutherAI/pythia-160m",
-          "sign_flip_fraction_pooled": 0.2763265203670678,
-          "sign_flip_fraction_min_head": 0.22559386973180076,
-          "sign_flip_fraction_max_head": 0.35009259624098665,
-          "rel_err_median": 1.1381522475456844,
-          "rel_err_p90": 1.2087218314252455
+          "sign_flip_fraction_pooled": 0.28411500729759204,
+          "sign_flip_fraction_min_head": 0.21047248247596523,
+          "sign_flip_fraction_max_head": 0.33935616430329285,
+          "rel_err_median": 1.1134371101023,
+          "rel_err_p90": 1.165424419328155
         },
         {
           "model_id": "JackFram/llama-160m",
           "sign_flip_fraction_pooled": 0.26293419616820457,
-          "sign_flip_fraction_min_head": 0.24343030838271085,
-          "sign_flip_fraction_max_head": 0.2864370700204642,
-          "rel_err_median": 1.1231496784437698,
-          "rel_err_p90": 1.1505859248396264
+          "sign_flip_fraction_min_head": 0.24769583235049403,
+          "sign_flip_fraction_max_head": 0.2829774723528062,
+          "rel_err_median": 1.1271314288785053,
+          "rel_err_p90": 1.151071745994628
         },
         {
           "model_id": "HuggingFaceTB/SmolLM-135M",
           "sign_flip_fraction_pooled": 0.26407566511540925,
-          "sign_flip_fraction_min_head": 0.24194078311623052,
-          "sign_flip_fraction_max_head": 0.29120049854428964,
-          "rel_err_median": 1.1270316601911503,
-          "rel_err_p90": 1.1510159214227762
+          "sign_flip_fraction_min_head": 0.24597515546559875,
+          "sign_flip_fraction_max_head": 0.28195550144085957,
+          "rel_err_median": 1.1279901396276735,
+          "rel_err_p90": 1.1437047289058617
         }
       ]
     }
   ],
   "mean": {
-    "sign_flip_fraction": 0.2677855317262869,
-    "sign_flip_fraction_min_head": 0.22449357811882545,
-    "sign_flip_fraction_max_head": 0.34929210707317027,
-    "rel_err_median": 1.1271736953529117,
-    "rel_err_p90": 1.1516381773291295
+    "sign_flip_fraction": 0.2704205767031744,
+    "sign_flip_fraction_min_head": 0.2117553534263127,
+    "sign_flip_fraction_max_head": 0.3390562197005971,
+    "rel_err_median": 1.1255592192304735,
+    "rel_err_p90": 1.1489494238936806
   },
   "sd": {
-    "sign_flip_fraction": 9.135285238515307e-06,
-    "sign_flip_fraction_min_head": 0.0009662580989374746,
-    "sign_flip_fraction_max_head": 0.000756327438264842,
-    "rel_err_median": 0.00013423623187592255,
-    "rel_err_p90": 0.0006201581897789549
+    "sign_flip_fraction": 4.583575138008895e-05,
+    "sign_flip_fraction_min_head": 0.001145892803795025,
+    "sign_flip_fraction_max_head": 0.00034333400446226963,
+    "rel_err_median": 6.692101796805904e-05,
+    "rel_err_p90": 0.0006181245955762764
   }
 }

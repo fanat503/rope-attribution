@@ -47,6 +47,15 @@ _MODULE_TESTS = {
     "real_model": "tests/test_real_model.py",
     "usefulness": "tests/test_usefulness.py",
     "uncertainty": "tests/test_uncertainty.py",
+    "agreement": "tests/test_agreement.py",
+    "downstream": "tests/test_downstream.py",
+    "seed_variance": "tests/test_seed_variance.py",
+    "sensitivity": "tests/test_sensitivity.py",
+    "train": "tests/test_train.py",
+    "report_run": "tests/test_report_run.py",
+    "tpu_configs": "tests/test_tpu_configs.py",
+    "tpu_launch": "tests/test_tpu_configs.py",
+    "postedit": "tests/test_postedit.py",
 }
 
 
@@ -69,21 +78,40 @@ def _syntax_check(path: Path) -> list[str]:
     return []
 
 
+def _parse_porcelain(raw: str) -> list[str]:
+    """Return the paths in ``git status --porcelain -z`` output.
+
+    ``-z`` emits NUL-separated, verbatim (unquoted) paths. A rename or copy is
+    two fields for one entry: the new path, then the original. The previous
+    parser split on newlines and sliced ``line[3:]``, so a rename became the
+    literal ``old -> new`` string and a non-ASCII path kept Git's C-style
+    escapes.
+    """
+    fields = raw.split("\0")
+    paths: list[str] = []
+    index = 0
+    while index < len(fields):
+        entry = fields[index]
+        index += 1
+        if not entry:
+            continue
+        status = entry[:2]
+        paths.append(entry[3:])
+        if status[0] in "RC" or status[1] in "RC":
+            # The next field is the original path. It may no longer exist;
+            # only the new path is of interest to the checks.
+            index += 1
+    return paths
+
+
 def _changed_paths(explicit: list[str]) -> list[Path]:
     if explicit:
         return [Path(a) for a in explicit]
     proc = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=_REPO, capture_output=True,
+        ["git", "status", "--porcelain", "-z"], cwd=_REPO, capture_output=True,
         text=True, encoding="utf-8",
     )
-    paths = []
-    for line in proc.stdout.splitlines():
-        if not line.strip():
-            continue
-        candidate = line[3:].strip()
-        if candidate.startswith('"') and candidate.endswith('"'):
-            candidate = candidate[1:-1]
-        paths.append(_REPO / candidate)
+    paths = [_REPO / candidate for candidate in _parse_porcelain(proc.stdout)]
     return [p for p in paths if p.exists() and p.suffix == ".py"]
 
 
@@ -138,7 +166,7 @@ def main(argv: list[str]) -> int:
             [sys.executable, "-m", "pytest", "-q", *tests], cwd=_REPO,
             capture_output=True, text=True, encoding="utf-8",
         )
-        tail = [l for l in run.stdout.splitlines() if l.strip()][-1:] or [""]
+        tail = [line for line in run.stdout.splitlines() if line.strip()][-1:] or [""]
         if run.returncode != 0:
             failures += 1
             print("  pytest  FAILED")

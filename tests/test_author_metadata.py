@@ -1,17 +1,9 @@
 """The author's name must agree everywhere it appears, and actually be present.
 
-Why this file exists
---------------------
-The author name was, until recently, deliberately absent from all three places it
-belongs: ``paper/main.tex``, ``CITATION.cff`` and the ``LICENSE`` appendix. That
-was the right call while it was unknown -- a wrong attribution in a legal
-document is worse than a missing one that fails validation loudly -- but it left
-nothing to stop the three from drifting apart once it was filled in.
-
-These tests are therefore not about the name itself. They are about the
-*consistency* of the three, and they fail if any one of them goes back to being a
-placeholder. The name is read from the CFF and compared against the other two, so
-correcting one file is never enough.
+The name belongs in three places: ``paper/main.tex``, ``CITATION.cff`` and the
+``LICENSE`` appendix. These tests check that all three are filled and that they
+agree; correcting one file is never enough. The name is read from the CFF and
+compared against the other two.
 
 ``paper/main.tex`` is checked for an author command with a non-empty argument
 rather than for a literal string, so that LaTeX markup inside the argument does

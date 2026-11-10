@@ -13,20 +13,28 @@ wrong and hard to notice:
   matching it against the extracted page text.
 
 The tests below therefore *measure* rather than assert. The page-count test
-carried ``xfail(strict=False)`` while the main text ran over the limit — it
-recorded the real number instead of failing the suite — and it cleared on
+carried ``xfail(strict=False)`` while the main text ran over the limit - it
+recorded the real number instead of failing the suite - and it cleared on
 2026-10-17, the day the compression pass moved the related-work survey, the
 extension-comparison table and the "note on two corrections" into the appendix.
-It is a plain assertion now. Raising the limit without changing the paper still
-cannot make it pass silently: the boundary is located in the built PDF.
+That version had a blind spot: it measured the page where the Conclusion
+*started*, not where the main text ended, and passed while the Conclusion
+continued onto page 10. The current version forces the appendix onto a fresh
+page with ``\\clearpage`` and measures the appendix boundary instead. Raising
+the limit without changing the paper still cannot make it pass silently: the
+boundary is located in the built PDF, and a PDF older than ``main.tex`` skips
+rather than certifying a stale build.
 
 Everything here skips cleanly when the paper has not been built, so a fresh
 clone with no LaTeX toolchain still has a green suite that is honest about
-having checked nothing.
+having checked nothing. The paper workflow sets ``ROPE_PAPER_STRICT=1``, which
+turns those same skips into failures: CI must not report a green format gate
+when it checked no format.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -41,13 +49,33 @@ _MAIN_TEX = _PAPER_DIR / "main.tex"
 _BUILD_DIR = _PAPER_DIR / "build"
 _PDF = _BUILD_DIR / "main.pdf"
 
-# NeurIPS 2026: nine pages of main text, unlimited references and appendix.
+#: NeurIPS 2026: nine pages of main text, unlimited references and appendix.
 MAIN_TEXT_LIMIT = 9
+
+#: Treat an absent input as a failure instead of a skip. The paper workflow sets
+#: this: a job whose only format checks all skipped still reports success, and
+#: the green badge then claims a verification that did not happen. Locally the
+#: default stays permissive so a clone with no LaTeX toolchain has a green suite.
+_STRICT = os.environ.get("ROPE_PAPER_STRICT", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+
+def _skip_or_fail(message: str) -> None:
+    if _STRICT:
+        pytest.fail(f"{message} (ROPE_PAPER_STRICT is set, so this cannot skip)")
+    pytest.skip(message)
 
 
 def _pdf_or_skip() -> Path:
     if not _PDF.exists():
-        pytest.skip("paper/build/main.pdf is absent; run the paper workflow first")
+        _skip_or_fail("paper/build/main.pdf is absent; run the paper workflow first")
+    if _PDF.stat().st_mtime < _MAIN_TEX.stat().st_mtime:
+        _skip_or_fail(
+            "paper/build/main.pdf predates main.tex; rebuild before checking pages"
+        )
     return _PDF
 
 
@@ -71,12 +99,16 @@ def _first_page_containing(pages: list[str], needle: str) -> int | None:
 # --------------------------------------------------------------------------
 
 
-# The last section of the main text. Bound for page accounting by the first
-# page on which it appears. After the 2026-10 compression pass the counted text
-# ends with the Conclusion — the "note on two corrections" it used to end with
-# now lives in the appendix — so the boundary is located there. Every page
-# accounting test keys on this, so moving it means updating one named constant.
+# The last section of the main text. Used only to make sure the appendix really
+# follows it; the page limit is measured at the appendix boundary, not here.
 LAST_MAIN_TEXT_SECTION = "Conclusion"
+
+# The first appendix section. ``\clearpage`` immediately before ``\appendix``
+# makes this start on a fresh page, so its page number is the first page that is
+# not part of the main text. The old test keyed on the *start* of the Conclusion
+# and passed while the Conclusion spilled onto a tenth page; this boundary cannot
+# do that.
+APPENDIX_FIRST_SECTION = "Provenance of every number"
 
 
 def test_the_appendix_marker_is_present() -> None:
@@ -94,18 +126,52 @@ def test_the_last_main_text_section_is_found(pages: list[str]) -> None:
 
 
 def test_the_main_text_fits_in_nine_pages(pages: list[str]) -> None:
-    """The limit itself, measured rather than asserted.
+    """The limit itself, measured at the appendix boundary.
 
-    This test carried ``xfail(strict=False)`` while the main text ran long: it
-    recorded the real number — measured at 11 pages when the October 2026
-    compression pass started, 10 after the first cut — and cleared when the
-    second cut brought the boundary to page 9. It stays an assertion rather than
-    a warning because that is what the limit is.
+    The previous version keyed on the first page containing the word
+    ``Conclusion``. That passed while the Conclusion continued onto page 10,
+    because it measured where the section *started*, not where the main text
+    ended. ``\\clearpage`` now forces the appendix onto a fresh page, so the
+    appendix's first page is a real upper bound: it can start on page 10 only if
+    the main text ended on page 9. A ten-page main text moves it to page 11. The
+    page is also required to begin with the appendix, not with a main-text float
+    that was queued behind the Conclusion.
     """
-    boundary = _first_page_containing(pages, LAST_MAIN_TEXT_SECTION)
-    assert boundary is not None
-    assert boundary <= MAIN_TEXT_LIMIT, (
-        f"main text runs to page {boundary}, limit is {MAIN_TEXT_LIMIT}"
+    source = _MAIN_TEX.read_text(encoding="utf-8")
+    before, marker, _after = source.partition("\\appendix")
+    assert marker, "no \\appendix marker"
+    assert "\\clearpage" in before[-200:], (
+        "the appendix must start after \\clearpage, or a shared page makes the "
+        "page-limit check pass while main text spills onto the appendix page"
+    )
+
+    appendix = _first_page_containing(pages, APPENDIX_FIRST_SECTION)
+    conclusion = _first_page_containing(pages, LAST_MAIN_TEXT_SECTION)
+    assert appendix is not None, (
+        f"could not locate {APPENDIX_FIRST_SECTION!r} in the PDF"
+    )
+    assert conclusion is not None, (
+        f"could not locate {LAST_MAIN_TEXT_SECTION!r} in the PDF"
+    )
+    assert appendix > conclusion, (
+        f"the appendix starts on page {appendix}, before the Conclusion on "
+        f"page {conclusion}; the source order is wrong"
+    )
+    assert appendix <= MAIN_TEXT_LIMIT + 1, (
+        f"main text runs past page {MAIN_TEXT_LIMIT}: the appendix starts on "
+        f"page {appendix}"
+    )
+
+    # The appendix page is not automatically clean: a main-text float queued at
+    # the end of the document can land above the appendix heading and still
+    # leave the heading on page 10. Figure 3 did exactly that on the 2026-10-21
+    # build. Any float caption before the first appendix section is uncounted
+    # main text and must be moved, not explained away.
+    prefix = pages[appendix - 1].split(APPENDIX_FIRST_SECTION, 1)[0]
+    spilled = re.search(r"\b(?:Figure|Table)\s+\d+:", prefix)
+    assert spilled is None, (
+        "a float caption precedes the appendix heading on its first page: "
+        f"{prefix[:240]!r}"
     )
 
 
@@ -126,16 +192,17 @@ def test_every_numbered_figure_reaches_the_document(pages: list[str]) -> None:
 def test_the_figures_are_all_embedded(pages: list[str]) -> None:
     """One raster image per figure, counted from the LaTeX rather than typed in.
 
-    The assertion used to be a hard-coded floor of nine, which eleven figures
-    clear even if two images silently vanish. The count is therefore read from
-    the ``\\paperfigure`` calls in ``main.tex``, the same way the paper CI gate
-    does it, so adding a figure tightens the check automatically.
+    The assertion used to be a hard-coded floor of nine, which twelve figures
+    clear even if three images silently vanish. The count is therefore read from
+    the ``\\paperfigure`` calls in ``main.tex`` -- including the
+    ``\\paperfigure[<width>]`` form -- the same way the paper CI gate does it,
+    so adding a figure tightens the check automatically.
     """
     pypdf = pytest.importorskip("pypdf")
     reader = pypdf.PdfReader(str(_pdf_or_skip()))
     n_images = sum(len(page.images) for page in reader.pages)
     main = _MAIN_TEX.read_text(encoding="utf-8")
-    n_figures = len(re.findall(r"(?m)^\\paperfigure\{", main))
+    n_figures = len(re.findall(r"(?m)^\\paperfigure(?:\[|\{)", main))
     assert n_figures >= 1, "no \\paperfigure calls found in paper/main.tex"
     assert n_images >= n_figures, (
         f"{n_images} embedded images for {n_figures} \\paperfigure calls; "
@@ -206,7 +273,7 @@ def test_tectonic_can_compile_the_paper(tmp_path: Path) -> None:
     if binary is None:
         local = _REPO / ".tmp" / "tectonic" / "tectonic.exe"
         if not local.exists():
-            pytest.skip("no tectonic binary available")
+            _skip_or_fail("no tectonic binary available")
         binary = str(local)
 
     proc = subprocess.run(

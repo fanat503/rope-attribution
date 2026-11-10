@@ -1,0 +1,57 @@
+{
+  "schema": "rope_attribution/uncertainty/v1",
+  "source": "results/usefulness.json",
+  "unit": "layer-head, each averaged over its prompts",
+  "n_heads": 558,
+  "n_head_prompt_instances": 2790,
+  "equal_weight_fraction": 0.27042014920964974,
+  "head_pooled_fraction": 0.2689958583063463,
+  "equal_weight_minus_pooled": 0.0014242909033034268,
+  "difference_in_pooled_half_widths": 0.9935355162632961,
+  "pooled": {
+    "n": 558,
+    "mean": 0.2689958583063463,
+    "sd": 0.01697106723398191,
+    "ci_low": 0.26756274077929393,
+    "ci_high": 0.2704298570121594,
+    "half_width": 0.001433558116432726,
+    "n_resamples": 2000
+  },
+  "agreement": {
+    "n_checkpoints": 3,
+    "labels": [
+      "EleutherAI/pythia-160m",
+      "JackFram/llama-160m",
+      "HuggingFaceTB/SmolLM-135M"
+    ],
+    "per_checkpoint_mean": [
+      0.2842077958035947,
+      0.2629400766160485,
+      0.264112575209306
+    ],
+    "pairs": [
+      {
+        "pair": "EleutherAI/pythia-160m vs JackFram/llama-160m",
+        "mean_difference": 0.021202209854859478,
+        "ci_low": 0.016889101948396514,
+        "ci_high": 0.02548866149002654,
+        "agrees_at_95": false
+      },
+      {
+        "pair": "EleutherAI/pythia-160m vs HuggingFaceTB/SmolLM-135M",
+        "mean_difference": 0.02007961548129601,
+        "ci_low": 0.015804505976107653,
+        "ci_high": 0.02433675384253133,
+        "agrees_at_95": false
+      },
+      {
+        "pair": "JackFram/llama-160m vs HuggingFaceTB/SmolLM-135M",
+        "mean_difference": -0.0011879884701590786,
+        "ci_low": -0.0025819759125530724,
+        "ci_high": 0.00011791578746097595,
+        "agrees_at_95": true
+      }
+    ],
+    "all_agree": false
+  }
+}

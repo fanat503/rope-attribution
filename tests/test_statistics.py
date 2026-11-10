@@ -9,9 +9,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +16,40 @@ import pytest
 from rope_attribution import statistics as S
 
 EXACT_TOL = 1e-12
+#: Absolute ceiling for a value that *is* the float64 roundoff of subtracting
+#: two analytically equal expressions. Its digits are whatever order the host's
+#: summation picked, so a relative test on it is meaningless; the claim the
+#: paper makes is "below the noise floor", not "equal to the digits I got".
+#: The ceiling is five orders above the observed residuals (3.5e-14 to
+#: 7.1e-14) and five below a real conservation failure (1e-9).
+NOISE_FLOOR = 1e-12
+#: Relative tolerance for a quotient whose divisor is a cancellation residue.
+#: ``max_min_ratio`` divides the largest contribution by the smallest cell of
+#: that same cancellation-accumulated sum, so BLAS order moves it by ~2e-11
+#: relative -- far above the results window, far below any convention change
+#: (the paper quotes the ratio to four digits).  This is the same three-class
+#: policy as ``tests/test_paper_claims.py::_leaves``, applied to the statistics
+#: artifact rather than to measurements.json.
+AMPLIFIED_TOL = 1e-9
+#: Absolute tolerance for a base-10 logarithm of a ratio whose denominator is a
+#: cancellation residue.  ``position_free_error_min`` can be ~3e-3 while the
+#: numerator is O(1), so a 1e-15 change in the denominator moves the logarithm
+#: by O(1e-13); the observed Windows/Linux gap on the same seeded run was 0.079
+#: (15.068 vs 15.147), and py3.11 on e4f9c37 moved it to 15.033, a 0.114 gap.
+#: The logarithm is a diagnostic, not a quoted quantity.  A 0.2 window admits
+#: both and still rejects a 0.3 change (a 2x change in the ratio).
+LOG_RATIO_ABS = 0.2
+#: Absolute tolerance for ``...log10_ratio_max.relative_drift``, the
+#: ``(max - min) / min`` of two near-equal cancellation-dominated logarithms.
+#: The quantity is a difference of noise, so its own noise is the order of its
+#: value: py3.10 on 4bd653f returned 0.009742 against the committed 0.014393, a
+#: 32% relative gap and 4.7e-3 in absolute units. A relative window is
+#: meaningless there, so the leaf is compared absolutely, and the window is
+#: capped by the claim it protects rather than by the observed noise:
+#: 0.014393 + 0.03 = 0.044 < 0.05, so every value this window admits still
+#: satisfies the paper's ``relative_drift < 0.05``. The fallback
+#: (``LOG_RATIO_ABS`` = 0.2) would admit 0.064, which does not.
+DRIFT_ABS = 0.03
 
 
 # --------------------------------------------------------------------------
@@ -170,6 +201,38 @@ def test_the_disputed_ratio_has_no_usable_seed_precision() -> None:
     )
 
 
+def test_the_withdrawn_ladder_matches_the_figure_it_came_from() -> None:
+    """The 920x and its density ladder are the same vector set.
+
+    An earlier draft quoted the *pooled* spread while naming the per-feature
+    ratio, and the test compared the paper against the pooled number. This pins
+    the per-feature value to the committed fig09 sidecar and keeps the two
+    statistics apart.
+    """
+    import csv
+    from collections import defaultdict
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parent.parent
+        / "figures"
+        / "fig09_position_conditional_attribution.csv"
+    )
+    curves: dict[int, list[float]] = defaultdict(list)
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            curves[int(row["feature_index"])].append(abs(float(row["contribution"])))
+    ratios = [max(values) / min(values) for values in curves.values() if min(values) > 0]
+    assert max(ratios) == pytest.approx(920.044450, rel=1e-6)
+
+    ladder = S.withdrawn_ratio_ladder()
+    assert ladder["seed"] == S.FIG09_SEED
+    assert ladder["rows"][-1]["worst_feature_ratio"] > 10 * ladder["rows"][0]["worst_feature_ratio"]
+    assert ladder["spread_worst_feature"] != pytest.approx(ladder["spread_pooled"])
+    assert ladder["seed_sweep"]["worst_feature_relative_std"] < 1.0
+    assert ladder["seed_sweep"]["pooled_relative_std"] > 1.0
+
+
 def test_a_stable_statistic_really_is_stable_across_seeds() -> None:
     """The replacement statistic must be tight, or it is no better than the ratio."""
     stats = S.seed_variance(n_seeds=8)["statistics"]
@@ -232,6 +295,7 @@ def test_run_all_is_json_serialisable_and_complete() -> None:
     assert set(result) == {
         "configuration",
         "ratio_vs_density",
+        "withdrawn_ratio_ladder",
         "grid_independence",
         "position_free_error",
         "seed_variance",
@@ -309,24 +373,389 @@ def test_the_position_free_residual_is_what_the_mean_summary_actually_incurs() -
     assert np.sqrt(baseline / contrib.size) / residual > 1e13
 
 
-def test_main_writes_the_report_it_prints() -> None:
+def _tolerances(where: str) -> tuple[float, float]:
+    """``(relative, absolute)`` for the leaf at ``where``; seven classes.
 
+    Ordinary results keep the strict window. Error floors and amplified
+    quotients get the tolerances the module docstring of ``_leaves`` in
+    ``tests/test_paper_claims.py`` explains; both are properties of float64
+    summation order, not of the measurement. The fourth class is the base-10
+    logarithm of a ratio with a near-zero denominator: it is compared on the
+    log scale because a relative window there is a different quantity. The
+    fifth is a relative standard deviation across seeds, a second moment of
+    ratios whose individual values inherit the same ordering noise. The sixth
+    is the withdrawn ratio ladder as a block: every leaf in it is a quotient of
+    the same near-zero sums, so the block as a whole moves with the platform.
+    The seventh is the relative drift of the log-ratio summary, a difference of
+    two noise-dominated logarithms; it is compared in absolute units, with the
+    window capped by the claim it protects (``DRIFT_ABS``).
+    """
+    if where.endswith(".additivity_residual_max"):
+        return 0.0, NOISE_FLOOR
+    if where.startswith("root.withdrawn_ratio_ladder") and "relative_std" not in where:
+        # Every number in this block is a quotient of the same sweeps, and the
+        # block is the statistic the paper *withdrew*: it measures the grid, not
+        # the model. The noise is 1.43e-12 relative on Linux (4937.569559608477
+        # against 4937.569559615532), which the ordinary window rejects by a
+        # hair; nothing here is quoted, and no value is used by a claim. The
+        # ``relative_std`` leaves keep their own clause below, so that dropping
+        # that clause is still caught by the CI pair rather than absorbed here.
+        return AMPLIFIED_TOL, 1e-15
+    if where.endswith(".log10_ratio"):
+        # ``log10(max_min_ratio)``: the same amplified quotient, compressed.
+        return AMPLIFIED_TOL, 1e-15
+    if "log_dynamic_range" in where or "endpoint_log_ratio" in where:
+        # Two more base-10 logarithms of min-sensitive ratios (``log10(max/min)``
+        # and ``log10(|c(hi)|/|c(lo)|)``). CI py3.11 moved one per-density
+        # window from 0.9692215094603904 to 0.9692215094615737, 1.18e-12
+        # relative, just outside the ordinary window; the quantity has the same
+        # cancellation-residue denominator as ``log10_ratio`` above.
+        return AMPLIFIED_TOL, 1e-15
+    if where.endswith(".relative_drift"):
+        # ``(max - min) / min`` of two near-equal logs: a difference of noise.
+        # Compared in absolute units; see DRIFT_ABS for why the cap is 0.03.
+        return 0.0, DRIFT_ABS
+    if "log10_ratio_max" in where or "log10_ratio_min" in where:
+        # A ratio against a near-zero cancellation residue; see LOG_RATIO_ABS.
+        # The block has two shapes: a float per density (``...by_density[3]
+        # .log10_ratio_max``) and a summary dict at the top level
+        # (``...log10_ratio_max.min``, ``.max``). The relative-drift leaf of
+        # that summary has its own clause above, because a relative window on a
+        # difference of two logs is a different quantity.
+        return 0.0, LOG_RATIO_ABS
+    if where.endswith("relative_std"):
+        # Std of per-seed ratios (paper: 0.93x and 1.13x their means). The
+        # ratios are quotients of near-zero sums, so their second moment moves
+        # by ~3e-12 between BLAS builds. Quoted to two digits; a real change is
+        # orders above this window. Every relative std in the artifact is this
+        # object, including the four in ``seed_variance.statistics`` (the
+        # endpoint mean crosses zero, so its relative std is 2.8).
+        return AMPLIFIED_TOL, 1e-15
+    if where.endswith(".position_free_error_min") or where.endswith(
+        ".position_free_error_max"
+    ):
+        # Order statistics over the same per-cell errors. The minimum is a
+        # near-zero cell (0.0143), so its relative spread is larger than the
+        # ordinary window: CI py3.10 moved it by 3.55e-14 absolute, 2.5e-12
+        # relative. Neither leaf is a quoted literal; the paper quotes the band
+        # and the max/min stability ratio instead.
+        return AMPLIFIED_TOL, 1e-15
+    if "max_min_ratio" in where:
+        return AMPLIFIED_TOL, 1e-15
+    return EXACT_TOL, 1e-15
+
+
+def _assert_json_close(computed, committed, where: str = "root") -> None:
+    """Recursively compare a computed result with the committed JSON.
+
+    Floats must agree to the leaf's tolerance (see ``_tolerances``); a changed
+    committed value, a renamed field, or an extra row is a failure. That is the
+    point: the test exists to detect drift, not to re-write the artifact and
+    agree with itself.
+    """
+    if isinstance(committed, dict):
+        assert isinstance(computed, dict), where
+        assert computed.keys() == committed.keys(), f"{where}: keys differ"
+        for key in committed:
+            _assert_json_close(computed[key], committed[key], f"{where}.{key}")
+    elif isinstance(committed, list):
+        assert isinstance(computed, list), where
+        assert len(computed) == len(committed), f"{where}: length differs"
+        for index, (got, want) in enumerate(zip(computed, committed, strict=True)):
+            _assert_json_close(got, want, f"{where}[{index}]")
+    elif isinstance(committed, bool) or not isinstance(committed, (int, float)):
+        assert computed == committed, where
+    else:
+        rel, abs_ = _tolerances(where)
+        assert computed == pytest.approx(committed, rel=rel, abs=abs_), where
+
+
+def test_the_committed_statistics_json_is_current(tmp_path: Path) -> None:
+    """Recompute, compare value by value, and leave the artifact untouched.
+
+    The previous version ran the module as a subprocess, which *overwrote*
+    ``results/statistics.json`` and then read the file it had just written: it
+    could never detect a stale artifact. ``main`` now accepts an explicit
+    output path, so this test writes to ``tmp_path`` and compares against the
+    committed bytes.
+    """
     root = Path(__file__).resolve().parents[1]
-    env = {**os.environ, "PYTHONPATH": str(root / "projects"), "PYTHONIOENCODING": "utf-8"}
-    proc = subprocess.run(
-        [sys.executable, "-m", "rope_attribution.statistics"],
-        cwd=root,
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=600,
-    )
-    assert proc.returncode == 0, proc.stderr[-2000:]
-    out = root / "results" / "statistics.json"
-    assert out.exists(), "the module must write results/statistics.json when run"
-    data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["configuration"]["head_dim"] == S.HEAD_DIM
-    assert len(data["ratio_vs_density"]) == len(S.GRID_DENSITIES)
-    # stdout is informational; the JSON file is the contract this test checks.
+    committed_path = root / "results" / "statistics.json"
+    before = committed_path.read_bytes()
+    committed = json.loads(before)
+    out = tmp_path / "statistics.json"
+    S.main(out=out)
+    _assert_json_close(json.loads(out.read_text(encoding="utf-8")), committed)
+    assert committed_path.read_bytes() == before, "the test must not rewrite the artifact"
+
+
+def test_the_tolerances_admit_platform_noise_and_still_reject_staleness() -> None:
+    """The three classes are not a blanket exemption for the whole file.
+
+    The pair on the left is the one CI actually produced: the same seeded
+    Windows and Linux runs returned ``...5544146`` and ``...579107`` for the
+    amplified quotient, and residuals of 3.55e-14 and 6.22e-14 for the same
+    analytically-zero cancellation. Both must pass; a 1% change in the
+    quotient, or a residual that stopped cancelling at 1e-9, must not.
+
+    Mutation verdict: dropping the ``max_min_ratio`` clause fails the first
+    assertion; widening the residual ceiling to 1e-8 fails the third; dropping
+    the two log-ratio clauses fails the fourth; widening ``LOG_RATIO_ABS`` to
+    1.0 fails the fifth; dropping the relative-std clause fails the sixth
+    (the 3.3e-12 CI pair no longer passes); matching the log-ratio block by
+    ``endswith`` again (the shape that let CI's 1.2e-2 gap through) fails the
+    seventh; dropping the drift window fails the eighth (the log-ratio fallback
+    is absolute 0.2 and would admit a drift of 0.064, past the paper's 0.05);
+    dropping the
+    withdrawn-ladder block clause fails the ninth (its 1.43e-12 CI pair no
+    longer passes); dropping the log-dynamic-range clause fails the tenth (its
+    1.18e-12 py3.11 pair no longer passes); restricting the relative-std clause
+    to the two ladder leaf names fails the eleventh (a ``seed_variance``
+    relative std falls through to the exact window); dropping the
+    position-free-order-statistic clause fails the twelfth (its 2.5e-12 py3.10
+    pair no longer passes).
+    """
+    committed = {
+        "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146}],
+        "position_free_error": {
+            "by_density": [{"additivity_residual_max": 3.552713678800501e-14}]
+        },
+    }
+    runner = {
+        "ratio_vs_density": [{"max_min_ratio": 1111.729886579107}],
+        "position_free_error": {
+            "by_density": [{"additivity_residual_max": 6.217248937900877e-14}]
+        },
+    }
+    _assert_json_close(runner, committed)
+
+    stale_ratio = {
+        "ratio_vs_density": [{"max_min_ratio": 1111.7298865544146 * 1.01}],
+        "position_free_error": committed["position_free_error"],
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_ratio, committed)
+
+    stale_residual = {
+        "ratio_vs_density": committed["ratio_vs_density"],
+        "position_free_error": {
+            "by_density": [{"additivity_residual_max": 1e-9}]
+        },
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_residual, committed)
+
+    # The two leaves CI actually moved on the same seeded run: log10 of a
+    # quotient (3.045999280925157 vs 3.045999280934803) and log10 of a ratio
+    # whose denominator is a cancellation residue (15.147 vs 15.033 on py3.11).
+    # Both are diagnostics, not quoted claims; the windows are chosen from the
+    # observed platform gap, and a 1% / 0.3 change must still be rejected.
+    ci_logs = {
+        "ratio_vs_density": [{"log10_ratio": 3.045999280925157}],
+        "position_free_error": {
+            "by_density": [{"log10_ratio_max": 15.147178543837066}]
+        },
+    }
+    runner_logs = {
+        "ratio_vs_density": [{"log10_ratio": 3.045999280934803}],
+        "position_free_error": {
+            "by_density": [{"log10_ratio_max": 15.033235191530233}]
+        },
+    }
+    _assert_json_close(runner_logs, ci_logs)
+
+    stale_log_ratio = {
+        "ratio_vs_density": [{"log10_ratio": 3.045999280925157 + 0.01}],
+        "position_free_error": ci_logs["position_free_error"],
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_log_ratio, ci_logs)
+
+    stale_log_ratio_max = {
+        "ratio_vs_density": ci_logs["ratio_vs_density"],
+        "position_free_error": {
+            "by_density": [{"log10_ratio_max": 15.147178543837066 + 0.3}]
+        },
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_log_ratio_max, ci_logs)
+
+    # The same ratio, in the *other* shape the artifact uses: a top-level
+    # summary dict of ``min``/``max``/``relative_drift``. CI on 7f436ca moved
+    # ``position_free_error.log10_ratio_max.min`` from the committed 15.019034
+    # to 15.006799, a 1.2e-2 gap that the exact window rejected. On 4bd653f
+    # py3.10 moved ``relative_drift`` from 0.014393 to 0.009742: 32% relative,
+    # 4.7e-3 absolute, so the leaf is compared absolutely (DRIFT_ABS). The min
+    # must still reject a 0.3 change, and a drift past the paper's 0.05 bound
+    # must still be rejected even though the log-ratio fallback would take it.
+    ci_summary = {
+        "position_free_error": {
+            "log10_ratio_max": {
+                "min": 15.019034227272984,
+                "max": 15.235210318507315,
+                "relative_drift": 0.014393474837535034,
+            }
+        }
+    }
+    runner_summary = {
+        "position_free_error": {
+            "log10_ratio_max": {
+                "min": 15.006799770855972,
+                "max": 15.235210318507315,
+                "relative_drift": 0.009742267533322128,
+            }
+        }
+    }
+    _assert_json_close(runner_summary, ci_summary)
+
+    for stale in (
+        {"min": 15.019034227272984 + 0.3},
+        {"relative_drift": 0.014393474837535034 + 0.05},
+    ):
+        block = dict(ci_summary["position_free_error"]["log10_ratio_max"])
+        block.update(stale)
+        with pytest.raises(AssertionError):
+            _assert_json_close(
+                {"position_free_error": {"log10_ratio_max": block}}, ci_summary
+            )
+
+    # The third quantity CI moved on: a relative standard deviation across
+    # seeds. Same seeded run, two builds: 0.9265496496875988 vs
+    # 0.9265496496845552, a 3.3e-12 relative gap. Must pass; a 1e-4 change
+    # (far below anything a reader would notice in the quoted 0.93) must not.
+    seed_std = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {"worst_feature_relative_std": 0.9265496496875988}
+        }
+    }
+    runner_seed_std = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {"worst_feature_relative_std": 0.9265496496845552}
+        }
+    }
+    _assert_json_close(runner_seed_std, seed_std)
+
+    stale_seed_std = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {"worst_feature_relative_std": 0.9265496496875988 * 1.0001}
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_seed_std, seed_std)
+
+    # The CI failure that sent this block to its own class: the same seeded
+    # sweep on Linux returned 4937.569559608477 for the pooled mean against the
+    # committed 4937.569559615532, a 1.43e-12 relative gap. The ordinary window
+    # rejected it by a hair; the block's window admits it, a 1e-4 change does
+    # not.
+    ladder = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {
+                "worst_feature_mean": 1145.068905459464,
+                "pooled_mean": 4937.569559615532,
+            }
+        }
+    }
+    runner_ladder = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {
+                "worst_feature_mean": 1145.068905459464,
+                "pooled_mean": 4937.569559608477,
+            }
+        }
+    }
+    _assert_json_close(runner_ladder, ladder)
+
+    stale_ladder = {
+        "withdrawn_ratio_ladder": {
+            "seed_sweep": {"pooled_mean": 4937.569559615532 * 1.0001}
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_ladder, ladder)
+
+    # py3.11 moved a per-density log dynamic range: 0.9692215094615737 against
+    # the committed 0.9692215094603904, 1.18e-12 relative. It is another log10
+    # of a min-sensitive ratio, so it gets the same window; a 1e-4 change must
+    # still fail.
+    grid = {
+        "grid_independence": {
+            "log_dynamic_range": {"values_by_density": [0.9692215094603904]},
+            "endpoint_log_ratio": {"values_by_density": [-0.6182788131496617]},
+        }
+    }
+    runner_grid = {
+        "grid_independence": {
+            "log_dynamic_range": {"values_by_density": [0.9692215094615737]},
+            "endpoint_log_ratio": {"values_by_density": [-0.6182788131496617]},
+        }
+    }
+    _assert_json_close(runner_grid, grid)
+
+    stale_grid = {
+        "grid_independence": {
+            "log_dynamic_range": {"values_by_density": [0.9692215094603904 * 1.0001]},
+            "endpoint_log_ratio": {"values_by_density": [-0.6182788131496617]},
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_grid, grid)
+
+    # The relative-std class is not just the two ladder leaves. This one lives
+    # in ``seed_variance.statistics`` and is 2.8 because the endpoint mean
+    # changes sign across seeds; a 3e-12 relative gap must pass, 1e-4 must not.
+    seed_block = {
+        "seed_variance": {
+            "statistics": {
+                "endpoint_log_ratio_mean": {"relative_std": 2.8372034570410545}
+            }
+        }
+    }
+    runner_seed_block = {
+        "seed_variance": {
+            "statistics": {
+                "endpoint_log_ratio_mean": {
+                    "relative_std": 2.8372034570410545 * (1.0 + 3e-12)
+                }
+            }
+        }
+    }
+    _assert_json_close(runner_seed_block, seed_block)
+
+    stale_seed_block = {
+        "seed_variance": {
+            "statistics": {
+                "endpoint_log_ratio_mean": {
+                    "relative_std": 2.8372034570410545 * 1.0001
+                }
+            }
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_seed_block, seed_block)
+
+    # A minimum over cells is an order statistic: py3.10 moved this one by
+    # 3.55e-14 absolute (2.5e-12 relative), just outside the ordinary window.
+    # It is not a quoted literal; the CI pair must pass, a 1e-4 change must
+    # not.
+    free_min = {
+        "position_free_error": {
+            "by_density": [{"position_free_error_min": 0.014299891029988743}]
+        }
+    }
+    runner_free_min = {
+        "position_free_error": {
+            "by_density": [{"position_free_error_min": 0.014299891029953216}]
+        }
+    }
+    _assert_json_close(runner_free_min, free_min)
+
+    stale_free_min = {
+        "position_free_error": {
+            "by_density": [
+                {"position_free_error_min": 0.014299891029988743 * 1.0001}
+            ]
+        }
+    }
+    with pytest.raises(AssertionError):
+        _assert_json_close(stale_free_min, free_min)

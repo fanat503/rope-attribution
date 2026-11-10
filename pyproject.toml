@@ -16,28 +16,24 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 
-# `authors` is a single person, Ilya Slyatski, and nobody else. The earlier
-# comment here claimed the field had to stay empty because LICENSE and
-# CITATION.cff were unfilled and two conflicting candidate names appeared in a
-# patch that does not exist in this repository. All three files are now filled,
-# and tests/test_author_metadata.py pins them together so the field cannot drift
-# from them again.
+# One author. CITATION.cff, LICENSE, and the paper are pinned to the same name
+# by tests/test_author_metadata.py.
 #
-# `readme` points at README.md, which now describes this package rather than the
-# unrelated curriculum document the old comment referred to.
+# `readme` points at README.md, which describes this package.
 authors = [{ name = "Ilya Slyatski" }]
 readme = "README.md"
 
-# The library itself only needs numpy. The GPU experiment stack (torch,
-# transformer-lens, nnsight, transformers, ...) stays in
-# projects/requirements.txt and is deliberately not duplicated here.
+# The library itself only needs numpy. The GPU/model experiment stacks are
+# opt-in via real_model_requirements.txt and train_requirements.txt and are
+# deliberately not duplicated here.
 dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
-# Used by the figure-producing exploration scripts, never by the library or the
-# test suite.
+# matplotlib is used by the figure generators and by tests/test_figures.py, which
+# imports it with importorskip. It is therefore part of `dev`: leaving it out
+# would make the figure tests skip in CI and a broken plot ship green.
 plots = ["matplotlib>=3.7"]
-dev = ["pytest>=7.0", "ruff"]
+dev = ["pytest>=7.0", "ruff", "matplotlib>=3.7"]
 
 [tool.setuptools]
 # The only real package in this repository lives at projects/rope_attribution,
@@ -62,17 +58,8 @@ target-version = "py310"
 
 # Lint scope: the code this repository is actively maintaining, and nothing else.
 #
-# Deliberately out of scope, by decision and not by accident:
-#   * projects/frontier-01-*.py  - 31 tracked one-off experiment scripts. They
-#     are a frozen archive of GPU work, not part of the package, and their
-#     constants are illustrative, not measured. Under this exact rule set they
-#     produce 10 findings (RET504 x4, RUF100 x3, E402 x1, E731 x1, RET505 x1);
-#     enabling E501 as well takes it to 552, because those files contain lines
-#     up to 368 characters. Linting them would be a reformatting project, not a
-#     packaging change, and they are not owned by the change that introduced
-#     this file.
-#
-# Re-run with a wider `include` once the archive is retired.
+# The generated artifacts under results/ and figures/ are data, not source; the
+# test suite and the package are the complete lint surface.
 include = ["projects/rope_attribution/**/*.py", "tests/**/*.py"]
 
 [tool.ruff.lint]

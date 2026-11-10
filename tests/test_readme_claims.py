@@ -78,7 +78,8 @@ FIG_DELTA_POINTS = 61
 _WORD_NUMBERS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-    "eleven": 11, "twelve": 12,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+    "fifteen": 15, "sixteen": 16,
 }
 
 # README scheme label -> the `method` key measurements.json uses.
@@ -576,7 +577,7 @@ def test_yarn_retains_about_a_fifth_of_the_channels_at_4096() -> None:
 
 
 def test_amplitude_weighted_error_ratio_rope_to_yarn() -> None:
-    pattern = r"\(ratio RoPE:YaRN of `([\d.]+)` at `delta = (\d+)`\)"
+    pattern = r"\(ratio YaRN:RoPE of `([\d.]+)` at `delta = (\d+)`\)"
     literal, delta = re.search(pattern, README_TEXT, re.MULTILINE).groups()
     rope = spectrum_row("rope_base_10k", int(delta))["amplitude_weighted_err"]
     yarn = spectrum_row("yarn", int(delta))["amplitude_weighted_err"]
@@ -643,7 +644,7 @@ def test_unrotated_subscore_spread_is_exactly_zero() -> None:
     assert partial["rotated_fraction"] == 0.25, "the rotated quarter is 0.25, not a quarter by chance"
 
 
-def test_rotated_subscore_spread_is_12_03() -> None:
+def test_rotated_subscore_spread_is_20_65() -> None:
     _, rotated = readme_groups(
         r"is\s+exactly `([\d.]+)`, while the rotated quarter varies by `([\d.]+)`",
         "the partial-RoPE spreads",
@@ -986,7 +987,7 @@ _FILE_SUFFIXES = (
 # (`models/llama/modeling_llama.py`, `scaled_rope/...` in `jquesnelle/yarn`) do
 # not need an entry: the rule below only treats a slash-bearing token as
 # repository-local when its first segment is a real top-level entry here.
-KNOWN_ABSENT = frozenset({"projects/fig_*.png"})
+KNOWN_ABSENT = frozenset({"projects/fig_*.png", "projects/frontier-01-*"})
 
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./*-]*$")
 
@@ -1128,8 +1129,6 @@ def test_the_path_scan_covers_the_paths_that_matter() -> None:
         "projects.rope_attribution.usefulness",
         "figures/fig09_position_conditional_attribution.png",
         "figures/fig03",
-        "projects/frontier-01-*.py",
-        "projects/frontier-01-*.md",
         "requirements-dev.txt",
         "NOTICE.md",
         "LICENSE",
@@ -1137,7 +1136,6 @@ def test_the_path_scan_covers_the_paths_that_matter() -> None:
         "rope.py",
         "experiments.py",
         "figures.py",
-        "frontier-01-bag-of-words-test.py",
     ):
         assert expected in kinds, f"the path scan missed {expected!r}; it found {sorted(kinds)}"
 
@@ -1149,7 +1147,6 @@ def test_the_path_scan_covers_the_paths_that_matter() -> None:
 _DOCS_SCANNED_FOR_COMMANDS = (
     "README.md",
     "figures/README.md",
-    "LEGACY.md",
     "paper/BUILD.md",
     "NOTICE.md",
 )
@@ -1313,30 +1310,92 @@ def test_readme_names_figures_and_paths_it_links_to_with_markdown() -> None:
 
 
 # ==========================================================================
-# "several scripts print hardcoded illustrative values rather than computing them"
+# trained-checkpoint numbers quoted in the README
+# ==========================================================================
+
+_TRAINED_JSON = _REPO / "results" / "real_model.json"
+
+
+def test_readme_trained_statistics_match_the_artifact() -> None:
+    """The ranges in the README are the ones in ``results/real_model.json``.
+
+    Mutation verdict: changing either the README range or the artifact makes
+    this fail. It is the detector that was missing when the README still said
+    ``0.6-0.7%`` and ``0.011``/``67-93x``; no test read the trained artifact,
+    so those stale numbers survived the rest of the audit.
+    """
+    trained = json.loads(_TRAINED_JSON.read_text(encoding="utf-8"))
+    models = ("EleutherAI/pythia-160m", "JackFram/llama-160m", "HuggingFaceTB/SmolLM-135M")
+    blind = [
+        100.0 * trained["aggregates"][m]["frac_position_blind_pooled"]
+        for m in models
+    ]
+    lo, hi = readme_groups(
+        r"only (0\.\d+)-(0\.\d+)%\s+of pairs meet the cutoff",
+        "the position-blind percentage range",
+    )
+    lo_f, hi_f = float(lo), float(hi)
+    # The README quotes an enclosing band at two decimals of a percentage.
+    # Containment is the contract: 0.54-0.65 fails because llama's exact
+    # 0.6533% lies above the upper endpoint, even though it rounds to 0.65.
+    # The endpoints must also stay within 0.01 of the measured extremes, so a
+    # loose band like 0.6-0.7 fails.
+    assert lo_f <= min(blind) and max(blind) <= hi_f, (blind, lo, hi)
+    assert min(blind) - lo_f < 0.01, (blind, lo, hi)
+    assert hi_f - max(blind) < 0.01, (blind, lo, hi)
+    assert hi_f - lo_f < 0.2, "the band is too wide to be informative"
+
+    quantiles = [
+        trained["aggregates"][m]["share_quantiles_across_prompts"] for m in models
+    ]
+    share_lo, share_hi = readme_groups(
+        r"spans `(0\.\d+)` to `(0\.\d+)` depending", "the leading-feature share range"
+    )
+    assert_readme_number_matches(
+        min(q["min"] for q in quantiles), share_lo, "the lower leading-feature share"
+    )
+    assert_readme_number_matches(
+        max(q["max"] for q in quantiles), share_hi, "the upper leading-feature share"
+    )
+    factor_lo, factor_hi = readme_groups(
+        r"on the head\s+[—-]\s+a factor of ([\d.]+)-([\d.]+)x",
+        "the leading-feature share factor range",
+    )
+    factors = [q["max"] / q["min"] for q in quantiles]
+    assert_readme_number_matches(
+        min(factors), factor_lo, "the smaller leading-feature share factor"
+    )
+    assert_readme_number_matches(
+        max(factors), factor_hi, "the larger leading-feature share factor"
+    )
+
+    # The relative-position identity reaches float64 precision because the
+    # rotation is evaluated in float64; the per-pair closed form and
+    # bilinearity stay at the float32 floor. A blanket "all identities hold
+    # at ~1e-7" erases that distinction and contradicts the paper's 4.55e-13.
+    readme_flat = re.sub(r"\s+", " ", README_TEXT)
+    assert "The exact identities hold to the **float32** floor" not in readme_flat
+    rel_literal = readme_groups(
+        r"is exact to `([\d.eE+-]+)`", "the relative-position float64 value"
+    )[0]
+    rel_max = max(
+        trained["aggregates"][m]["identities"]["relative_position_max_abs_err"]["max"]
+        for m in models
+    )
+    assert_readme_number_matches(rel_max, rel_literal, "the relative-position error")
+
+
+# ==========================================================================
+# the quoted test count
 # ==========================================================================
 
 
-def test_legacy_scripts_the_readme_warns_about_do_print_literals() -> None:
-    bag = (_REPO / "projects" / "frontier-01-bag-of-words-test.py").read_text(encoding="utf-8")
-    assert re.search(r"acc(?:uracy)?\s+0\.\d", bag), (
-        "the README says frontier-01-bag-of-words-test.py assigns retrieval "
-        "accuracies as literals; no such literal is there any more"
-    )
-    assert re.search(r"=\s*D\s*\*\*\s*2\s*/\s*2", bag), (
-        "the README says that script computes 'interaction' as D**2 / 2 by definition"
-    )
-    graphs = (_REPO / "projects" / "frontier-01-graphs-ULTIMATE-V11.py").read_text(
-        encoding="utf-8"
-    )
-    assert re.search(r"=\s*[\[\(]\s*[-\d]", graphs), (
-        "the README says frontier-01-graphs-ULTIMATE-V11.py plots literal lists"
-    )
-
-
-# ==========================================================================
-# "1431 tests"
-# ==========================================================================
+#: The one module whose tests are skipped as a whole on the documented install:
+#: it calls ``pytest.importorskip("torch")`` at import time, and
+#: ``requirements-dev.txt`` is deliberately torch-free. The README quotes the
+#: count a fresh CPU-only install collects, so those nodes are subtracted when
+#: they are present (they are absent on CI).
+_TORCH_ONLY_MODULE = "tests/test_downstream.py"
 
 
 @functools.lru_cache(maxsize=1)
@@ -1379,12 +1438,17 @@ def collected_node_ids() -> tuple[str, ...]:
 
 
 def test_quoted_test_count_matches_what_pytest_collects() -> None:
-    """``1431 tests``, in both places the README states it.
+    """The quoted count, in both places the README states it.
 
     The README counts the suite that existed when it was written. This file is
     the documentation verifier and is deliberately excluded from the comparison,
     so that *adding verification tests* cannot invalidate the README. Any other
     module gaining or losing a test still fails this.
+
+    ``tests/test_downstream.py`` is excluded as well: it skips at module level on
+    the documented install, so counting its nodes would make the README's number
+    depend on whether the reader has torch (1601 locally, 1581 on CI for the same
+    commit). The README states the CPU-only count; see ``_TORCH_ONLY_MODULE``.
     """
     literals = readme_literals(r"\b(\d+) tests\b")
     assert len(literals) == 2, (
@@ -1395,9 +1459,144 @@ def test_quoted_test_count_matches_what_pytest_collects() -> None:
     node_ids = collected_node_ids()
     mine = [nid for nid in node_ids if nid.startswith("tests/test_readme_claims.py::")]
     assert mine, "this file contributed no tests to the collection; the count is not comparable"
-    others = len(node_ids) - len(mine)
+    torch_only = [nid for nid in node_ids if nid.startswith(_TORCH_ONLY_MODULE + "::")]
+    others = len(node_ids) - len(mine) - len(torch_only)
     assert others == int(literals[0]), (
         f"README says {literals[0]} tests; pytest collects {others} outside this "
-        f"file ({len(node_ids)} in total, {len(mine)} of them this file). If a "
-        f"test was added or removed, update the README."
+        f"file and {_TORCH_ONLY_MODULE} ({len(node_ids)} in total, {len(mine)} of "
+        f"them this file, {len(torch_only)} torch-only). If a test was added or "
+        f"removed, update the README."
+    )
+
+
+# ==========================================================================
+# the spacing sensitivity
+# ==========================================================================
+
+
+def test_the_spacing_sensitivity_is_restated_in_the_readme() -> None:
+    """Both README passages quote ``results/usefulness_spacing.json``.
+
+    The headline is the log-grid value; the uniform-grid value is the
+    conservative check that stops a reader from treating ``27.0%`` as the only
+    weighting. Mutation verdict: swapping the two grids, editing one per-model
+    rate, or changing ``1.13``/``1.01`` without regenerating the artifact fails
+    the corresponding comparison; deleting either passage fails
+    ``readme_groups``, which demands exactly one match.
+    """
+    artifact = json.loads(
+        (_REPO / "results" / "usefulness_spacing.json").read_text(encoding="utf-8")
+    )
+    assert artifact["schema"] == "rope_attribution/usefulness_spacing/v1"
+    pooled = artifact["pooled"]
+    models = artifact["models"]
+    assert len(models) == 3
+    uniform65 = [m["uniform65"]["sign_flip_fraction_pooled"] * 100 for m in models]
+    rel_log = float(np.median([m["log13"]["rel_err_median"] for m in models]))
+    rel_uniform = float(np.median([m["uniform65"]["rel_err_median"] for m in models]))
+
+    tldr = readme_groups(
+        r"sign wrong on \*\*(27\.0)%\*\* of\s+"
+        r"per-pair, per-distance cells[\s\S]*?"
+        r"error of `(1\.13)` against a peak of `1`\. That is the pre-registered "
+        r"log-grid value\s+and the conservative one: on a uniform (65)-point grid "
+        r"over the same range the\s+equal-weight rate is \*\*(39\.8)%\*\*, while "
+        r"the median relative error falls to `(1\.01)`",
+        "the TL;DR spacing passage",
+    )
+    assert_readme_number_matches(pooled["log13"] * 100, tldr[0], "TL;DR log-grid rate")
+    assert_readme_number_matches(rel_log, tldr[1], "TL;DR log-grid rel error")
+    assert int(tldr[2]) == 65
+    assert_readme_number_matches(
+        pooled["uniform65"] * 100, tldr[3], "TL;DR uniform-grid rate"
+    )
+    assert_readme_number_matches(rel_uniform, tldr[4], "TL;DR uniform rel error")
+
+    results = readme_groups(
+        r"On the pre-registered (13)-point log\s+grid it is `(27\.0)%`; on a "
+        r"uniform (65)-point grid over the same interval it is\s+"
+        r"`(39\.8)%` \(`(40\.4)%`, `(39\.5)%`, `(39\.6)%` per checkpoint\), and "
+        r"on a uniform (13)-point\s+grid `(38\.5)%`, so the gap is spacing rather "
+        r"than resolution\. The median relative\s+"
+        r"error moves the other way, from `(1\.13)` to `(1\.01)`",
+        "the Results spacing passage",
+    )
+    assert int(results[0]) == 13
+    assert_readme_number_matches(pooled["log13"] * 100, results[1], "results log-grid rate")
+    assert int(results[2]) == 65
+    assert_readme_number_matches(
+        pooled["uniform65"] * 100, results[3], "results uniform-grid rate"
+    )
+    for actual, written, what in zip(
+        uniform65, results[4:7], ("pythia", "llama", "SmolLM"), strict=True
+    ):
+        assert_readme_number_matches(actual, written, f"results uniform {what}")
+    assert int(results[7]) == 13
+    assert_readme_number_matches(
+        pooled["uniform13"] * 100, results[8], "results uniform-13 rate"
+    )
+    assert_readme_number_matches(rel_log, results[9], "results log-grid rel error")
+    assert_readme_number_matches(rel_uniform, results[10], "results uniform rel error")
+
+
+# ==========================================================================
+# the measured extension cost
+# ==========================================================================
+
+
+def test_the_measured_extension_cost_is_restated_in_the_readme() -> None:
+    """The README paragraph quotes ``results/usefulness_extension.json``.
+
+    Mutation verdict: swapping the YaRN and position-interpolation rows,
+    editing a per-checkpoint bound, or changing a past-threshold fraction
+    without regenerating the artifact fails the corresponding comparison;
+    deleting the paragraph fails ``readme_groups``, which demands exactly one
+    match.  The plain-RoPE control is compared to the headline artifact, not to
+    this one, so a drift in either is caught.
+    """
+    artifact = json.loads(
+        (_REPO / "results" / "usefulness_extension.json").read_text(encoding="utf-8")
+    )
+    pooled = {(row["scheme"], row["scale"]): row for row in artifact["pooled"]}
+    rope = pooled[("rope", 1.0)]
+    yarn = pooled[("yarn", 32.0)]
+    pi = pooled[("position_interpolation", 32.0)]
+    passage = readme_groups(
+        r"the pooled sign-error rate falls from `(27\.0)%` under plain\s+"
+        r"RoPE to `(21\.5)%` under YaRN \(per-checkpoint range `(20\.8)-(22\.5)%`\) "
+        r"and `(11\.9)%` under\s+position interpolation \(`(11\.5)-(12\.7)%`\), "
+        r"while the past-threshold channel fractions\s+at `L = (4096)` fall from "
+        r"`(0\.729)` to `(0\.583)` and `(0\.354)`",
+        "the measured-extension passage",
+    )
+    assert_readme_number_matches(
+        rope["sign_flip_fraction_mean"] * 100, passage[0], "plain-RoPE rate"
+    )
+    assert_readme_number_matches(
+        yarn["sign_flip_fraction_mean"] * 100, passage[1], "YaRN rate"
+    )
+    assert_readme_number_matches(
+        yarn["sign_flip_fraction_min"] * 100, passage[2], "YaRN bound low"
+    )
+    assert_readme_number_matches(
+        yarn["sign_flip_fraction_max"] * 100, passage[3], "YaRN bound high"
+    )
+    assert_readme_number_matches(
+        pi["sign_flip_fraction_mean"] * 100, passage[4], "PI rate"
+    )
+    assert_readme_number_matches(
+        pi["sign_flip_fraction_min"] * 100, passage[5], "PI bound low"
+    )
+    assert_readme_number_matches(
+        pi["sign_flip_fraction_max"] * 100, passage[6], "PI bound high"
+    )
+    assert int(passage[7]) == 4096
+    assert_readme_number_matches(
+        rope["fraction_past_threshold_4096_mean"], passage[8], "plain-RoPE fraction"
+    )
+    assert_readme_number_matches(
+        yarn["fraction_past_threshold_4096_mean"], passage[9], "YaRN fraction"
+    )
+    assert_readme_number_matches(
+        pi["fraction_past_threshold_4096_mean"], passage[10], "PI fraction"
     )

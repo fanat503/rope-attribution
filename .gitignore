@@ -10,6 +10,10 @@ __pycache__/
 # LaTeX build output; CI produces paper/build/main.pdf as an artifact.
 paper/build/
 
+# Local scratch: plans, downloaded papers, and generated review notes are not
+# part of the repository and must never be committed.
+.tmp/
+
 # Training runs (train.py). metrics.jsonl grows with the run; regenerate with
 # `python -m projects.rope_attribution.train --config <name>`.
 runs/

@@ -8,15 +8,31 @@ content vectors at fixed relative distance, so the additive feature decompositio
 function of the distance, and that function **reverses sign**: on the 54-point
 grid all 8 of 8 features change sign somewhere in `δ ∈ [1, 8192]`. So a
 position-free per-feature scalar is not merely inaccurate, it is *backwards*:
-replacing `c_i(δ)` with its per-feature mean gets the sign wrong on **26.8%** of
+replacing `c_i(δ)` with its per-feature mean gets the sign wrong on **27.0%** of
 per-pair, per-distance cells of three trained checkpoints, with a median relative
-error of `1.13` against a peak of `1`. The well-posed object is per-feature and
-per-distance — and it is closed-form, so it costs the same as the scalar it
-replaces.
+error of `1.13` against a peak of `1`. That is the pre-registered log-grid value
+and the conservative one: on a uniform 65-point grid over the same range the
+equal-weight rate is **39.8%**, while the median relative error falls to `1.01`.
+The well-posed object is per-feature and per-distance — and it is closed-form, so
+it costs the same as the scalar it replaces.
 
-Three claims we explicitly do **not** make: the algebra is already published
-(arXiv:2607.25507, §3–§4); RoPE internals are not under-explored in general; and
-nothing here evaluates a downstream task.
+That rate is not a constant: it is one value of an exact law. Replacing the
+per-pair sinusoid by the best constant over a window of `L` positions has minimax
+relative sup-error exactly `1` once the window sweeps `x = θL ≥ 2π`, and below
+the threshold the attainable set is exactly
+`[(1 − cos(x/2)) / 2, sin(min(x, π) / 2)]`; at `x = 2π` the band collapses to
+`1`. The law also prices context extension: at `L = 4096`, `23/32` channels are
+past the threshold under plain RoPE, `18/32` under YaRN at `s = 32`, `11/32`
+under position interpolation and `16/32` under a raised base. YaRN cannot go
+below `9/32` at that length, because its nine fastest channels are bit-for-bit
+plain RoPE; position interpolation reaches zero only at `s ≥ L/(2π) = 651.90`,
+which maps `4096` tokens onto six positions.
+
+We explicitly do **not** claim novelty for the algebra: it is already published
+(arXiv:2607.25507, Sections 3–4). Nor do we claim that RoPE internals are
+under-explored in general, or that anything here evaluates a downstream task.
+The pre-registered design for the follow-up task-level test at 1B–8B is
+`docs/DOWNSTREAM_PROTOCOL.md`; it has no results yet and changes no number here.
 
 ## Dataflow
 
@@ -42,7 +58,7 @@ hand.
         │                          │
         ▼                          ▼
    figures/*.png  ◄──── figures.py ────┘
-   + CSV sidecars  (11 figures, every array plotted is shipped)
+   + CSV sidecars  (15 figures, every array plotted is shipped)
         │
         ▼
    tests/test_paper_claims.py   parses paper/main.tex, re-derives every literal
@@ -51,15 +67,16 @@ hand.
 ```
 
 The claim registry in `tests/test_paper_claims.py` is the audit: it locates each
-number in `paper/main.tex` by pattern, compares it against the artefact, and
-fails if a number in the paper has no claim behind it. Adding a number to the
-paper without a test for it fails the suite.
+inline-math number and each cell of the five measured tables in `paper/main.tex`
+by pattern, compares it against the artefact, and fails if a covered number has
+no claim behind it. Adding such a number to the paper without a test for it fails
+the suite.
 
 ## Reproduce everything
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1431 tests (excludes tests/test_readme_claims.py)
+pytest -q                                        # 1774 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -79,6 +96,9 @@ a test dependency:
 pip install -r real_model_requirements.txt
 python -m projects.rope_attribution.real_model    # results/real_model.json
 python -m projects.rope_attribution.usefulness    # results/usefulness.json
+python -m projects.rope_attribution.usefulness --spacing  # + usefulness_spacing.json
+python -m projects.rope_attribution.usefulness_extension  # results/usefulness_extension.json
+python -m projects.rope_attribution.uncertainty   # results/uncertainty.json
 python -m projects.rope_attribution.seed_variance # + results/usefulness_seeds.json
 python -m projects.rope_attribution.agreement     # results/agreement.json
 ```
@@ -88,42 +108,115 @@ The two artifacts that carry the structural claims - `measurements.json` and
 with the committed copies value by value: floats must agree to a relative
 `1e-12` (about 4500 ULP of float64), which tolerates the last-bit drift of a
 different BLAS build while still failing on any real change. Byte-identity
-across platforms is not claimed. The five checkpoint artifacts are larger and
-take about four minutes each (the seed-variance sweep re-runs the cost sweep
+across platforms is not claimed. The checkpoint-derived artifacts are
+larger and take minutes each (the seed-variance sweep re-runs the cost sweep
 three times, so about ten), and the same recompute-on-every-run check is not
-claimed for them; they are regenerated by `make checkpoints` and compared only
-by the tests that read them.
+claimed for them. `make checkpoints` regenerates seven
+(`real_model.json`, `usefulness.json`, `usefulness_grid_independence.json`,
+`uncertainty.json`, `usefulness_seeds.json`, `agreement.json` and
+`attention_cost.json`); `make qk SAE=<public SAE file>` regenerates
+`qk_attribution.json`, `make qk-depth SAE_DIR=<tree>` regenerates
+`qk_depth.json`, and `make qk-trajectory SAE_DIR=<tree>` regenerates
+`qk_trajectory.json`, after downloading the dictionaries named in the
+artifacts. They are compared by the tests that read them.
+
+`downstream.py` is a separate, optional NLL kernel-replacement probe kept for
+follow-up work. It is **not** used by the paper, does not measure attribution
+utility, and none of its numbers is a paper claim; the repository commit does
+not include its scratch outputs.
+
+`real_model.py --model google/gemma-2b --no-gpt2-check` is the intended
+open-Gemma path; gated checkpoints need a Hugging Face token. Gemma 2/3 apply QK
+normalization after the query/key projections, so `collect_head_vectors` refuses
+them rather than measuring the wrong tensor. Gemma 4 is refused earlier, on the
+config alone and before any weights are fetched: its text tower nests
+`rope_parameters` under `full_attention`/`sliding_attention`, rotates 128 of 512
+channels in full-attention layers but all 256 in sliding ones, and in the 31B
+variant ties the key and value projections. The adapter reads one theta, one
+partial factor and one head dimension, so a Gemma 4 number from it would
+describe neither layer type. No Gemma checkpoint is part of the committed
+evidence. `gemma4.py --config <config.json>` reads only the config and prints
+the per-family plan --- head dimensions, thetas, rotated widths and the
+proportional ladder --- together with the blockers above; `docs/GEMMA4.md`
+records the boundary. The planner produces no numbers, and no Gemma 4 result is
+part of the paper.
 
 ## Training your own models
 
 The measurement suite runs on checkpoints others trained. `train.py` trains the
 same object -- a bias-free RMSNorm decoder with a tied head and full RoPE at
 head dimension 64 -- and logs every metric, including the attribution
-diagnostics, at each evaluation:
+diagnostics, at each evaluation. The loader contract --- pre-tokenized shards,
+atomic writes, SHA-256, resume and a `uint16` memmap --- is in `docs/DATA.md`;
+the Kaggle-specific preparation recipe is in `docs/KAGGLE.md`:
 
 ```bash
 pip install -r train_requirements.txt
-python -m projects.rope_attribution.train --config train_124m --run-name my_124m
+# tokenize once, checksum, and mmap the result in every rank
+python -m projects.rope_attribution.data prepare \
+    --source wikitext-103 --out data/wikitext103
+python -m projects.rope_attribution.data check --out data/wikitext103
+python -m projects.rope_attribution.train --config train_124m \
+    --run-name my_124m --data-dir data/wikitext103
 ```
 
-Named configurations: `train_124m` (123,551,232 parameters), `train_208m`
-(208,504,320), `train_303m` (303,163,392) -- GPT-2-tokenized wikitext-103 at
-context 1024. The counts are computed in closed form and asserted in the test
-suite, so the names are honest. The named configurations expect a GPU: on a CPU
-device they refuse to start unless `--force-cpu` is passed, because a run of
-this size pegs every core of the machine for days. The tiny `smoke`
-configuration runs the whole loop in seconds and is what the suite exercises.
+Named configurations: `train_102m` (102,312,960 parameters), `train_124m`
+(123,551,232), `train_152m` (151,868,928), `train_208m` (208,504,320),
+`train_253m` (252,823,552) and `train_303m` (303,163,392) -- GPT-2-tokenized
+wikitext-103 at context 1024. The counts are computed in closed form and
+asserted in the test suite, so the names are honest. The named configurations
+expect a GPU: on a CPU device they refuse to start unless `--force-cpu` is
+passed, because a run of this size pegs every core of the machine for days. The
+tiny `smoke` configuration runs the whole loop in seconds and is what the suite
+exercises.
+
+`train.py` writes one JSONL record per evaluation; `report_run.py` prints the
+same run as a table and can emit a self-contained HTML view:
+
+```bash
+python -m projects.rope_attribution.report_run <run-dir>
+python -m projects.rope_attribution.report_run <run-dir> --html <output.html>
+```
+
+The TPU v5e-8 presets (`tpu_v5e8_102m`, `tpu_v5e8_152m`, `tpu_v5e8_253m`,
+`tpu_v5e8_303m`) and the single-host launcher are documented in
+`docs/TPU_V5E8.md`. The arithmetic is verified; the XLA path is a scaffold and
+has **not** been run on a TPU in this repository.
 
 Each run writes `runs/<name>/metrics.jsonl` -- a leading `run_start` record
-pinning the config, parameter count, device, seed and token budget, then one
-record per evaluation: schedule and gradient norm, train/validation loss,
-throughput, tokens seen, and the attribution diagnostics on one fixed probe
-batch (`closed_form_resid_max`, `rope_probe_resid_max`, the position-free
-`sign_flip_rate` with its `n_probe_cells` support count, and
-`rel_err_median_probe`) -- plus `runs/<name>/summary.json`. Two runs of the
-same command with the same seed produce identical records except the
-throughput field; `tests/test_train.py` pins that, and the torch-free tests
-pin the parameter arithmetic, the next-token window construction and the
+pinning the config, parameter count, device, seed, world size and token budget,
+then one record per evaluation: schedule and gradient norm, current and EMA
+train loss, validation loss and perplexity over several held-out batches (not
+one), throughput, global tokens seen, and the attribution diagnostics on one
+fixed probe batch (`closed_form_resid_max`, `rope_probe_resid_max`, the
+position-free `sign_flip_rate` with its `n_probe_cells` support count, and
+`rel_err_median_probe`) -- plus `runs/<name>/summary.json` (with the best
+validation step), `runs/<name>/manifest.json` (code commit, torch/numpy
+versions, platform, token counts), and, unless `--no-checkpoint` is passed, a
+CPU-side `runs/<name>/checkpoint.pt` for evaluation or fine-tuning.
+
+`checkpoint_resume.pt` is written every `checkpoint_every` steps and at the
+end. Unlike the weights-only checkpoint it carries the AdamW moments and the
+data-order generator, so `--resume` continues the same run rather than a
+lookalike; the config and token stream are checked against the ones that wrote
+it. On a multi-rank run every rank writes its own resume file: the model state
+is the synchronised one, but the data order is per rank, so rank 0's file is not
+a substitute for rank 3's. `train.py` also refuses to silently emit bare `NaN` in
+JSONL (non-finite metrics become `null`) and treats a fresh run directory as
+fresh by deleting stale checkpoints from a previous run of the same name.
+
+The tied head is applied in chunks when `logit_chunk` is set, which is what lets
+the 100M-300M presets run on a 16 GB device: the whole-batch logits for a 303M
+model at its shipped batch are 6.6 GB, and their gradient is as much again. The
+training configs set 2048 positions per chunk (0.4 GB of logits); the TPU
+presets set 1024 (0.2 GB), and the head is recomputed during the backward pass.
+`0` restores the single-matrix path and is what the `smoke` config uses. The
+chunked and the full path are asserted to give the same loss and the same
+gradient.
+
+Two runs of the same command with the same seed produce identical records
+except the throughput field; `tests/test_train.py` pins that, and the torch-free
+tests pin the parameter arithmetic, the next-token window construction and the
 CPU-refusal matrix even where torch is absent.
 
 ## Citation
@@ -152,21 +245,47 @@ projects/rope_attribution/
   usefulness.py   cost of the best position-free surrogate, on real checkpoints
   agreement.py    how the surrogate's pair rankings disagree with the exact
                   ones, on the same checkpoints
+  downstream.py   optional NLL kernel-replacement probe; not paper evidence
   uncertainty.py  percentile bootstrap intervals over heads, for the aggregate
                   shares the paper quotes
   sensitivity.py  the cost statistic across rotary bases and head dimensions
                   (synthetic - is it balanced on one configuration?)
+  seed_variance.py the same cost statistic under three pre-registered content
+                  seeds, with mean and sample standard deviation
+  attention_cost.py what the best position-free surrogate costs at the
+                  attention level: top-1 flips, top-5 overlap, KL
+  qk_attribution.py exact per-distance QK attribution on a public sparse
+                  dictionary (pythia-70m-deduped, layer 3)
+  qk_depth.py     the same measurement at every layer of that checkpoint that
+                  has an attention block after it (five dictionaries)
+  qk_trajectory.py the feature-pair block swept over the full distance grid,
+                  per layer and head
+  extension_law.py the threshold law applied to context-extension schemes:
+                  how many channels each one leaves past `theta*L = 2*pi`
   train.py        trains 100M-300M models, logging every metric including the
-                  attribution diagnostics
+                  attribution diagnostics; periodic resumable checkpoints
+  data.py         tokenizes once into checksummed shards and a mmapped stream
+  report_run.py   reads runs/<name>/metrics.jsonl into a table or self-contained
+                  HTML report
+  tpu_configs.py  TPU v5e-8 presets and launch-override validation
+  tpu_launch.py   single-host TPU launcher for those presets
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1431 tests (excludes tests/test_readme_claims.py)
-figures/          eleven figures, each with a CSV sidecar
+tests/            1774 tests (CPU-only install)
+figures/          sixteen figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
                     real_model.json          (three trained checkpoints)
-                    usefulness.json          (cost of the position-free scalar)
+                    usefulness.json          (cost of the position-free scalar,
+                                              clustered at 558 layer-heads)
+                    usefulness_spacing.json  (the same sign-error rate under the
+                                              log and uniform distance weightings)
+                    usefulness_extension.json (the same rate re-priced under the
+                                              YaRN and position-interpolation
+                                              frequency ladders)
+                    uncertainty.json         (head-clustered interval and the
+                                              pairwise checkpoint comparison)
                     usefulness_seeds.json    (the same cost under three
                                               content-pair seeds: mean and sd)
                     usefulness_grid_independence.json (the grid sweep behind
@@ -174,14 +293,39 @@ results/          measurements.json  (structural facts)
                     agreement.json           (ranking agreement, same checkpoints)
                     sensitivity.json         (the cost rate across configs,
                                               synthetic sweep)
+                    attention_cost.json      (top-1 flips, top-5 overlap and KL
+                                              when the score is made
+                                              position-free, on the three
+                                              checkpoints)
+                    qk_attribution.json      (per-distance QK attribution on a
+                                              public 32k SAE over
+                                              pythia-70m-deduped, layer 3)
+                    qk_attribution_p2.json   (the same sweep with an independent
+                                              EleutherAI TopK dictionary, as the
+                                              external-validity check)
+                    qk_depth.json            (the same sweep with one dictionary
+                                              per attributable layer, layers 0-4
+                                              of the same checkpoint)
+                    qk_trajectory.json       (the feature-pair block swept over
+                                              the full distance grid, for every
+                                              layer and head)
+                    extension_law.json       (the threshold law applied to RoPE,
+                                              YaRN, position interpolation and a
+                                              raised base, over five context
+                                              lengths)
 ```
 
-There is an earlier body of exploratory work under `projects/frontier-01-*`.
-**Some of those scripts print illustrative constants rather than computing
-measurements, and their novelty claim is known to be false.** See
-[Legacy material](#legacy-material) before citing anything from them. The code
-under `projects/rope_attribution/` is the maintained implementation and is the
-only part of this repository that should be relied on.
+The early exploratory material that used to live under
+`projects/frontier-01-*` has been removed from the working tree. It printed
+illustrative constants rather than computing measurements, and its novelty claim
+is known to be false. It survives only in earlier git history and is not part of
+the maintained repository. The
+code under `projects/rope_attribution/` is the maintained implementation and the
+only code path that should be relied on.
+
+`THEORY_AND_PROOFS.md` collects the identities and proofs in one place, with
+numbering independent of the paper; `paper/main.tex` remains the submission
+source.
 
 ## The setting
 
@@ -244,10 +388,12 @@ RoPE.
 
 > The paper previously led with a worst-feature ratio of `920x`. That number was a
 > sampling artefact — a `max/min` over a grid, so it grows without bound as the
-> grid gets denser. `rope_attribution/statistics.py` reproduces the growth (a
-> factor of 32 across six grid densities, non-monotone, seed standard deviation
-> exceeding its own mean) and the paper withdrew the claim. `tests/test_paper_claims.py`
-> fails if it is reinstated.
+> grid gets denser. On the same vectors, `rope_attribution/statistics.py`
+> reproduces the growth: the ratio spans `571x` across six grid densities, is
+> non-monotone, and its seed standard deviation is `0.93x` its mean (`1.13x` for
+> the pooled variant). The paper withdrew the claim, and
+> `tests/test_paper_claims.py` fails if it is reinstated or if the per-feature
+> and pooled statistics are conflated again.
 
 **YaRN does not shrink the largest angle, and does not come from a bigger base.**
 `max|D_k|` is *identical* for plain RoPE and YaRN at every distance measured
@@ -267,10 +413,34 @@ linearized:
 So the linearization `cos D -> 1 - D^2/2`, `sin D -> D` degrades to nothing for
 plain RoPE by `delta = 4096` and retains a fifth of the channels under YaRN. The
 honest limit of the story: the amplitude-weighted error is still enormous for
-every scheme (ratio RoPE:YaRN of `0.997` at `delta = 4096`), because the handful
+every scheme (ratio YaRN:RoPE of `0.997` at `delta = 4096`), because the handful
 of fast channels dominate it. Linearization of the *whole* head is not rescued by
 any of these methods; what YaRN buys is a larger linearizable majority
 (`figures/fig03`, `figures/fig04`, `figures/fig05`).
+
+**No practical extension scheme makes a position-free table valid.** Apply the
+threshold law to the frequency ladder: at `L = 4096`, `23/32` channels sweep at
+least `2π` under plain RoPE, `18/32` under YaRN at `s = 32`, `11/32` under
+position interpolation and `16/32` under `base = 5×10^5`. YaRN cannot go below
+`9/32` at that length: its nine fastest channels are bit-for-bit equal to plain
+RoPE and all nine are already past the threshold. The raised base has the same
+obstruction, with one untouched channel. Position interpolation divides the
+fastest channel too, but needs `s ≥ L/(2π) = 651.90` to reach zero, which maps
+`4096` tokens onto six positions. The schemes move which slow channels are
+describable; they do not move the fast ones that carry the error
+(`results/extension_law.json`, `figures/fig15_extension_law.png`).
+
+**Extension lowers the measured price; it does not remove it.** The channel
+count is a prediction about geometry, so the same three checkpoints, prompts,
+content pairs and 13-point grid are re-priced under each ladder, with only the
+inverse frequencies changed. The plain-RoPE row reproduces the headline artifact
+exactly. At `s = 32` the pooled sign-error rate falls from `27.0%` under plain
+RoPE to `21.5%` under YaRN (per-checkpoint range `20.8-22.5%`) and `11.9%` under
+position interpolation (`11.5-12.7%`), while the past-threshold channel fractions
+at `L = 4096` fall from `0.729` to `0.583` and `0.354`. The ordering is the one
+the count predicts; the residual is the part no extension removes. This is a
+counterfactual geometry probe on the checkpoint's own weights, not a YaRN-trained
+model (`results/usefulness_extension.json`, `figures/fig16_extension_cost.png`).
 
 **Partial RoPE yields an exactly position-free sub-score.** At `p = 0.25` the
 unrotated 75% of channels contribute a sub-score whose spread across distance is
@@ -307,6 +477,24 @@ matters for the mechanism:
   9 of 32 pairs are bit-for-bit unchanged and 21 of 32 differ from uniform
   interpolation. Both `yarn` and `position_interpolation` are computed in
   `experiments.method_spectrum` so the two can be compared directly.
+- **The fixed-content QK sweep rotated the key the wrong way, and the
+  dictionary was applied to the wrong checkpoint.** The earlier drafts evaluated
+  the profile at angle `+delta`; a key sits *behind* its query, so the checkpoint
+  rotates by `n - m = -delta`. The error flips the sign of every sine term.
+  Separately, the public `ctigges` dictionary was trained on
+  `pythia-70m-deduped`, but the sweep loaded `pythia-70m`; the two releases share
+  an architecture but not weights, and the mismatch produced a reconstruction
+  error of `10.05` and a mean of `10,556` active units. With both corrected, on
+  `pythia-70m-deduped` the rotary sign-flip rate is `21.5%`, the total rate
+  `0.01%`, and the per-layer depth profile is
+  `26.0/27.7/22.8/21.5/22.9%`. The qualitative contrast survives — the rotary
+  subspace reverses roughly three orders of magnitude more often than the total —
+  but the earlier layer ordering, and the sentence that tied the layer-4
+  trajectory outlier to the highest rotary rate, were wrong and have been
+  removed. `qk_attribution.json`, `qk_depth.json` and `qk_trajectory.json` were
+  regenerated, three tests pin the rotation convention against the checkpoint's
+  own `apply_rotary_pos_emb`, and `measure_model` now refuses a dictionary that
+  reconstructs its residual stream worse than `0.75` relative error.
 
 ## Figures
 
@@ -323,6 +511,11 @@ matters for the mechanism:
 | `fig09_position_conditional_attribution` | per-feature contribution against distance |
 | `fig10_seed_variance` | the central claim across a 12-seed sweep, with the spread shown |
 | `fig11_sensitivity_sweep` | the configuration sweep behind the robustness paragraph, read from its artifact |
+| `fig12_qk_case_study` | one trained-dictionary feature: flat total profile, sign-changing rotary sub-score, and per-head flip rates |
+| `fig13_collapse_law` | the minimax collapse law and its 44 measured bins, with the pair-level and score-level error against window length |
+| `fig14_intervention` | achieved over intended suppression for the exact and position-free rules, plus the closed-form post-softmax prediction |
+| `fig15_extension_law` | channels past `θL = 2π` under four extension schemes, with YaRN's untouched-channel floor, and the mean minimax error those rows imply |
+| `fig16_extension_cost` | the measured sign-error rate re-priced under the YaRN and position-interpolation ladders, beside the past-threshold channel fraction those ladders imply |
 
 Each figure ships the plotted data as a CSV beside it, and `figures/README.md`
 records which function produced it and its headline number.
@@ -332,8 +525,8 @@ records which function produced it and its headline number.
 `rope.py` is an independent implementation. The inverse-frequency ladder and the
 split-half `rotate_half` convention follow `transformers`
 (`models/llama/modeling_llama.py`); the YaRN ramp (`find_correction_dim`,
-`find_correction_range`, `linear_ramp_mask`) and `get_mscale` are transcribed from
-the authors' own reference implementation
+`find_correction_range`, `linear_ramp_mask`) and `get_mscale` re-derive the same
+formulas as the authors' own reference implementation
 (`scaled_rope/LlamaYaRNScaledRotaryEmbedding.py` in `jquesnelle/yarn`).
 
 This repository contains **no third-party source code** — there is no vendored
@@ -366,13 +559,16 @@ python -m projects.rope_attribution.real_model     # ~3 min, CPU only
 
 Three findings there matter for reading the synthetic results:
 
-- Real rotary channels are overwhelmingly position-carrying: only 0.6-0.7% of
-  pairs are position-blind at a 1% threshold, and remarkably consistently across
-  three unrelated architectures.
-- The exact identities hold to the **float32** floor (~1e-7), not 1e-14, because
-  real activations are float32. The theorems survive; the floor moved.
-- The leading feature's **share** of a score spans `0.011` to `0.9999` depending
-  on the head — a factor of 67-93x across the three checkpoints. The repository
+- Real rotary channels are overwhelmingly position-carrying: with the
+  position-carrying share `|B_k|/R_k` required to be below 1%, only 0.54-0.66%
+  of pairs meet the cutoff, across three unrelated architectures.
+- The per-pair closed form and bilinearity hold to the **float32** floor
+  (~1e-7), not the float64 1e-14 of the synthetic suite, because real
+  activations are float32. The relative-position identity, checked after
+  promotion to float64, is exact to `4.55e-13`. The theorems survive; the floor
+  moved.
+- The leading feature's **share** of a score spans `0.0148` to `0.9999` depending
+  on the head — a factor of 55.4-67.6x across the three checkpoints. The repository
   previously had no error bars anywhere; a single-vector measurement would have
   missed this by two orders of magnitude.
 
@@ -380,13 +576,30 @@ Three findings there matter for reading the synthetic results:
 on the same checkpoints. It compares the exact per-distance attribution against
 the **best possible** position-free scalar — the least-squares constant over the
 distance range, not a strawman — and finds that the optimum reports the wrong
-sign on `26.8%` of per-pair, per-distance cells, with a median relative error of
+sign on `27.0%` of per-pair, per-distance cells, with a median relative error of
 `1.13` against a peak of `1`. That is the cost of insisting a RoPE feature's
 contribution is a number, and it is the paper's answer to "is this object useful
-or merely correct".
+or merely correct". The artifact records **558 layer-heads**, not the 2790
+head-prompt instances those heads contribute; `results/uncertainty.json` gives
+the head-clustered 95% interval `[0.2676, 0.2704]`, and separates pythia from
+the other two checkpoints while llama and SmolLM are not distinguishable
+(`-0.12` points, `[-0.26, +0.01]`).
 
 ```bash
 python -m projects.rope_attribution.usefulness   # ~4 min, CPU only
+```
+
+That rate is a functional of the distance weighting, and the paper reports the
+gap rather than only the favourable value. On the pre-registered 13-point log
+grid it is `27.0%`; on a uniform 65-point grid over the same interval it is
+`39.8%` (`40.4%`, `39.5%`, `39.6%` per checkpoint), and on a uniform 13-point
+grid `38.5%`, so the gap is spacing rather than resolution. The median relative
+error moves the other way, from `1.13` to `1.01`, because the sign rate and the
+sup-error are different functionals of the same profile. The per-checkpoint
+record is `results/usefulness_spacing.json`:
+
+```bash
+python -m projects.rope_attribution.usefulness --spacing   # ~8 min, CPU only
 ```
 
 ### What this repository does not claim
@@ -396,32 +609,32 @@ python -m projects.rope_attribution.usefulness   # ~4 min, CPU only
   Liang et al., *RoPE-Aware Bit Allocation* (arXiv:2606.24033, §1), and the
   per-frequency spectral structure of attention has been measured on pretrained
   checkpoints by Li (arXiv:2607.06621). What is claimed here is the attribution
-  semantics and its consequence, not the identity. The frozen
-  `frontier-01-*` documents assert the opposite — that nobody has done this — and
-  that claim is false; see `LEGACY.md`.
+  semantics and its consequence, not the identity. Early drafts that used to live
+  under `projects/frontier-01-*` asserted the opposite — that nobody had done
+  this — and that claim is false. Those drafts have been removed from the tree;
+  they remain only in git history and must not be cited.
 - **The sign reversal appears to be unreported**, but that is a search result,
   not a proof of absence.
-- Still absent and not measured anywhere here: trained sparse autoencoders,
+- **Trained sparse dictionaries are measured on one model, one input.**
+  `qk_attribution.py` runs the per-distance decomposition on a public
+  32,768-unit ReLU dictionary for `pythia-70m-deduped` layer 3, and that is the
+  evidence behind the trained-dictionary result. `qk_depth.py` repeats it with
+  the matching dictionary at every layer of the same checkpoint that still has
+  an attention block after it (five dictionaries, layers 0--4, one 320-token
+  input and one seed). That is a depth check, not a survey of trained SAEs
+  across models, layers or training recipes. Still absent and not measured anywhere here:
   retrieval or passkey benchmarks, and any accuracy number. Claims of the form
-  "the model retrieves the needle with accuracy 0.7" should not be attributed to
-  this repository.
+  "the model retrieves the needle with accuracy 0.7" should not be attributed
+  to this repository.
 
-## Legacy material
+## Removed exploratory material
 
-`projects/frontier-01-*.py` and `projects/frontier-01-*.md` are an earlier,
-frozen body of work kept for provenance. Known caveats:
-
-- several scripts **print hardcoded illustrative values** rather than computing
-  them — for example `frontier-01-bag-of-words-test.py` assigns retrieval
-  accuracies as literals and computes "interaction" as `D**2 / 2` by definition;
-- `frontier-01-graphs-ULTIMATE-V11.py` plots literal lists;
-- the `projects/fig_*.png` files from that era were plots of those literals and
-  have been removed for that reason; they are recoverable from git history at
-  `310bf2c`;
-- the documents disagree with each other and, in the two cases listed above, with
-  the measurements here. Where they disagree, the measurements win.
-
-Do not cite the legacy documents. Cite `projects/rope_attribution/` and
+The pre-paper drafts and demo scripts that used to live under
+`projects/frontier-01-*` were removed from the working tree in October 2026.
+They printed hardcoded illustrative constants rather than computing them, and
+their novelty claim is known to be false. They survive only in earlier git
+history. They are not part of the maintained record:
+do not cite them. Cite `projects/rope_attribution/` and
 `results/measurements.json`.
 
 ## License

@@ -127,7 +127,7 @@ def test_inv_freq_endpoints(dim):
 
 
 def test_inv_freq_known_endpoint_values():
-    """Numbers quoted in the module docstring / by the orchestrator."""
+    """Numbers quoted in the module docstring and in the paper."""
     f = R.inv_freq(64, 10000.0)
     assert f[0] == 1.0
     assert f[-1] == pytest.approx(1.334e-04, rel=1e-3)
@@ -1117,3 +1117,14 @@ def test_per_dim_angle_is_additive_over_the_gap():
     lhs = R.per_dim_angle(np.array([a + b]), inv_f)
     rhs = R.per_dim_angle(np.array([a]), inv_f) + R.per_dim_angle(np.array([b]), inv_f)
     np.testing.assert_allclose(lhs, rhs, rtol=1e-15, atol=1e-14)
+
+
+def test_a_two_wide_head_keeps_its_only_pair_when_the_block_divides():
+    got = R._rotary_dim_ladder(np.array([1.0]), 2)
+    np.testing.assert_array_equal(got, np.array([1.0]))
+
+
+def test_a_two_wide_head_refuses_a_block_it_cannot_rebuild():
+    """Rebuilding reads ``inv_f[1]``; a one-pair ladder has no such entry."""
+    with pytest.raises(ValueError, match="at least two rotary pairs"):
+        R._rotary_dim_ladder(np.array([1.0]), 4)

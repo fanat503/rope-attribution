@@ -64,15 +64,29 @@ def test_the_artifact_has_the_promised_shape() -> None:
 
 
 def test_the_shared_seed_reproduces_the_published_sweep() -> None:
-    """The default-seed row and usefulness.json are the same run."""
+    """The default-seed row and usefulness.json are the same run.
+
+    The row stores the five fields in ``MODEL_FIELDS``/``POOLED_FIELDS``, not the
+    whole model record: ``usefulness.json`` also carries ``head_rates`` and the
+    per-prompt rows, which the seed artifact deliberately omits. The comparison
+    is therefore over exactly the stored fields, and each one must also exist in
+    the published artifact -- that is the join that could break silently.
+
+    Mutation verdict: changing any pooled rate or any per-model field in the seed
+    artifact makes one of these equality assertions fail; dropping a field from
+    ``usefulness.json`` makes the membership assertion fail.
+    """
     artifact = _artifact()
     usefulness = _usefulness()
     row = next(r for r in artifact["per_seed"] if r["seed"] == U.DEFAULT_SEED)
-    assert row["pooled"] == usefulness["pooled"]
+    for field in S.POOLED_FIELDS:
+        assert field in usefulness["pooled"], f"usefulness.json lost {field}"
+        assert row["pooled"][field] == usefulness["pooled"][field], field
     for stored, published in zip(row["models"], usefulness["models"], strict=True):
         assert stored["model_id"] == published["model_id"]
         for field in S.MODEL_FIELDS:
-            assert stored[field] == published[field]
+            assert field in published, f"usefulness.json lost {field}"
+            assert stored[field] == published[field], field
 
 
 def test_the_mean_and_sd_are_the_arithmetic_of_the_rows() -> None:
@@ -95,6 +109,16 @@ def test_the_seeds_actually_produced_different_draws() -> None:
 
 
 def test_run_all_forwards_the_seed_to_measure_model(monkeypatch) -> None:
+    """``_pool`` needs the head-level records, so the stub must carry them.
+
+    ``measure_model`` returns a full record; this stub is the minimum
+    ``run_all`` actually consumes. A stub missing ``head_rates`` fails inside
+    ``_pool``, which is the failure this test caught when the pooling unit
+    changed from head-prompt instances to unique layer-heads.
+
+    Mutation verdict: dropping the ``seed=seed`` forwarding makes ``seen`` hold
+    the default instead of 123.
+    """
     seen: list[int] = []
 
     def fake(model_id, seed=U.DEFAULT_SEED):
@@ -106,6 +130,11 @@ def test_run_all_forwards_the_seed_to_measure_model(monkeypatch) -> None:
             "sign_flip_fraction_max_head": 0.9,
             "rel_err_median": 1.0,
             "rel_err_p90": 1.5,
+            "n_head_prompt_instances": 2,
+            "head_rates": [
+                {"sign_flip_fraction": 0.1, "rel_err_median": 1.0},
+                {"sign_flip_fraction": 0.9, "rel_err_median": 1.5},
+            ],
         }
 
     monkeypatch.setattr(U, "measure_model", fake)

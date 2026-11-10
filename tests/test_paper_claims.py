@@ -85,6 +85,9 @@ if str(_PROJECTS) not in sys.path:
     sys.path.insert(0, str(_PROJECTS))
 
 from rope_attribution import experiments as E  # noqa: E402  (needs the sys.path tweak)
+from rope_attribution import (  # noqa: E402  (needs the sys.path tweak)
+    extension_law as XL,
+)
 from rope_attribution import rope as R  # noqa: E402  (needs the sys.path tweak)
 
 # --------------------------------------------------------------------------
@@ -150,7 +153,7 @@ class Claim:
 CLAIMS: tuple[Claim, ...] = (
     # ---- configuration, stated in Method and repeated in the appendix -------
     Claim("cfg_dim", r"\$d = (\d+)\$"),
-    Claim("cfg_base", r"\$\\mathrm\{base\} = (\d+)\$"),
+    Claim("cfg_base", r"\$\\mathrm\{base\} = (\d+)\$, extension factor"),
     Claim("cfg_scale", r"extension factor \$s = (\d+)\$"),
     Claim("cfg_context", r"pre-extension context \$(\d+)\$"),
     Claim("cfg_nkeys", r"\$T = (\d+)\$ keys"),
@@ -168,12 +171,15 @@ CLAIMS: tuple[Claim, ...] = (
     # of subtracting two analytically equal expressions, so its value depends on the
     # host's summation order and is not portable. The claim that matters is the
     # bound, so that is what the pattern captures and what the test checks.
-    Claim("rel_pos_pairs", r"position pairs tested & \$(\d+)\$"),
+    # The two counts moved from Table~\ref{tab:exact} into the Method appendix
+    # when the table was trimmed to fit the nine-page limit. They still state the
+    # same measurement, so the patterns follow them rather than dropping the claims.
+    Claim("rel_pos_pairs", r"over \$(\d+)\$ position pairs"),
     Claim("rel_pos_ceiling", r"relative-position property & \$<(10)\^\{-(13)\}\$"),
     Claim("norm_q_ceiling", r"norm preservation, query & \$<(10)\^\{-(14)\}\$"),
     Claim("norm_k_ceiling", r"norm preservation, key & \$<(10)\^\{-(14)\}\$"),
     Claim("bilin_ceiling", r"bilinearity in content & \$<(10)\^\{-(14)\}\$"),
-    Claim("bilin_checks", r"\\quad score checks & \$(\d+)\$"),
+    Claim("bilin_checks", r"over \$(\d+)\$ score checks"),
     # The abstract, the contributions list and the results prose all restate the
     # same two counts. at_least is raised so a count cannot be quietly deleted.
     Claim("intro_pairs", r"relative-position property over \$(42)\$ (?:position )?pairs", at_least=2),
@@ -206,7 +212,6 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim("abstract_additivity", r"we measure the residual at \$(3\.9)\\times10\^\{-14\}\$"),
     Claim("r1_additivity", r"additive decomposition holds to \$(3\.9)\\times10\^\{-14\}\$"),
-    Claim("conclusion_additivity", r"is exact for a fixed position pair, to \$(3\.9)\\times10\^\{-14\}\$"),
     Claim(
         "corr_bilinearity",
         r"doubles the score to a relative error of \$(7\.4)\\times10\^\{-16\}\$",
@@ -219,8 +224,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("synthesis_additivity", r"is exact to \$(5\.0)\\times10\^\{-14\}\$"),
     Claim("abstract_additivity_54", r"the total remains additive to \$(5\.0)\\times10\^\{-14\}\$"),
     Claim("r2_additivity", r"additivity residual of \$(5\.0)\\times10\^\{-14\}\$"),
-    Claim("cond_additivity", r"total stays additive to \$(5\.0)\\times10\^\{-14\}\$"),
-    Claim("conclusion_additivity_54", r"the total stays additive to \$(5\.0)\\times10\^\{-14\}\$"),
+    Claim("cond_additivity", r"total (?:stays|remains) additive to \$(5\.0)\\times10\^\{-14\}\$"),
     # ---- how the structural tests are built ---------------------------------
     Claim(
         "relpos_pairs_prose",
@@ -259,10 +263,12 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         "withdrawn_ratio_densities",
-        r"\$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ distances it takes",
+        r"\$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ distances it spans",
     ),
-    Claim("withdrawn_ratio_drift", r"values spread by a\s+factor of \$(\d+)\$"),
+    Claim("withdrawn_ratio_drift", r"distances it spans \$(\d+)\\times\$"),
     Claim("withdrawn_ratio_seeds", r"Across \$(\d+)\$ independent seeds its standard deviation"),
+    Claim("withdrawn_seed_ratio", r"deviation is \$(\d+\.\d+)\\times\$ its mean"),
+    Claim("withdrawn_seed_ratio_pooled", r"gives \$(\d+\.\d+)\\times\$"),
     Claim("replacement_seed_variance", r"variation has .(\d\.\d).*?seed variance"),
     # The provenance table's row for the central result.
     Claim(
@@ -293,7 +299,7 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         "position_free_band",
-        r"stays between \$(\d+\.\d)\$ and \$(\d+\.\d)\$ as the distance grid",
+        r"stay(?:s|ing) between \$(\d+\.\d)\$ and \$(\d+\.\d)\$ as the (?:distance )?grid",
     ),
     Claim("position_free_denser", r"grid is made \$(\d+)\\times\$ denser"),
     Claim(
@@ -316,7 +322,6 @@ CLAIMS: tuple[Claim, ...] = (
     Claim(
         "orders_claim_provenance",
         r"additive to \$5\.0\\times10\^\{-14\}\$",
-        2,
     ),
     # ---- YaRN ramp bookkeeping (fig01) --------------------------------------
     Claim("yarn_unchanged_caption", r"leaves the fastest \$(\d+)\$ of \$(\d+)\$ entries bit-for-bit identical"),
@@ -357,7 +362,7 @@ CLAIMS: tuple[Claim, ...] = (
     # ---- the comparison table's caption --------------------------------------
     Claim("table_d_base", r"\$\\mathrm\{base\} = 10\^\{4\}\$"),
     # ---- median angle ratio -------------------------------------------------
-    Claim("median_ratio", r"constant \$(0\.4464)\\times\$ that of"),
+    Claim("median_ratio", r"(?:constant|factor\}:) \$(0\.4464)\\times\$ (?:that of|at every distance)"),
     Claim("median_ratio_abstract", r"constant factor of \$(0\.4464)\$"),
     Claim(
         "median_at_512",
@@ -375,7 +380,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("max_equal_grid", r"the largest disagreement is \$(0\.000)\\times10\^\{(0)\}\\rad\$"),
     Claim("pi_max_shrink", r"shrinking \$\\max_k\|\\D\|\$ from \$(\d+)\$ to \$(\d+)\\rad\$"),
     # ---- linearizable fractions in prose -------------------------------------
-    Claim("lin_rise_512", r"rises from \$(0\.0625)\$ to \$(0\.3438)\$ at \$\\delta = (\d+)\$"),
+    Claim("lin_rise_512", r"(?:rises )?from \$(0\.0625)\$ to \$(0\.3438)\$ at \$\\delta = (\d+)\$"),
     Claim("lin_rise_4096", r"and from \$(0\.0000)\$ to \$(0\.2188)\$ at \$\\delta = (\d+)\$"),
     Claim("lin_base500k", r"different numbers again \(\$(0\.3438)\$ and \$(0\.1875)\$\),"),
     # ---- fig04 tail ------------------------------------------------------------
@@ -388,16 +393,16 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("synthesis_worst", r"be unable to linearize it\..*?under full \\rope\\ at any \$\\delta > (\d+)\$"),
     Claim("synthesis_delta_8_512", r"correctly at \$\\delta = (\d+)\$ and reuses it at \$\\delta = (\d+)\$"),
     # ---- fig05 amplitude-weighted ---------------------------------------------
-    Claim("amp_at_8192", r"amplitude-weighted error is \$(1\.24572)\\times10\^\{(6)\}\$ for RoPE and \$(1\.24179)\\times10\^\{(6)\}\$ for \\yarn"),
+    Claim("amp_at_8192", r"amplitude-weighted error(?: at \$\\delta = \d+\$)? is \$(1\.24572)\\times10\^\{(6)\}\$ for RoPE (?:and|against) \$(1\.24179)\\times10\^\{(6)\}\$ for \\yarn"),
     Claim("amp_ratio", r"a ratio of \$(0\.996840)\$"),
     Claim("amp_ratio_r3", r"error ratio \\yarn/RoPE is \$(0\.99684)\$ at \$\\delta = (\d+)\$"),
-    Claim("amp_ratio_conclusion", r"amplitude-weighted error ratio of only \$(0\.996840)\$"),
+    Claim("amp_ratio_conclusion", r"amplitude-weighted error ratio is \$(0\.99684)\$"),
     Claim("amp_percent", r"buys less than \$(-?\d+(?:\.\d+)?)\\%\$"),
     Claim("rms_ratio", r"per-pair RMS ratio is \$(0\.999977)\$"),
     Claim("pi_amp", r"here \(\$(-?\d+(?:\.\d+)?)\$ at \$\\delta = (-?\d+(?:\.\d+)?)\$, roughly \$(-?\d+(?:\.\d+)?)\\times\$ below RoPE\)"),
     # ---- fig06 per-pair --------------------------------------------------------
     Claim("pair_amp_k0", r"rotary pair, \$k = 0\$, takes the single value \$([\d.]+)\$"),
-    Claim("pair_amp_k12", r"pair \$k = (\d+)\$ has amplitude \$([\d.]+)\$"),
+    Claim("pair_amp_k12", r"pair,? \$k = (\d+)\$,? has amplitude \$([\d.]+)\$"),
     Claim("pair_exact_d1", r"contribution of \$(-?\d+(?:\.\d+)?)\$ against a linearized \$(-?\d+(?:\.\d+)?)\$, a normalized error of \$(-?\d+(?:\.\d+)?)\$"),
     Claim("pair_lin_d1", r"the mid-frequency pair \$k = (-?\d+(?:\.\d+)?)\$ has \$(-?\d+(?:\.\d+)?)\\times10\^\{(-?\d+(?:\.\d+)?)\}\$ at the same distance, roughly \$(-?\d+(?:\.\d+)?)\$ times smaller"),
     Claim("pair_err_d3", r"By \$\\delta = (\d+)\$ the fastest pair's normalized error is \$(\d\.\d+)\$"),
@@ -442,7 +447,11 @@ CLAIMS: tuple[Claim, ...] = (
     # ---- the appendix's restatements -------------------------------------------
     Claim("prov_max_agreement", r"&\s*\$(0\.000)\\rad\$ agreement & \\texttt\{fig03\}"),
     Claim("prov_ratios", r"&\s*\$(0\.4464)\$, \$(1\.0000)\$ & ratios of fig03"),
-    Claim("prov_fig04", r"&\s*\$\\delta = (\d+)\$, \$(\d+)/(\d+)\$ & \\texttt\{fig04\}"),
+    Claim(
+        "prov_fig04",
+        r"&\s*\$\\delta = (\d+)\$: \$(\d+)/(\d+)\$ and \$(\d+)/(\d+)\$; "
+        r"\$\\delta = (\d+)\$: \$(\d+)/(\d+)\$ & \\texttt\{fig04\}",
+    ),
     Claim("prov_amp", r"&\s*\$(1\.24572)\\\!\\times\\\!10\^\{(6)\}\$ etc\."),
     Claim("prov_pi_amp", r"&\s*\$(\d+\.\d+)\$, \$\\delta = (\d+)\$ & \\texttt\{fig05\}"),
     Claim("prov_ramp", r"&\s*\$(\d+)\$ of \$(\d+)\$, \$(\d+\.\d+)\\times\$ & \\texttt\{fig01\}"),
@@ -475,7 +484,10 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("related_base_10000", r"\$\\mathrm\{base\}\$ from \$(10000)\$ to \$(500000)\$'' recipe"),
     # The "same scheme at s = 50" wording is gone: raising the base is not
     # position interpolation. The corrected sentences assert the s^{-2k/d} form.
-    Claim("bilin_checks_table", r"giving the \$(\d+)\$ score checks in the table"),
+    Claim(
+        "bilin_checks_table",
+        r"giving the \$(\d+)\$ score checks in Table~\\ref\{tab:exact\}",
+    ),
     Claim("amp_at_8192_lead", r"At \$\\delta = (\d+)\$ the amplitude-weighted"),
     Claim("pairs_delta_3_body", r"own contribution at \$\\delta = (\d+)\$, identically under"),
     Claim("partial_clean_zero_2", r"is also exactly \$(0\.0)\$ --- the plotted constant"),
@@ -498,7 +510,7 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         "limitations_config",
-        r"All measurements use \$d = (\d+)\$, \$\\mathrm\{base\} = (\d+)\$, "
+        r"The main synthetic experiments use \$d = (\d+)\$, \$\\mathrm\{base\} = (\d+)\$, "
         r"\$s = (\d+)\$, pre-extension context \$(\d+)\$",
     ),
     Claim("exact_identity_residue", r"residue in each case is \$(0\.0)\$ or a single ULP"),
@@ -514,7 +526,7 @@ CLAIMS: tuple[Claim, ...] = (
 CLAIMS += (
     Claim(
         "trained_relpos_worst",
-        r"worst absolute error of \$(\d+\.\d+)\\times10\^\{-12\}\$ across all three",
+        r"worst absolute error of \$(\d+\.\d+)\\times10\^\{-13\}\$ across all three",
     ),
     Claim("trained_float32_eps", r"float32 epsilon of \$(1\.\d+)\\times10\^\{-7\}\$"),
     Claim(
@@ -552,10 +564,38 @@ CLAIMS += (
     ),
     Claim(
         "trained_blind_fraction",
-        r"position-blind fraction is \$(0\.\d+)\$ on \\texttt\{pythia-160m\}, "
+        r"fraction meeting the cutoff is \$(0\.\d+)\$ on \\texttt\{pythia-160m\}, "
         r"\$(0\.\d+)\$ on \\texttt\{llama-160m\} and \$(0\.\d+)\$ on",
     ),
+    Claim(
+        "trained_blind_cutoff",
+        r"\|B_k\| < (0\.01)\\,\|A_k\|",
+    ),
     Claim("trained_blind_band", r"between \$(0\.\d+)\\%\$ and \$(0\.\d+)\\%\$"),
+    Claim(
+        "trained_norm_eps",
+        r"Norm preservation is looser, at \$(\d+)\$--\$(\d+)\$ float32 epsilons",
+    ),
+    Claim(
+        "trained_rope_layout",
+        r"GPT-NeoX with partial\s+RoPE at \$(\d+)\$ of \$(\d+)\$ channels, and two "
+        r"Llama-family models rotating all \$(\d+)\$",
+    ),
+    # The sampling disclosure: 256 content pairs per head and prompt, the
+    # resulting sample range, and the degenerate pair-channel entries excluded.
+    # Checked against results/real_model.json in test_paper_trained_claims.py.
+    Claim(
+        "trained_content_pairs",
+        r"with\s+\$(\d+)\$ random content pairs per head and prompt",
+    ),
+    Claim(
+        "trained_sample_range",
+        r"records\s+\$(\d+\.\d+)\$M--\$(\d+\.\d+)\$M",
+    ),
+    Claim(
+        "trained_degenerate",
+        r"the\s+\$(\d+\{,\}\d+)\$ degenerate \\texttt\{llama\} pair-channel entries",
+    ),
     Claim("gpt2_no_rope", r"learned absolute table of size \$(\d+)\$"),
     # fig10: the seed sweep that makes the central claim a claim about the
     # decomposition rather than about one lucky draw.
@@ -566,50 +606,112 @@ CLAIMS += (
     ),
     # ---- Section~\ref{sec:worth}: what a position-free scalar costs ---------
     Claim(
+        "worth_distance_grid",
+        r"on a \$(\d+)\$-point log-spaced grid from \$(\d+)\$ to \$(\d+)\$",
+    ),
+    Claim(
         "worth_pooled_flip",
-        r"wrong sign on \$(26\.\d)\\%\$ of per-pair, per-distance\s+cells",
+        r"wrong sign on \$(27\.\d)\\%\$ of per-pair, per-distance\s+cells",
     ),
     Claim(
         "worth_per_model_flip",
-        r"rate is \$(27\.\d)\\%\$ on\s+\\texttt\{pythia-160m\}, \$(26\.\d)\\%\$ on \\texttt\{llama-160m\} and "
+        r"rate is \$(28\.\d)\\%\$ on\s+\\texttt\{pythia-160m\}, \$(26\.\d)\\%\$ on \\texttt\{llama-160m\} and "
         r"\$(26\.\d)\\%\$ on\s+\\texttt\{SmolLM-135M\}",
     ),
     Claim(
         "worth_head_count",
-        r"all \$(2790)\$ heads the per-head rate never leaves the\s+band \$(22\.\d)\\%\$ to \$(34\.\d)\\%\$",
+        r"all \$(558)\$ layer-heads the per-head rate never\s+leaves the band \$(21\.\d)\\%\$ to \$(33\.\d)\\%\$",
     ),
     Claim(
         "worth_head_range",
-        r"the per-head rate never leaves the\s+band \$(22\.\d)\\%\$ to \$(34\.\d)\\%\$",
+        r"the per-head rate never\s+leaves the band \$(21\.\d)\\%\$ to \$(33\.\d)\\%\$",
     ),
     Claim("worth_rel_err", r"median \$(1\.\d+)\$ against a peak of \$1\$"),
     Claim("worth_materiality", r"at least \$(\d+)\\%\$ of its own peak"),
     Claim(
         "worth_grid_drift",
-        r"drift is \$(0\.1779)\$ across the sweep actually run, which spans\s+"
-        r"densities \$(9)\$, \$(17)\$ and \$(65)\$ --- a \$(7)\\times\$ change",
+        r"drift is \$(0\.2389)\$ across the sweep actually run, whose requested "
+        r"densities \$(9)\$, \$(17)\$ and \$(65)\$ do not all survive integer "
+        r"rounding, so the realized span is below the nominal \$(7)\\times\$\. "
+        r"An earlier version claimed a \$(14)\\times\$ span",
     ),
-    # The qualifications the paper puts on the 26.8% headline: which
+    # The spacing sensitivity. The canonical grid is log-spaced; the paper
+    # reports the uniform-grid rate next to it so the headline cannot be
+    # mistaken for the only weighting. All numbers come from
+    # results/usefulness_spacing.json and are re-derived in
+    # test_the_spacing_sensitivity_matches_its_artifact below.
+    Claim(
+        "abstract_spacing",
+        r"\$(27\.0)\\%\$ on our log grid, \$(\d+\.\d+)\\%\$ "
+        r"under uniform weighting",
+    ),
+    Claim(
+        "worth_spacing_grid",
+        r"Distance weighting matters: a \$(\d+)\$-point uniform grid gives a\s+"
+        r"sign-error rate of\s+\$(\d+\.\d+)\\%\$",
+    ),
+    Claim(
+        "worth_spacing_compare",
+        r"against \$(\d+\.\d+)\\%\$ on the pre-registered \$(\d+)\$-point log "
+        r"grid, and the\s+median relative error falls from \$(\d+\.\d+)\$ to "
+        r"\$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "app_spacing_head",
+        r"The \$(\d+\.\d+)\\%\$ headline is measured on the pre-registered "
+        r"\$(\d+)\$-point log-spaced grid\.",
+    ),
+    Claim(
+        "app_spacing_uniform",
+        r"At \$(\d+)\$ points the equal-weight rate is \$(\d+\.\d+)\\%\$ "
+        r"\(\$(\d+\.\d+)\\%\$,\s+\$(\d+\.\d+)\\%\$,\s+\$(\d+\.\d+)\\%\$ per model\);\s+"
+        r"at \$(\d+)\$ points it is \$(\d+\.\d+)\\%\$",
+    ),
+    Claim(
+        "app_spacing_conservative",
+        r"the log-grid \$(\d+\.\d+)\\%\$ is the conservative value",
+    ),
+    Claim(
+        "app_spacing_rel",
+        r"The median sup-error is \$(\d+\.\d+)\$ on the log grid and "
+        r"\$(\d+\.\d+)\$ on the uniform \$(\d+)\$-point grid\.",
+    ),
+    Claim(
+        "prov_spacing_row",
+        r"App\.~\\ref\{app:spacing\} & \$(\d+\.\d+)\\%\$; \$(\d+\.\d+)\$, "
+        r"\$(\d+\.\d+)\$, \$(\d+\.\d+)\$; \$(\d+\.\d+)\$ & "
+        r"\\texttt\{results/usefulness\\_spacing\.json :: pooled\}",
+    ),
+    # The qualifications the paper puts on the 27.0% headline: which
     # estimator it is, the interval around it, and the pairwise
     # disagreement. Every number here is re-derived from the per-head
     # rates in `test_uncertainty.py`; the patterns are also what the
     # exhaustiveness scan sees the passage through, so all three
-    # mentions of 26.8/26.70 are claimed.
+    # mentions of 27.0/26.90 are claimed.
     Claim(
         "boot_two_means",
-        r"\$(26\.8)\\%\$ is the equal-weight mean of the three per-checkpoint "
+        r"\$(27\.0)\\%\$ is the equal-weight mean of the three per-checkpoint "
         r"rates; the mean over all \$(\d+)\$ heads is \$(26\.\d\d)\\%\$",
     ),
     Claim(
         "boot_head_mean_restated",
-        r"the headline is the equal-weight \$(26\.8)\\%\$, while the interval "
+        r"the headline is the equal-weight \$(27\.0)\\%\$, while the interval "
         r"below belongs to the head-pooled \$(26\.\d\d)\\%\$",
     ),
-    Claim("boot_headline_restated", r"next to the \$(26\.8)\\%\$ itself"),
+    Claim("boot_headline_restated", r"next to the \$(27\.0)\\%\$ itself"),
     Claim(
         "boot_head_counts",
         r"\\texttt\{SmolLM-135M\} contributes \$(\d+)\$ heads against \$(\d+)\$ "
         r"each for the other",
+    ),
+    Claim(
+        "boot_weighting_gap",
+        r"Computed before rounding, the two differ by \$(\d\.\d+)\$ points",
+    ),
+    Claim(
+        "boot_interval_unit",
+        r"over the \$(\d+)\$\s+layer-heads --- over \\emph\{heads\}, not over the "
+        r"\$(\d+)\$\s+head-prompt\s+instances",
     ),
     Claim(
         "boot_pooled_interval",
@@ -623,8 +725,9 @@ CLAIMS += (
     Claim(
         "boot_pairwise_intervals",
         r"pythia vs llama \$([+-]?\d\.\d+)\$ points \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$, "
-        r"pythia vs SmolLM \$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$, "
-        r"llama vs SmolLM \$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$",
+        r"pythia vs SmolLM\s+\$([+-]?\d\.\d+)\$ \$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]\$\. "
+        r"The llama--SmolLM gap is \$([+-]?\d\.\d+)\$\s+"
+        r"\$\[([+-]?\d\.\d+), ([+-]?\d\.\d+)\]",
     ),
     # The seed-variance sentence, added after the pair-draw sweep: the pooled
     # rate and its sample sd across three pre-registered content-pair seeds.
@@ -652,11 +755,18 @@ CLAIMS += (
     ),
     Claim("method_freq_formula", r"\$\\invf_k = \\mathrm\{base\}\^\{(-2)k/d\}\$"),
     Claim("prop_gate_positive", r"whenever \$R_k > (0)\$"),
-    Claim("prop_blind_zero", r"it touches has \$\\Bk = (0)\$"),
-    Claim("blind_one_percent", r"moves by less than \$(1)\\%\$ across the distance range"),
+    # The position-free condition is A_k = B_k = 0, not B_k = 0. The old pattern
+    # matched the latter and stayed green after the paper was corrected, which is
+    # exactly the drift this registry exists to catch.
+    Claim("prop_blind_zero", r"it touches has \$\\Ak = \\Bk = (0)\$"),
+
     Claim("pair_past_one", r"past \$(1)\$, i\.e\. worse than deleting the term"),
     Claim("yarn_scales_fast_one", r"scales those channels by exactly \$(1)\$"),
-    Claim("threshold_rad_within", r"within \$(0\.1)\\rad\$ for more than three tokens"),
+    Claim(
+        "threshold_rad_within",
+        r"only position interpolation keeps the fastest channel within \$(0\.1)\\rad\$, "
+        r"and only for three tokens",
+    ),
     Claim("worth_withdrawn_fourteen", r"claimed a \$(14)\\times\$ span"),
     Claim("fig11_head_dim", r"at head dimension \$(64)\$ \(error bars"),
     Claim("fig11_error_bars", r"error bars: \$\\pm (1)\$ SD across"),
@@ -668,10 +778,10 @@ CLAIMS += (
     # context table's caption restates. The measured appendix numbers carry
     # their own claims above.
     Claim(
-        "app_linearization_bounds",
-        r"bounds the error by \$(1)\$ in units of the pair's own contribution, "
-        r"which is a well-conditioned quantity: it is \$(0)\$ when the pair is "
-        r"exactly linear and \$(1)\$ when",
+        "app_linearization_scale",
+        r"makes the error dimensionless and comparable across pairs: it is \$(\d+)\$ "
+        r"when the pair is exactly linear and \$(\d+)\$ when the error is as large as the "
+        r"term",
     ),
     Claim(
         "app_linearization_replace",
@@ -767,7 +877,7 @@ CLAIMS += (
     # would have scored on heads with 8 and 32 pairs.
     Claim(
         "worth_rank_top1",
-        r"name the same first pair on \$(55\.7)\\%\$ of the triples of "
+        r"name the same first pair on \$(49\.4)\\%\$ of the triples of "
         r"\\texttt\{pythia-160m\}, \$(56\.6)\\%\$ on \\texttt\{llama-160m\} and "
         r"\$(60\.1)\\%\$ on \\texttt\{SmolLM-135M\}",
     ),
@@ -796,8 +906,20 @@ CLAIMS += (
     ),
     Claim(
         "sensitivity_dim",
-        r"sweeping head dimension \$(32)\$ to \$(128)\$ at base "
+        r"[Ss]weeping head dimension \$(32)\$ to \$(128)\$ at base "
         r"\$(10\^\{4\})\$ leaves it at \$(25\.6)\\%\$ to \$(26\.3)\\%\$",
+    ),
+    Claim(
+        "limitations_base_sensitivity",
+        r"stable in head dimension, at \$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$, but not in "
+        r"base: it falls from \$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$ as the base rises from "
+        r"\$(10\^\{3\})\$ to \$(5\\times10\^\{5\})\$ at \$d = (\d+)\$, and the published "
+        r"\$(10\^\{4\})\$ is mid-range",
+    ),
+    Claim(
+        "limitations_grid_drift",
+        r"pooled rate moves from \$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$ over the three "
+        r"grids actually run",
     ),
     Claim(
         "sensitivity_relerr",
@@ -805,7 +927,7 @@ CLAIMS += (
     ),
     # The scale sweep the mscale appendix result rests on, restated in the
     # pointer that replaced that section in the main text.
-    Claim("appendix_mscale_scales", r"monotone in\s+entropy across \$(18)\$ scales"),
+    Claim("appendix_mscale_scales", r"monotone across \$(18)\$ scales in entropy"),
     # The five relative distances the trained-weights section sweeps.
     Claim(
         "trained_delta_range",
@@ -902,6 +1024,716 @@ CLAIMS += (
     Claim(
         "interp_shrinks_max_angle",
         r"shrinking \$\\max_k\|\\D\|\$ from \$(\d+)\$ to\s*\$(\d+)\\rad\$",
+    ),
+    # ---- attention-level cost (Sec.~\ref{sec:softmax} and App.~\ref{app:attention})
+    #
+    # The abstract rounds the per-model rates to whole points; the body and the
+    # appendix print the one-decimal ranges.  Both are the same three
+    # measurements, so both are pinned here and recomputed from
+    # results/attention_cost.json in the tests below.
+    Claim(
+        "attn_intro_rates",
+        r"changes the argmax key for \$(\d+)\\%\$--\$(\d+)\\%\$ of queries and leaves "
+        r"\$(\d+)\\%\$--\$(\d+)\\%\$ top-5 overlap on three \$(\d+)\$--\$(\d+)\$M checkpoints",
+    ),
+    Claim(
+        "attn_setup",
+        r"three \$(\d+)\$--\$(\d+)\$M checkpoints and three original passages of "
+        r"\$(\d+)\$--\$(\d+)\$ tokens",
+    ),
+    Claim(
+        "attn_rates",
+        r"changes the argmax key for \$(\d+\.\d+)\\%\$--\$(\d+\.\d+)\\%\$ of queries, moves "
+        r"\$(\d+\.\d+)\\%\$--\$(\d+\.\d+)\\%\$ of the attention mass in total variation, holds "
+        r"top-5 overlap at \$(\d+\.\d+)\$--\$(\d+\.\d+)\$, and raises the mean forward KL to "
+        r"\$(\d+\.\d+)\$--\$(\d+\.\d+)\$ nats",
+    ),
+    Claim(
+        "attn_early_mean",
+        r"\$(\d+\.\d+)\$--\$(\d+\.\d+)\$ argmax flips in the first two layers, against a "
+        r"mean of \$(\d+\.\d+)\$--\$(\d+\.\d+)\$ over the rest",
+    ),
+    Claim("attn_late_max", r"individual later layers reach \$(\d+\.\d+)\$"),
+    Claim(
+        "attn_appendix_prompts",
+        r"run on three original passages of \$(\d+)\$--\$(\d+)\$ tokens",
+    ),
+    Claim(
+        "attn_appendix_residual",
+        r"maximum residual of \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$ on \\texttt\{llama-160m\} and "
+        r"\\texttt\{SmolLM-135M\}, and to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$ on "
+        r"\\texttt\{pythia-160m\}, whose logits saturate float32",
+    ),
+    Claim(
+        "attn_appendix_top1",
+        r"all but \$(\d+\.\d+)\\%\$ of \\texttt\{pythia-160m\} queries",
+    ),
+    Claim(
+        "attn_appendix_layers",
+        r"argmax flip rate is \$(\d+\.\d+)\$--\$(\d+\.\d+)\$ across the first two layers of "
+        r"the three models and averages \$(\d+\.\d+)\$--\$(\d+\.\d+)\$ over the remaining "
+        r"layers, though individual later layers span \$(\d+\.\d+)\$--\$(\d+\.\d+)\$",
+    ),
+    # ---- the QK decomposition on a trained dictionary (Sec.~\ref{sec:features})
+    #
+    # The abstract and the introduction summarise the same two rates; the body
+    # states them with the counts they are computed over; the provenance table
+    # repeats them.  Every occurrence points back to
+    # results/qk_attribution.json, whose aggregate block is the source.
+    Claim(
+        "qk_intro_dictionary",
+        r"public \$(\d+)\$k dictionary on \\texttt\{pythia-70m(?:-deduped)?\}, where the bucket "
+        r"identity closes to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$",
+    ),
+    Claim(
+        "qk_intro_residual",
+        r"the dictionary residual is \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$: in the rotary",
+    ),
+    Claim(
+        "qk_intro_flip",
+        r"in the rotary subspace the best position-free scalar mis-signs \$(\d+\.\d+)\\%\$ of "
+        r"material cells, while the total profile --- dominated by the \$(\d+)\$ of \$(\d+)\$ "
+        r"channels that partial RoPE never rotates --- mis-signs \$(\d+\.\d+)\\%\$",
+    ),
+    Claim(
+        "qk_scope_reversal",
+        r"reversal reappears at \$(\d+\.\d+)\\%\$ of material cells --- but only in the rotary "
+        r"channels: the total profile reverses on \$(\d+\.\d+)\\%\$ of cells",
+    ),
+    Claim("qk_scope_dictionary", r"adds one public \$(\d+)\$k dictionary on a fourth"),
+    Claim(
+        "qk_scope_sizes",
+        r"content-pair draws at \$(\d+)\$--\$(\d+)\$M parameters",
+    ),
+    Claim("qk_scope_pairs", r"One input and \$(\d+)\$ content pairs per head"),
+    Claim(
+        "feat_dictionary",
+        r"\$(\d+)\{,\}(\d+)\$ ReLU units trained with SAE Lens",
+    ),
+    Claim(
+        "feat_layer",
+        r"layer \$(\d+)\$, which is the input to attention layer \$(\d+)\$",
+    ),
+    Claim(
+        "feat_exactness",
+        r"On a \$(\d+)\$-token input the bucket sum reproduces the score to a relative "
+        r"\$(\d+\.\d+)\\times10\^\{(-\d+)\}\$, and the residual fed to the dictionary is the "
+        r"vector attention consumed to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$",
+    ),
+    Claim(
+        "feat_grid",
+        r"At each of \$(\d+)\$ realized distances from \$(\d+)\$ to \$(\d+)\$ we sample "
+        r"\$(\d+)\$ content pairs",
+    ),
+    Claim(
+        "feat_rates",
+        r"constant mis-signs \$(\d+\.\d+)\\%\$ of material feature cells, or "
+        r"\$(\d+\.\d+)\\%\$ restricted to the rotary channels",
+    ),
+    Claim(
+        "feat_sweep_setup",
+        r"Holding each of \$(\d+)\$ pairs fixed and sweeping \$\\delta\$ over the QK sweep's "
+        r"\$(\d+)\$-point grid from \$(\d+)\$ to \$(\d+)\$",
+    ),
+    Claim(
+        "feat_sweep_units",
+        r"gives the\s+per-feature analogue of the per-pair rate in "
+        r"Section~\\ref\{sec:worth\}; the units\s+differ, so the two are not directly "
+        r"comparable",
+    ),
+    Claim(
+        "feat_sweep_rates",
+        r"total per-feature profile mis-signs \$(\d+\.\d+)\\%\$ of material cells; the "
+        r"rotary-only profile mis-signs \$(\d+\.\d+)\\%\$, between \$(\d+\.\d+)\\%\$ and "
+        r"\$(\d+\.\d+)\\%\$ per head, and feature pairs \$(\d+\.\d+)\\%\$",
+    ),
+    Claim(
+        "worth_grid_realized",
+        r"over the three grids actually run the pooled rate\s+moves from \$(\d+\.\d+)\\%\$ "
+        r"to \$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\$ times the between-head standard",
+    ),
+    Claim(
+        "related_scale",
+        r"Among the four schemes\s+tested at \$s = (\d+)\$, only position interpolation",
+    ),
+    Claim(
+        "feat_rotary_channels",
+        r"This head rotates \$(\d+)\$ of its \$(\d+)\$ channels; the other \$(\d+)\$ contribute",
+    ),
+    Claim(
+        "feat_total_table",
+        r"A reader of a total table would see \$(\d+\.\d+)\\%\$",
+    ),
+    Claim(
+        "feat_shares",
+        r"base bucket carries \$(\d+\.\d+)\\times\$ the score magnitude on average and the "
+        r"top-\$(\d+)\$ features \$(\d+\.\d+)\\times\$",
+    ),
+    Claim("feat_model_size", r"One layer of one \$(\d+)\$M-parameter checkpoint"),
+    # ---- the depth profile behind the trained-dictionary section --------------
+    #
+    # The table itself is covered wholesale by VERIFIED_TABLES; the prose and the
+    # provenance row quote its minimum, its maximum and its total-rate ceiling.
+    # Both prose occurrences of the layer range are checked, not just the first.
+    Claim(
+        "qk_depth_scope",
+        r"\(five dictionaries, layers \$(\d+)\$--\$(\d+)\$\)",
+        at_least=2,
+    ),
+    Claim(
+        "qk_depth_range",
+        r"keeps the rotary rate between \$(\d+\.\d+)\\%\$ and \$(\d+\.\d+)\\%\$",
+    ),
+    # ---- compressed restatements in Sec.~\ref{sec:context} --------------------
+    Claim(
+        "ctx_max_angle_main",
+        r"exactly \$(\d+)\\rad\$ at \$\\delta = (\d+)\$",
+    ),
+    Claim(
+        "ctx_pi_main",
+        r"Position interpolation reaches \$(\d+\.\d+)\$ there",
+    ),
+    # ---- provenance table rows for the two new artifacts ----------------------
+    Claim(
+        "prov_pooled_row",
+        r"&\s*\$(\d+\.\d+)\\%\$, \$\[(0\.\d+), (0\.\d+)\]\$ & "
+        r"\\texttt\{usefulness\.json\}, \\texttt\{uncertainty\.json :: pooled\}",
+    ),
+    Claim(
+        "prov_real_model_row",
+        r"&\s*\$(\d+\.\d+)\\!\\times\\!10\^\{(-\d+)\}\$, "
+        r"\$(\d+\.\d+)\\!\\times\\!10\^\{(-\d+)\}\$; "
+        r"\$(\d+)\$--\$(\d+)\\epsilon\$ & \\texttt\{results/real\\_model\.json :: identities\}",
+    ),
+    Claim(
+        "prov_agreement_row",
+        r"&\s*\$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$, chance \$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$ & "
+        r"\\texttt\{results/agreement\.json :: models\}",
+    ),
+    Claim(
+        "prov_attention_rates_row",
+        r"Sec\.~\\ref\{sec:softmax\} & \$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$, "
+        r"\$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$ & \\texttt\{results/attention\\_cost\.json\}",
+    ),
+    Claim(
+        "prov_attention_top5_row",
+        r"&\s*\$(\d+\.\d+)\$--\$(\d+\.\d+)\$, \$(\d+\.\d+)\$--\$(\d+\.\d+)\$ & same, "
+        r"\\texttt\{top5\\_overlap\\_mean\}, \\texttt\{kl\}",
+    ),
+    Claim(
+        "prov_attention_residual_row",
+        r"&\s*\$(\d+\.\d+)\\!\\times\\!10\^\{(-\d+)\}\$, \$(\d+\.\d+)\\!\\times\\!10\^\{(-\d+)\}\$ "
+        r"& same, \\texttt\{max\\_attention\\_residual\}",
+    ),
+    Claim(
+        "prov_features_exact_row",
+        r"Sec\.~\\ref\{sec:features\} & \$(\d+\.\d+)\\!\\times\\!10\^\{(-\d+)\}\$, "
+        r"\$(\d+\.\d+)\\!\\times\\!10\^\{(-\d+)\}\$ & \\texttt\{results/qk\\_attribution\.json\}",
+    ),
+    Claim(
+        "prov_features_flip_row",
+        r"&\s*\$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\\%\$ & "
+        r"same, \\texttt\{aggregate\.\*\.sign\\_flip\\_fraction\}",
+    ),
+    Claim(
+        "prov_features_share_row",
+        r"&\s*\$(\d+\.\d+)\\times\$, \$(\d+\.\d+)\\times\$ & same, "
+        r"\\texttt\{base\\_share\\_mean\}, \\texttt\{top\\_k\\_share\\_mean\}",
+    ),
+    Claim(
+        "prov_qk_depth_row",
+        r"App\.~\\ref\{app:qkcase\} & \$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$ rotary; total "
+        r"\$\\le (\d+\.\d+)\\%\$ & \\texttt\{results/qk\\_depth\.json :: layers\}",
+    ),
+    Claim(
+        "prov_qk_trajectory_row",
+        r"&\s*\$(\d+)\$, \$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\\%\$ & "
+        r"\\texttt\{results/qk\\_trajectory\.json :: pooled\}",
+    ),
+    # ---- the second dictionary, as an external-validity check -----------------
+    Claim(
+        "qk_p2_setup",
+        r"TopK release at layer \$(\d+)\$: \$k=(\d+)\$ latents of width "
+        r"\$(\d+)\{,\}(\d+)\$, a different on-disk layout and a different "
+        r"activation rule\. Its reconstruction error is \$(\d+\.\d+)\$ and the "
+        r"bucket identity closes to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$;",
+    ),
+    Claim(
+        "qk_p2_rates",
+        r"the rotary rate is \$(\d+\.\d+)\\%\$, the total rate \$(\d+\.\d+)\\%\$ "
+        r"and the feature-pair rate \$(\d+\.\d+)\\%\$, against \$(\d+\.\d+)\\%\$, "
+        r"\$(\d+\.\d+)\\%\$ and \$(\d+\.\d+)\\%\$",
+    ),
+    # ---- the distance trajectory of the feature-pair block --------------------
+    #
+    # The table itself is covered wholesale by VERIFIED_TABLES; the prose quotes
+    # the pooled summaries, the layer split and the pair count, and each capture
+    # is recomputed from results/qk_trajectory.json in the tests below.
+    Claim(
+        "qk_traj_bound",
+        r"subspace of dimension at most \$1\+(\d+)=(\d+)\$",
+    ),
+    Claim(
+        "qk_traj_block",
+        r"the \$(\d+)\\times(\d+)\$ feature-pair block traces a curve",
+    ),
+    Claim(
+        "qk_traj_rank_heads",
+        r"numerical rank is exactly \$(\d+)\$ for all \$(\d+)\$ layer-heads",
+    ),
+    Claim(
+        "qk_traj_rank_app",
+        r"trajectory matrix is exactly \$(\d+)\$ for all \$(\d+)\$ layer-heads",
+    ),
+    Claim(
+        "qk_traj_energy",
+        r"leading direction carries \$(\d+\.\d+)\\%\$ of it on average",
+    ),
+    Claim(
+        "qk_traj_flatten",
+        r"loses \$(\d+\.\d+)\\%\$ of the Frobenius norm",
+    ),
+    Claim(
+        "qk_traj_block_app",
+        r"returns the \$(\d+)\\times(\d+)\$ block of feature-pair terms",
+    ),
+    Claim(
+        "qk_traj_bound_app",
+        r"span of at most \$1\+2\\cdot(\d+)=(\d+)\$ fixed",
+    ),
+    Claim(
+        "qk_traj_matrix",
+        r"numerical rank of the \$(\d+)\\times(\d+)\$ trajectory matrix",
+    ),
+    Claim(
+        "qk_traj_dims",
+        r"Distance enters through all \$(\d+)\$ dimensions",
+    ),
+    Claim(
+        "qk_traj_energy_app",
+        r"leading singular direction carries \$(\d+\.\d+)\\%\$ of the squared "
+        r"singular-value mass, the top four carry \$(\d+\.\d+)\\%\$, and the "
+        r"participation ratio of the trajectory's singular values is \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "qk_traj_heads_pooled",
+        r"Across the \$(\d+)\$ layer-heads the leading singular direction",
+    ),
+    Claim(
+        "qk_traj_flatten_app",
+        r"trajectory to its own mean averages \$(\d+\.\d+)\\%\$, and is between "
+        r"\$(\d+\.\d+)\\%\$ and \$(\d+\.\d+)\\%\$ per head",
+    ),
+    Claim(
+        "qk_traj_layer_curve",
+        r"last attributable block has the largest\s+participation ratio "
+        r"\(\$(\d+\.\d+)\$, against at most \$(\d+\.\d+)\$ in the first four rows\), "
+        r"while the first block has the largest flatten error \(\$(\d+\.\d+)\\%\$, "
+        r"against \$(\d+\.\d+)\\%\$ at the last\)",
+    ),
+    Claim(
+        "qk_traj_pairs",
+        r"one input, \$(\d+)\$ content pairs per head and one checkpoint",
+    ),
+    # ---- the same statistics, restated in App.~\ref{app:stats} ----------------
+    Claim(
+        "stats_between_head_sd_app",
+        r"between-head standard deviation of \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "stats_boot_unit_app",
+        r"bootstrap resamples the \$(\d+)\$ layer-heads with replacement, not the "
+        r"\$(\d+)\$ head-prompt instances",
+    ),
+    Claim(
+        "stats_rank_range",
+        r"same leading pair as the exact one on \$(\d+\.\d+)\\%\$--\$(\d+\.\d+)\\%\$ of triples, "
+        r"against \$(\d+\.\d+)\\%\$--\$(\d+\.\d+)\\%\$ for chance",
+    ),
+    # ---- the threshold law and its measurement (Sec.~\ref{sec:worth}) --------
+    Claim(
+        "collapse_bins_abstract",
+        r"every one of \$(\d+)\$ measured bins lies inside the band",
+    ),
+    Claim(
+        "collapse_unit_abstract",
+        r"median per-pair error is \$(\d+\.\d+)\$ at \$L=(\d+)\$",
+    ),
+    Claim(
+        "collapse_past_abstract",
+        r"fraction of pairs past threshold there is \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ "
+        r"and \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_score_abstract",
+        r"rotary fraction: \$(\d+\.\d+)\$\s+on partial-RoPE "
+        r"\\texttt\{pythia-160m\} against \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_pairs",
+        r"\$(\d+)\$ content pairs per head, and windows \$L=8,16,\\dots,(\d+)\$",
+    ),
+    Claim("collapse_bins_body", r"That is \$(\d+)\$ non-empty log-spaced bins of \$x\$"),
+    Claim(
+        "collapse_exact_past",
+        r"minimum and the maximum are exactly \$(\d+)\$: the window then contains "
+        r"both a maximum and a minimum of the cosine, so its half-range is "
+        r"\$(\d+)\$ with no float64 slack",
+    ),
+    Claim(
+        "collapse_unit_body",
+        r"median per-pair error reaches \$(\d+\.\d+)\$ at \$L=(\d+)\$ on all three",
+    ),
+    Claim(
+        "collapse_past_body",
+        r"window spans a full period there is \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ "
+        r"and \$(\d+\.\d+)\$",
+    ),
+    Claim("collapse_tail", r"the tail carries \$(\d+\.\d+)\$ of the score"),
+    Claim(
+        "collapse_score_body",
+        r"median score-level error at \$L=(\d+)\$ is \$(\d+\.\d+)\$ against a "
+        r"pair-level \$(\d+\.\d+)\$; on the two full-RoPE checkpoints the tail is "
+        r"zero and the score-level error is \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_ls_median",
+        r"median is \$(\d+\.\d+)\$ at \$L=(\d+)\$ on \\texttt\{pythia-160m\}, "
+        r"against the optimiser's \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_bins_per_model",
+        r"the \$(\d+)\$ bins are \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ log-spaced "
+        r"bins of \$x=\\theta L\$ per checkpoint",
+    ),
+    Claim(
+        "collapse_bin_edges",
+        r"on the shared edges \$10\^\{(-?\d+)\},\\dots,10\^\{(-?\d+)\}\$, with "
+        r"empty bins omitted",
+    ),
+    # ---- the law itself: statements, proposition and proof -------------------
+    Claim(
+        "threshold_law_abstract",
+        r"the minimax relative error is exactly \$(\d+)\$ once \$x\\ge(\d+)\\pi\$, and "
+        r"below the threshold the attainable set is exactly "
+        r"\$\[\(1-\\cos\(x/(\d+)\)\)/(\d+),\\ \\sin\(\\min\(x,\\pi\)/(\d+)\)\]\$",
+    ),
+    Claim(
+        "threshold_law_intro",
+        r"The minimax relative error is exactly \$(\d+)\$ for \$x\\ge(\d+)\\pi\$, and "
+        r"below the threshold the attainable set is exactly "
+        r"\$\[\(1-\\cos\(x/(\d+)\)\)/(\d+),\\ \\sin\(\\min\(x,\\pi\)/(\d+)\)\]\$",
+    ),
+    Claim(
+        "threshold_prop_ceiling",
+        r"if \$x\\ge(\d+)\\pi\$, then \$E_\{\\mathrm\{rel\}\}=(\d+)\$ exactly",
+    ),
+    Claim(
+        "threshold_prop_floor",
+        r"if \$x<(\d+)\\pi\$, then \$E_\{\\mathrm\{rel\}\}\\ge\((\d+)-\\cos\(x/(\d+)\)\)/(\d+)\$",
+    ),
+    Claim(
+        "threshold_prop_band",
+        r"attainable values of \$E_\{\\mathrm\{rel\}\}\$ are exactly the interval "
+        r"\$\\bigl\[\((\d+)-\\cos\(x/(\d+)\)\)/(\d+),\\ \\sin\(\\min\(x,\\pi\)/(\d+)\)\\bigr\]\$",
+    ),
+    Claim(
+        "threshold_bounded",
+        r"It is a value of \$E_\{\\mathrm\{rel\}\}\$, it is bounded by \$(\d+)\$, "
+        r"and it reaches that bound exactly when the window sweeps a full period\. "
+        r"Every rate below \$(\d+)\$",
+    ),
+    Claim(
+        "threshold_proof_large",
+        r"If \$\\pi\\le x<(\d+)\\pi\$, \$R\\le(\d+)\$ always, and \$R=(\d+)\$ is attained",
+    ),
+    Claim(
+        "threshold_proof_collapse",
+        r"Translating \$R\$ back to \$E_\{\\mathrm\{rel\}\}=R/2\$ gives the stated "
+        r"band; at \$x=2\\pi\$ the band collapses to the single point \$(\d+)\$",
+    ),
+    Claim("threshold_r2_heading", r"phase swept, with a threshold at \$(\d+)\\pi\$"),
+    # ---- the extension-law consequence (Appendix~\ref{app:extension-law}) ----
+    Claim(
+        "ext_threshold",
+        r"window sweeps at least \$(\d+)\\pi\$ radians",
+    ),
+    Claim(
+        "ext_caption_scale",
+        r"for the four schemes at \$s=(\d+)\$",
+    ),
+    Claim(
+        "ext_caption_channels",
+        r"the number of rotary channels \(of \$(\d+)\$\)",
+    ),
+    Claim(
+        "ext_figcap_threshold",
+        r"channels past \$\\theta L=(\d+)\\pi\$ against context length",
+    ),
+    # R3 restates the same counts in the main text, at a different position from
+    # the appendix paragraph. A pattern that matched only one of the two would
+    # let the other drift, so both are registered.
+    Claim(
+        "ext_remark_counts",
+        r"at \$L=(\d+)\$ the number of channels past \$\\theta L=2\\pi\$ is "
+        r"\$(\d+)/(\d+)\$ under plain RoPE, \$(\d+)/(\d+)\$ under \\yarn\\ at "
+        r"\$s=(\d+)\$ and \$(\d+)/(\d+)\$ under position interpolation",
+    ),
+    Claim(
+        "ext_remark_floor",
+        r"\\yarn's nine untouched fast channels put a floor of \$(\d+)/(\d+)\$",
+    ),
+    Claim(
+        "prov_extension_row",
+        r"App\.~\\ref\{app:extension-law\} & \$(\d+)\$, \$(\d+)\$, \$(\d+)\$, "
+        r"\$(\d+)\$ of \$(\d+)\$; \$(\d+)\$ floor; \$(\d+\.\d+)\$ & "
+        r"\\texttt\{results/extension\\_law\.json :: headline\}",
+    ),
+    Claim(
+        "ext_counts",
+        r"At \$L=(\d+)\$ the count is \$(\d+)\$ of \$(\d+)\$ for plain RoPE, "
+        r"\$(\d+)\$ for \\yarn\\ at \$s=(\d+)\$, \$(\d+)\$ for position "
+        r"interpolation and \$(\d+)\$ for the raised base",
+    ),
+    Claim(
+        "ext_floor",
+        r"the fastest \$(\d+)\$ channels are bit-for-bit equal to RoPE, and all "
+        r"\$(\d+)\$ are already past threshold at this length, so no finite scale "
+        r"can take \\yarn\\ below \$(\d+)/(\d+)\$",
+    ),
+    Claim(
+        "ext_critical",
+        r"\$s > L/\(2\\pi\) = (\d+\.\d+)\$, which maps a \$(\d+)\$-token "
+        r"context onto six positions",
+    ),
+    Claim("ext_theta_zero", r"leaves \$\\theta_0 = (\d+)\$"),
+    # ---- the measured cost under extension geometry -------------------------
+    # Same three checkpoints, pairs and grid as the headline, re-priced under
+    # each ladder.  The abstract, the R3 paragraph, the appendix section, the
+    # figure caption and the provenance row all state the same six numbers, so
+    # each location is registered rather than one shared pattern.
+    Claim(
+        "extcost_abstract",
+        r"Under those ladders the measured sign-error rate falls from "
+        r"\$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$ \(\\yarn\) and "
+        r"\$(\d+\.\d+)\\%\$ \(position interpolation\), not to zero",
+    ),
+    Claim(
+        "extcost_main",
+        r"cuts the sign-error rate from \$(\d+\.\d+)\\%\$ to "
+        r"\$(\d+\.\d+)\\%\$ under \\yarn\\ at \$s=(\d+)\$ and "
+        r"\$(\d+\.\d+)\\%\$ under position interpolation, not to zero",
+    ),
+    Claim(
+        "extcost_grid",
+        r"pairs and \$(\d+)\$-point grid are re-priced under each ladder",
+    ),
+    Claim(
+        "extcost_appendix",
+        r"At \$s=(\d+)\$ the pooled sign-error rate is \$(\d+\.\d+)\\%\$ under "
+        r"\\yarn\\ \(per-checkpoint range \$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$\) and "
+        r"\$(\d+\.\d+)\\%\$ under position interpolation "
+        r"\(\$(\d+\.\d+)\$--\$(\d+\.\d+)\\%\$\), against "
+        r"\$(\d+\.\d+)\\%\$ under plain RoPE\. The corresponding past-threshold "
+        r"fractions at \$L=(\d+)\$ are \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ against "
+        r"\$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "extcost_figcap_scale",
+        r"ladders at scales \$(\d+)\$--\$(\d+)\$",
+    ),
+    Claim(
+        "extcost_figcap_threshold",
+        r"past \$\\theta L=(\d+)\\pi\$ at \$L=(\d+)\$",
+    ),
+    Claim(
+        "prov_extension_cost_row",
+        r"App\.~\\ref\{app:extension-cost\} & \$(\d+\.\d+)\\%\$, "
+        r"\$(\d+\.\d+)\\%\$, \$(\d+\.\d+)\\%\$; \$(\d+\.\d+)\$, "
+        r"\$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & "
+        r"\\texttt\{results/usefulness\\_extension\.json :: pooled\}",
+    ),
+    Claim(
+        "intervention_error_ratio",
+        r"the median is \$(\d+)\$--\$(\d+)\\%\$ higher on the two Llama-family "
+        r"models",
+    ),
+    Claim(
+        "threshold_amplitude",
+        r"content amplitude \$\\rho\\ge(\d+)\$ and phase \$\\psi\$",
+    ),
+    Claim(
+        "threshold_midrange",
+        r"best such \$\\hat c\$ is the midrange \$\(\\max c\+\\min c\)/(\d+)\$",
+    ),
+    Claim(
+        "threshold_conclusion",
+        r"minimax error is exactly \$(\d+)\$ once the window sweeps \$(\d+)\\pi\$",
+    ),
+    Claim("threshold_related", r"it saturates at \$x=(\d+)\\pi\$"),
+    Claim(
+        "checkpoint_sizes_abstract",
+        r"On three \$(\d+)\$--\$(\d+)\$M checkpoints every one of",
+    ),
+    Claim(
+        "collapse_bins_intro",
+        r"On three trained checkpoints all \$(\d+)\$ measured bins lie inside that band",
+    ),
+    Claim(
+        "collapse_unit_intro",
+        r"at \$L=(\d+)\$ the median per-pair error is \$(\d+\.\d+)\$",
+    ),
+    Claim(
+        "collapse_bins_per_model_body",
+        r"--- \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ per checkpoint, because the bin grid",
+    ),
+    Claim(
+        "figure_threshold_line",
+        r"the dotted line is \$\\theta L=(\d+)\\pi\$",
+    ),
+    Claim(
+        "collapse_ls_exceed",
+        r"so its error can slightly exceed \$(\d+)\$; the median is",
+    ),
+    Claim(
+        "collapse_sign_abstract",
+        r"The \$(\d+\.\d+)\\%\$ sign-error rate is a different functional",
+    ),
+    Claim(
+        "collapse_sign_intro",
+        r"The \$(\d+\.\d+)\\%\$ sign-error rate below is a different functional",
+    ),
+    Claim(
+        "collapse_sign_error_rate",
+        r"reports the wrong sign on \$(\d+\.\d+)\\%\$ of per-pair, per-distance cells",
+    ),
+    Claim(
+        "collapse_tail_channels_abstract",
+        r"the \$(\d+)\$ of \$(\d+)\$ channels that partial RoPE never rotates",
+    ),
+    Claim(
+        "collapse_tail_channels",
+        r"On partial-RoPE \\texttt\{pythia-160m\}, \$(\d+)\$ of \$(\d+)\$ channels "
+        r"never rotate",
+    ),
+    Claim(
+        "collapse_conclusion",
+        r"all \$(\d+)\$ measured bins lie inside the exact band below it, and the "
+        r"pair-level error is \$(\d+\.\d+)\$ at \$L=(\d+)\$",
+    ),
+
+    Claim(
+        "yarn_ratio_abstract",
+        r"the amplitude-weighted error ratio is \$(\d+\.\d+)\$",
+    ),
+    # ---- the intervention (Sec.~\ref{sec:intervention}) ----------------------
+    Claim(
+        "intervention_abstract",
+        r"Over \$(\d+)\$ single-pair interventions the position-free table selects "
+        r"a different pair in \$(\d+)\$ cells and reverses the sign of the "
+        r"suppression in \$(\d+)\$",
+    ),
+    Claim("intervention_oracle_abstract", r"exact rule is a \$(\d+\.\d+)\$ oracle"),
+    Claim(
+        "intervention_intro",
+        r"over \$(\d+)\$ single-pair interventions the position-free selection "
+        r"differs from the exact one in \$(\d+)\$ cells and reverses the "
+        r"suppression in \$(\d+)\$",
+    ),
+    Claim(
+        "intervention_peak",
+        r"unsaturated \(\$\\text\{peak\}\\le(0\.9)\$",
+    ),
+    Claim(
+        "intervention_visible",
+        r"query must see at least \$(\d+)\$ keys",
+    ),
+    Claim(
+        "intervention_cells",
+        r"the \$(\d+)\$ cells are \$(\d+)\$ distinct heads per checkpoint",
+    ),
+    Claim(
+        "intervention_oracle",
+        r"exact rule scores \$(\d+\.\d+)\$ in all \$(\d+)\$ cells",
+    ),
+    Claim(
+        "intervention_counts",
+        r"selection differs from the exact one in \$(\d+)\$ of \$(\d+)\$ cells, "
+        r"and in \$(\d+)\$ of those",
+    ),
+    Claim(
+        "intervention_per_model",
+        r"with \$(\d+)\$ differing selections and \$(\d+)\$ reversals on "
+        r"\\texttt\{pythia-160m\}, against \$(\d+)\$/\$(\d+)\$ on "
+        r"\\texttt\{llama-160m\} and \$(\d+)\$/\$(\d+)\$ on "
+        r"\\texttt\{SmolLM-135M\}",
+    ),
+    Claim(
+        "intervention_medians",
+        r"median ratio is \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$ "
+        r"respectively",
+    ),
+    Claim("intervention_min", r"minimum is \$(-?\d+\.\d+)\$"),
+    Claim(
+        "intervention_identity",
+        r"median absolute prediction error is \$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$ "
+        r"on \\texttt\{pythia-160m\} and \$(\d+\.\d+)\$--"
+        r"\$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$",
+    ),
+    Claim(
+        "intervention_control",
+        r"unedited forward pass \(\$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$, "
+        r"\$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$, "
+        r"\$(\d+\.\d+)\\times10\^\{(-?\d+)\}\$\)",
+    ),
+    Claim(
+        "intervention_currency",
+        r"A value of \$(\d+)\$ is a faithful summary, \$(\d+)\$ removes nothing "
+        r"that mattered",
+    ),
+    Claim("intervention_window", r"causal window \$(\d+),\\dots,q\$"),
+    Claim("intervention_figure_oracle", r"it is \$(\d+)\$ by construction"),
+    Claim(
+        "intervention_saturation",
+        r"since a head already at \$(\d+)\$ cannot respond to a score edit",
+    ),
+    Claim(
+        "intervention_conclusion",
+        r"Acting on the attribution costs \$(\d+)\$ differing selections and "
+        r"\$(\d+)\$ sign reversals in \$(\d+)\$ interventions",
+    ),
+    # ---- provenance rows for the two new artifacts ---------------------------
+    Claim(
+        "prov_collapse_row",
+        r"Sec\.~\\ref\{sec:worth\} & \$(\d+)\$ bins; \$(\d+\.\d+)\$; exactly "
+        r"\$(\d+)\$ past threshold",
+    ),
+    Claim(
+        "prov_collapse_past_row",
+        r"& \$(\d+\.\d+)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ & same, "
+        r"\\texttt\{by\\_window\[\]\.past\\_threshold\\_fraction\}",
+    ),
+    Claim(
+        "prov_collapse_score_row",
+        r"& \$(\d+\.\d+)\$, \$(\d+\.\d+)\$, \$(\d+\.\d+)\$; \$(\d+\.\d+)\$ & "
+        r"same, \\texttt\{score\\_rel\\_median\}",
+    ),
+    Claim(
+        "prov_intervention_row",
+        r"Sec\.~\\ref\{sec:intervention\} & \$(\d+)\$, \$(\d+)\$, \$(\d+)\$; "
+        r"\$(\d+)\$/\$(\d+)\$, \$(\d+)\$/\$(\d+)\$, \$(\d+)\$/\$(\d+)\$ & "
+        r"\\texttt\{results/intervention\.json\}",
+    ),
+    Claim(
+        "prov_intervention_medians_row",
+        r"& \$(\d+\.\d+)\$ oracle; \$(\d+\.\d+)\$, \$(\d+\.\d+)\$, "
+        r"\$(\d+\.\d+)\$ & same, \\texttt\{exact\}",
+    ),
+    Claim(
+        "prov_intervention_identity_row",
+        r"& \$(-?\d+\.\d+)\$; \$(\d+\.\d+)\\\!\\times\\\!10\^\{(-?\d+)\}\$, "
+        r"\$(\d+\.\d+)\\\!\\times\\\!10\^\{(-?\d+)\}\$ & same, "
+        r"\\texttt\{pooled\}",
     ),
 )
 
@@ -1555,7 +2387,7 @@ def test_feature_additivity_claim_on_the_5_point_grid() -> None:
     assert_paper_asserts_below(
         coarse, "additivity_5pt_ceiling", "feature additivity, 5-point grid"
     )
-    for name in ("abstract_additivity", "r1_additivity", "conclusion_additivity"):
+    for name in ("abstract_additivity", "r1_additivity"):
         assert_paper_sci_matches(coarse, literal(name), -14, name)
     assert_paper_sci_matches(
         coarse, literal("eq_additivity_grids", 1), -14, "the 5-point residual in the prose"
@@ -1581,7 +2413,6 @@ def test_feature_additivity_claim_on_the_54_point_grid() -> None:
         "r2_additivity",
         "cond_additivity",
         "synthesis_additivity",
-        "conclusion_additivity_54",
     ):
         assert_paper_sci_matches(fine, literal(name), -14, name)
     csv_residual = max(
@@ -1615,6 +2446,8 @@ def test_the_ratio_is_withdrawn_and_the_paper_says_so() -> None:
     import rope_attribution.statistics as STATS
 
     assert int(literal("withdrawn_ratio")) == 920
+    raised = max(fig09_per_feature_ratios(fig09_csv_curves()))
+    assert_paper_number_matches(raised, literal("withdrawn_ratio"), "the withdrawn ratio")
     assert "We withdrew it" in TEX_FLAT
     # The mechanism is named, not just the retraction.
     assert "keeps shrinking toward zero" in TEX_FLAT
@@ -1634,12 +2467,28 @@ def test_the_withdrawal_remark_is_stable_where_the_headline_was_not() -> None:
     import rope_attribution.statistics as STATS
 
     densities = [int(x) for x in groups("withdrawn_ratio_densities")[0]]
-    measured = [row["n_deltas"] for row in STATS.ratio_vs_density()]
+    ladder = STATS.withdrawn_ratio_ladder()
+    measured = [row["n_deltas"] for row in ladder["rows"]]
     assert densities == measured, f"paper says {densities}, module measured {measured}"
-    ratios = [row["max_min_ratio"] for row in STATS.ratio_vs_density()]
-    spread = max(ratios) / min(ratios)
-    assert_paper_number_matches(spread, literal("withdrawn_ratio_drift"), "the ratio's spread")
+    assert_paper_number_matches(
+        ladder["spread_worst_feature"],
+        literal("withdrawn_ratio_drift"),
+        "the per-feature ratio's spread",
+    )
+    # The two statistics the earlier draft conflated must stay separate.
+    assert ladder["spread_worst_feature"] != pytest.approx(ladder["spread_pooled"])
     assert int(literal("withdrawn_ratio_seeds")) == STATS.N_SEEDS
+    sweep = ladder["seed_sweep"]
+    assert_paper_number_matches(
+        sweep["worst_feature_relative_std"],
+        literal("withdrawn_seed_ratio"),
+        "the per-feature seed spread",
+    )
+    assert_paper_number_matches(
+        sweep["pooled_relative_std"],
+        literal("withdrawn_seed_ratio_pooled"),
+        "the pooled seed spread",
+    )
 
 
 def test_the_replacement_statistic_is_what_the_paper_leads_with() -> None:
@@ -2132,9 +2981,22 @@ def test_plain_rope_collapses_to_zero_exactly_from_delta_861() -> None:
         f"fig04 says {yarn[first_zero] * N_PAIRS}"
     )
     assert yarn[int(delta_end)] * N_PAIRS == int(end)
-    prov_delta, prov_end, prov_denom = groups("prov_fig04")[0]
+    (
+        prov_delta,
+        prov_rope,
+        prov_denom,
+        prov_yarn,
+        prov_denom_again,
+        prov_far_delta,
+        prov_far,
+        prov_far_denom,
+    ) = groups("prov_fig04")[0]
     assert int(prov_delta) == first_zero
-    assert int(prov_end) == int(end) and int(prov_denom) == N_PAIRS
+    assert int(prov_rope) == round(rope[first_zero] * N_PAIRS) == 0
+    assert int(prov_yarn) == int(here)
+    assert int(prov_denom) == int(prov_denom_again) == int(prov_far_denom) == N_PAIRS
+    assert int(prov_far_delta) == int(delta_end)
+    assert int(prov_far) == int(end)
 
 
 def test_the_synthesis_ramp_from_zero_to_eleven_out_of_thirty_two() -> None:
@@ -2229,11 +3091,21 @@ def test_position_interpolation_is_a_thousand_times_below_rope_on_this_axis() ->
     assert_paper_number_matches(values["position_interpolation"], value, "PI amp-weighted err")
     assert_paper_says_roughly(measured, factor, "how far below RoPE PI sits")
     prov_value, prov_delta = groups("prov_pi_amp")[0]
-    # The appendix row "$1225.06$, $\delta = 3$" pairs the PI amplitude-weighted
-    # error with the fig06 crossing distance, not with this row's delta.
-    assert int(prov_delta) == int(literal("pair_err_d3", 1))
+    # The appendix row "$1225.06$, $\delta = 8192$" is the same PI
+    # amplitude-weighted error at the far end of the fig05 grid. Pairing it with
+    # delta = 3 (the fig06 crossing distance) was wrong by three orders of
+    # magnitude: at delta = 3 the same column reads 4.6e-6.
+    far = {
+        row["method"]: float(row["amplitude_weighted_err"])
+        for row in csv_rows("fig05_linearization_error")
+        if int(row["delta"]) == int(prov_delta)
+    }
+    assert int(prov_delta) == FIG_DELTA_MAX
     assert_paper_number_matches(
-        values["position_interpolation"], prov_value, "PI amp-weighted err (appendix)"
+        far["position_interpolation"], prov_value, "PI amp-weighted err (appendix)"
+    )
+    assert_paper_number_matches(
+        far["position_interpolation"], literal("ctx_pi_main"), "PI amp-weighted err (main text)"
     )
     prov_divisor, prov_factor = groups("derived_1000x")[0][::-1]
     assert_paper_number_matches(
@@ -2259,7 +3131,28 @@ def test_partial_rope_split_fractions_and_dimensions() -> None:
     assert partial["n_rot"] == int(partial["rotated_fraction"] * partial["dim"])
     assert partial["rotated_fraction"] + partial["clean_fraction"] == 1.0
     assert partial["clean_fraction"] == 0.75
+    # p = 0.25 rotates a quarter, so three quarters carry no position. The
+    # paper said "a quarter" here, which inverts the one quantity the section
+    # is about. The artifact's clean_fraction is the detector.
+    assert "correct only for the unrotated three quarters of the" in TEX_FLAT
+    assert "a quarter of the channels carry no position" not in TEX_FLAT
     assert {int(row["n_rot"]) for row in csv_rows("fig07_partial_rope")} == {partial["n_rot"]}
+
+
+def test_the_per_pair_normalization_is_a_scale_not_a_bound() -> None:
+    """The old sentence claimed a bound the measurements violate.
+
+    The fastest pair's normalized linearization error is already past 1 at
+    delta = 3 (Section~\\ref{sec:context}) and reaches 1.8e7 at delta = 8192
+    in fig06. A phrase that calls this a bound by 1 is false, and a reviewer
+    can check it in one row of the CSV.
+
+    Mutation verdict: restoring "bounds the error by $1$" fails both asserts.
+    """
+    assert "It is a scale, not a bound" in TEX_FLAT
+    assert "bounds the error by" not in TEX_FLAT
+    rows = csv_rows("fig06_pair_exact_vs_linear")
+    assert max(float(row["normalized_abs_error"]) for row in rows) > 1.0
 
 
 def test_the_unrotated_subscore_spread_is_exactly_zero_on_both_grids() -> None:
@@ -2678,15 +3571,17 @@ def test_the_two_pair_amplitudes_the_paper_quotes() -> None:
 
 
 def test_the_appendix_rounds_the_two_pair_amplitudes_correctly() -> None:
-    """KNOWN PAPER DEFECT. The appendix truncates ``0.9526294617807264``.
+    """The appendix rounds both amplitudes to ten decimals; it used to truncate.
 
-    Correct rounding to the 10 decimal places the appendix writes is
-    ``0.9526294618``; the paper writes ``0.9526294617``, which is a truncation.
-    (The other half of the same row, ``2.3046990966686227`` -> ``2.3046990967``,
-    is a correct rounding and is checked below.)  The mismatch is tiny, about
-    8e-11 in absolute terms, but the appendix presents these as *the* values
-    and states that no number was typed from memory, so it is left failing
-    rather than loosened.
+    ``0.9526294617807264`` was printed as ``...17``, a truncation; the correct
+    rounding is ``...18``, which is what the row now carries.  The other
+    amplitude, ``2.3046990966686227`` -> ``...67``, was already correct and is
+    checked in the same assertion pair, so a fix to one cannot hide a break in
+    the other.
+
+    Mutation verdict: restoring ``0.9526294617`` fails ``R_0 (appendix)``;
+    truncating ``2.3046990966686227`` to ``2.3046990966`` fails
+    ``R_12 (appendix)``.
     """
     rows = csv_rows("fig06_pair_exact_vs_linear")
     amplitude_0 = {row["amplitude_R_k"] for row in rows if int(row["pair_index"]) == 0}
@@ -2762,14 +3657,16 @@ def test_every_begin_has_a_matching_end() -> None:
 
 
 def paperfigure_calls() -> list[tuple[str, str, str]]:
-    """``\\paperfigure{file stem}{caption}{label}``, caption braces respected.
+    """``\\paperfigure[<width>]{file stem}{caption}{label}``, braces respected.
 
-    The caption is full of braces and ``$...$``, so the arguments have to be
-    split on nesting depth, not on whitespace or commas.
+    The width argument is optional, so it is skipped rather than parsed; the
+    caller only ever needs the stem, the caption and the label. The caption is
+    full of braces and ``$...$``, so the arguments have to be split on nesting
+    depth, not on whitespace or commas.
     """
     calls: list[tuple[str, str, str]] = []
     body = paper_body()
-    for match in re.finditer(r"\\paperfigure\{", body):
+    for match in re.finditer(r"\\paperfigure(?:\[[^\]]*\])?\{", body):
         index = match.end() - 1
         args: list[str] = []
         for position in range(1, 4):
@@ -2967,23 +3864,23 @@ def test_the_paper_states_a_limitations_section() -> None:
     for label, required in (
         ("no downstream model", "Neither connects to a task"),
         ("trained weights acknowledged", "Section~" + chr(92) + "ref{sec:trained} confirms the"),
-        ("no learned features", "none of its content"),
+        ("no content evaluated on a task", "none of its content"),
         ("no evaluation", "no retrieval benchmark, no language-modelling evaluation"),
         ("sign reversal is synthetic", "property of random directions in a"),
-        ("single configuration", "We have not swept head dimension"),
+        ("single configuration", "varies the base and the head dimension"),
     ):
         assert required in limitations, f"Limitations no longer states: {label}"
     assert "This matters enough to state before the results" in TEX_FLAT
 
 
 def test_the_paper_disclaims_the_three_forbidden_things() -> None:
-    """No trained sparse autoencoder, no real activations, no retrieval accuracy."""
+    """No trained sparse autoencoder (one public dictionary is used), no accuracy number."""
     disclaimer = disclaimer_text()
     for phrase in (
-        "There is no sparse autoencoder anywhere in this work",
+        "No sparse autoencoder is trained in this work",
         "There is no retrieval benchmark and no accuracy measurement",
         "We do not claim any scheme is better in practice",
-        "The conclusions are model-independent by construction",
+        "The algebraic conclusions are model-independent by construction",
         "no retrieval benchmark, no accuracy figure",
         # Section~\ref{sec:trained} now measures on trained weights, so the
         # disclaimer is about what those measurements are *for*, not about their
@@ -2993,6 +3890,34 @@ def test_the_paper_disclaims_the_three_forbidden_things() -> None:
         "Section~" + chr(92) + "ref{sec:trained} then repeats the central",
     ):
         assert phrase in disclaimer, f"the paper no longer says: {phrase!r}"
+
+
+def test_the_scope_and_softmax_qualifiers_are_explicit() -> None:
+    """Three claims that were true only with a qualifier.
+
+    The endpoint comparison is an average, not a per-seed guarantee; the
+    softmax's denominator effect can grow, but no universal monotonicity is
+    measured; and only the algebra is model-independent, not the synthetic
+    sign-reversal experiment. These are prose guards for exactly those three
+    corrections, not a general style rule.
+    """
+    assert "on average, the same size to within a factor of" in TEX_FLAT
+    assert "can grow with the number of keys" in TEX_FLAT
+    assert "it grows as the number of keys grows" not in TEX_FLAT
+    assert "The algebraic conclusions are model-independent" in TEX_FLAT
+    assert "The conclusions are model-independent" not in TEX_FLAT
+    assert "No downstream task, and one model's dictionaries" in TEX_FLAT
+    assert "No downstream task, and no learned features" not in TEX_FLAT
+    assert "No downstream model, and no learned features" not in TEX_FLAT
+    assert "Computed before rounding, the two differ by $0.14$ points" in TEX_FLAT
+    assert "more than twice" not in TEX_FLAT
+    # The pairwise bootstrap has three gaps; only the pythia-vs-others two
+    # are large next to the between-head spread. The llama--SmolLM gap is a
+    # tenth of a point and must not be folded into "about two percentage
+    # points, larger than the noise floor".
+    assert "the llama--SmolLM gap is a tenth of a point" in TEX_FLAT
+    assert "the llama--SmolLM gap is a tenth of a point and not material" in TEX_FLAT
+    assert "The effect is about two percentage points" not in TEX_FLAT
 
 
 def test_no_affirmative_claim_of_a_trained_model_real_activations_or_accuracy() -> None:
@@ -3033,12 +3958,12 @@ def test_the_paper_does_not_deny_the_trained_checkpoints_exist() -> None:
 
     The trained section measures on three pretrained checkpoints, so that
     absolute denial was false; it was replaced by what is actually absent (a
-    downstream model, learned features, a retrieval benchmark) plus an explicit
-    statement that those checkpoints are not evaluated on any task. This pins
+    downstream model, a trained task, a retrieval benchmark) plus an explicit
+    statement that those checkpoints are not evaluated on a task. This pins
     the replacement and catches a rewording that resurrects the false sentence.
     """
     assert "no trained model" not in TEX_FLAT
-    assert "we do not evaluate them on any task" in TEX_FLAT
+    assert "but are not evaluated on a task" in TEX_FLAT
 
 
 def test_the_only_accuracy_number_in_the_paper_is_the_one_it_refuses_to_report() -> None:
@@ -3059,7 +3984,15 @@ def test_the_only_accuracy_number_in_the_paper_is_the_one_it_refuses_to_report()
 # Sections that report checkpoint measurements and may therefore name a checkpoint
 # affirmatively. Everything else in the paper must speak about checkpoints only to
 # disclaim them, which is the rule this list carves the exception out of.
-CHECKPOINT_REPORTING_SECTIONS = ("sec:trained", "sec:worth")
+CHECKPOINT_REPORTING_SECTIONS = (
+    "sec:trained",
+    "sec:worth",
+    # The appendix section that re-prices the same checkpoints under each
+    # extension ladder.  It reports a measurement on trained weights, so it
+    # owns an affirmative checkpoint mention exactly as the two sections above
+    # do; the guard still rejects one anywhere else.
+    "app:extension-cost",
+)
 
 
 def test_no_model_or_activation_is_reported_anywhere_outside_a_denial() -> None:
@@ -3106,7 +4039,13 @@ def test_no_model_or_activation_is_reported_anywhere_outside_a_denial() -> None:
 EXEMPT_ALGEBRA: frozenset[str] = frozenset()
 
 # `tabular` blocks whose every cell is verified by a dedicated test.
-VERIFIED_TABLES = ("tab:spectrum", "tab:exact")
+VERIFIED_TABLES = (
+    "tab:spectrum",
+    "tab:exact",
+    "tab:qk-depth",
+    "tab:qk-trajectory",
+    "tab:extension-law",
+)
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 
@@ -3234,6 +4173,1423 @@ def unaccounted_numbers() -> set[str]:
     return numbers
 
 
+# ==========================================================================
+# The attention-level cost and the trained-dictionary decomposition
+# ==========================================================================
+#
+# Two artifacts were added after the first submission. Their literals are
+# checked here, not merely covered: every capture is recomputed from the JSON
+# the provenance table names, so a value that drifts in either file fails.
+
+ATTENTION_COST_PATH = _REPO / "results" / "attention_cost.json"
+QK_PATH = _REPO / "results" / "qk_attribution.json"
+QK_P2_PATH = _REPO / "results" / "qk_attribution_p2.json"
+DEPTH_PATH = _REPO / "results" / "qk_depth.json"
+QK_TRAJECTORY_PATH = _REPO / "results" / "qk_trajectory.json"
+USEFULNESS_PATH = _REPO / "results" / "usefulness.json"
+UNCERTAINTY_PATH = _REPO / "results" / "uncertainty.json"
+AGREEMENT_PATH = _REPO / "results" / "agreement.json"
+COLLAPSE_PATH = _REPO / "results" / "collapse.json"
+INTERVENTION_PATH = _REPO / "results" / "intervention.json"
+EXTENSION_PATH = _REPO / "results" / "extension_law.json"
+
+
+def _artifact(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _checkpoint_sizes(artifact: dict) -> list[int]:
+    """The checkpoint sizes in millions, read off the ids that were run."""
+    sizes = []
+    for row in artifact["models"]:
+        match = re.search(r"(\d+)[Mm]", row["model_id"])
+        assert match, f"no size in checkpoint id {row['model_id']!r}"
+        sizes.append(int(match.group(1)))
+    return sorted(sizes)
+
+
+def test_the_attention_cost_headline_is_what_the_three_checkpoints_measured() -> None:
+    """The abstract, the body and the setup paragraph quote one sweep.
+
+    Mutation verdict: changing the abstract's ``27%`` to ``28%``, or the
+    body's ``27.2%`` to ``27.3%``, fails the corresponding comparison; so does
+    dropping a checkpoint from the artifact, because the sizes and the number
+    of aggregates are pinned.
+    """
+    artifact = _artifact(ATTENTION_COST_PATH)
+    assert artifact["schema"] == "attention-cost/v1"
+    assert len(artifact["models"]) == 3
+    assert _checkpoint_sizes(artifact) == [135, 160, 160]
+
+    setup = groups("attn_setup")[0]
+    assert (int(setup[0]), int(setup[1])) == (135, 160)
+    assert (int(setup[0]), int(setup[1])) == (
+        min(_checkpoint_sizes(artifact)),
+        max(_checkpoint_sizes(artifact)),
+    )
+
+    n_tokens = [
+        prompt["n_tokens"]
+        for model in artifact["models"]
+        for prompt in model["per_prompt"]
+    ]
+    assert min(n_tokens) == int(setup[2]) == 88
+    assert max(n_tokens) == int(setup[3]) == 122
+    assert groups("attn_appendix_prompts")[0] == setup[2:]
+
+    aggregates = [model["aggregate"] for model in artifact["models"]]
+    top1 = [row["top1_flip_rate"] for row in aggregates]
+    variation = [row["total_variation_mean"] for row in aggregates]
+    top5 = [row["top5_overlap_mean"] for row in aggregates]
+    kl = [row["kl_exact_surrogate_mean"] for row in aggregates]
+
+    # The abstract rounds the same rates to whole points.
+    intro = [int(value) for value in groups("attn_intro_rates")[0]]
+    measured = [
+        min(top1) * 100,
+        max(top1) * 100,
+        min(top5) * 100,
+        max(top5) * 100,
+    ]
+    for actual, written, what in zip(
+        measured,
+        intro[:4],
+        ("argmax low", "argmax high", "top-5 low", "top-5 high"),
+        strict=True,
+    ):
+        assert round(actual) == written, (
+            f"{what}: the abstract writes {written}, the sweep measured {actual!r}"
+        )
+    assert (intro[4], intro[5]) == (int(setup[0]), int(setup[1]))
+
+    body = groups("attn_rates")[0]
+    for actual, written, what in (
+        (min(top1) * 100, body[0], "argmax low"),
+        (max(top1) * 100, body[1], "argmax high"),
+        (min(variation) * 100, body[2], "total variation low"),
+        (max(variation) * 100, body[3], "total variation high"),
+        (min(top5), body[4], "top-5 low"),
+        (max(top5), body[5], "top-5 high"),
+        (min(kl), body[6], "KL low"),
+        (max(kl), body[7], "KL high"),
+    ):
+        assert_paper_number_matches(actual, written, f"attention cost, {what}")
+
+
+def test_the_attention_appendix_reports_the_layer_shape_and_float32_floor() -> None:
+    """The per-layer summary is a range over ``by_layer``, not an impression.
+
+    Mutation verdict: restoring the old ``0.04--0.36 later`` sentence fails the
+    span comparison, because individual later layers reach 0.74; moving the
+    pythia residual into the ``llama``/``SmolLM`` slot fails the scientific
+    notation check, as does turning 9.5e-3 into 9.5e-6.
+    """
+    artifact = _artifact(ATTENTION_COST_PATH)
+    models = artifact["models"]
+
+    early = [
+        row["top1_flip_rate"]
+        for model in models
+        for row in model["by_layer"]
+        if row["layer"] < 2
+    ]
+    later = [
+        [row["top1_flip_rate"] for row in model["by_layer"] if row["layer"] >= 2]
+        for model in models
+    ]
+    later_means = [sum(rates) / len(rates) for rates in later]
+    later_flat = [rate for rates in later for rate in rates]
+
+    main_early = groups("attn_early_mean")[0]
+    appendix = groups("attn_appendix_layers")[0]
+    assert main_early == appendix[:4], (
+        "the main text and the appendix no longer restate the same early-later split"
+    )
+    assert_paper_number_matches(min(early), main_early[0], "early layer min")
+    assert_paper_number_matches(max(early), main_early[1], "early layer max")
+    assert_paper_number_matches(min(later_means), main_early[2], "later mean min")
+    assert_paper_number_matches(max(later_means), main_early[3], "later mean max")
+    assert_paper_number_matches(min(later_flat), appendix[4], "later layer min")
+    assert_paper_number_matches(max(later_flat), appendix[5], "later layer max")
+    # The main text now names the same late-layer maximum, so the earlier claim
+    # that later layers are uniformly mild cannot come back unnoticed.
+    assert_paper_number_matches(
+        max(later_flat), literal("attn_late_max"), "main-text later-layer max"
+    )
+
+    residuals = {
+        model["model_id"]: max(
+            prompt["max_attention_residual"] for prompt in model["per_prompt"]
+        )
+        for model in models
+    }
+    llm = max(
+        value for key, value in residuals.items() if "pythia" not in key
+    )
+    pythia = next(value for key, value in residuals.items() if "pythia" in key)
+    mantissa, exponent, pythia_mantissa, pythia_exponent = groups(
+        "attn_appendix_residual"
+    )[0]
+    assert_paper_sci_matches(llm, mantissa, int(exponent), "llama/SmolLM residual")
+    assert_paper_sci_matches(
+        pythia, pythia_mantissa, int(pythia_exponent), "pythia residual"
+    )
+
+    disagreements = {
+        model["model_id"]: max(
+            prompt["max_top1_disagreement_with_model"]
+            for prompt in model["per_prompt"]
+        )
+        for model in models
+    }
+    assert_paper_number_matches(
+        max(value for key, value in disagreements.items() if "pythia" in key) * 100,
+        literal("attn_appendix_top1"),
+        "pythia top-1 disagreement",
+    )
+    assert all(
+        value == 0.0 for key, value in disagreements.items() if "pythia" not in key
+    ), "the paper claims exact agreement for the other two checkpoints"
+
+
+def test_the_qk_decomposition_is_exact_on_a_trained_dictionary() -> None:
+    """Every setup literal in Section~\\ref{sec:features} comes from the JSON.
+
+    Mutation verdict: pairing layer 3 with attention layer 5, or writing 65536
+    units, fails here; the ``d_sae`` field is parsed from the artifact's own
+    dictionary string rather than trusted from the paper.
+    """
+    qk = _artifact(QK_PATH)
+    assert qk["schema"] == "qk-attribution/v1"
+
+    dictionary = qk["dictionary"]
+    wide = int(re.search(r"d_sae=(\d+)", dictionary).group(1))
+    thousands, units = groups("feat_dictionary")[0]
+    assert int(thousands) * 1000 + int(units) == wide == 32768
+    # "32k" is the dictionary width in thousands, rounded down.
+    assert int(literal("qk_scope_dictionary")) == wide // 1000
+    assert f"pythia-{literal('feat_model_size')}m" in dictionary
+
+    sae_layer, attention_layer = (int(x) for x in groups("feat_layer")[0])
+    assert (sae_layer, attention_layer) == (qk["sae_layer"], qk["attention_layer"])
+    assert attention_layer == sae_layer + 1
+    assert f"{sae_layer}-res-sm" in dictionary
+
+    n_tokens, mantissa, exponent, residual, residual_exponent = groups(
+        "feat_exactness"
+    )[0]
+    assert int(n_tokens) == qk["n_tokens"]
+    assert_paper_sci_matches(
+        qk["aggregate"]["max_relative_exactness_error"],
+        mantissa,
+        int(exponent),
+        "QK exactness",
+    )
+    assert_paper_sci_matches(qk["ln_residual"], residual, int(residual_exponent), "LN residual")
+
+    # The abstract restates the bucket identity and the dictionary residual;
+    # "exact" is reserved for the identity, and the residual is the real error.
+    thousands, abstract_mantissa, abstract_exponent = groups("qk_intro_dictionary")[0]
+    assert int(thousands) == wide // 1000
+    assert_paper_sci_matches(
+        qk["aggregate"]["max_relative_exactness_error"],
+        abstract_mantissa,
+        int(abstract_exponent),
+        "abstract bucket identity",
+    )
+    abstract_residual, abstract_residual_exponent = groups("qk_intro_residual")[0]
+    assert_paper_sci_matches(
+        qk["ln_residual"],
+        abstract_residual,
+        int(abstract_residual_exponent),
+        "abstract LN residual",
+    )
+    abstract_rotary, abstract_unrotated, abstract_dim, abstract_total = groups(
+        "qk_intro_flip"
+    )[0]
+    aggregate = qk["aggregate"]
+    assert_paper_number_matches(
+        aggregate["sweep_rotary"]["sign_flip_fraction"] * 100,
+        abstract_rotary,
+        "abstract rotary sweep",
+    )
+    assert int(abstract_unrotated) == qk["head_dim"] - qk["rotary_dim"]
+    assert int(abstract_dim) == qk["head_dim"]
+    assert_paper_number_matches(
+        aggregate["sweep_feature"]["sign_flip_fraction"] * 100,
+        abstract_total,
+        "abstract total sweep",
+    )
+
+    distances, first, last, pairs = groups("feat_grid")[0]
+    assert int(distances) == len(qk["deltas"])
+    assert (int(first), int(last)) == (min(qk["deltas"]), max(qk["deltas"]))
+    assert int(pairs) == qk["pairs_per_delta"]
+    assert int(literal("qk_scope_pairs")) == qk["pairs_per_delta"]
+
+    rotated, dim, unrotated = (int(x) for x in groups("feat_rotary_channels")[0])
+    assert dim == qk["head_dim"]
+    assert rotated == qk["rotary_dim"]
+    assert unrotated == dim - rotated
+
+    sizes = _checkpoint_sizes(_artifact(ATTENTION_COST_PATH))
+    low, high = (int(x) for x in groups("qk_scope_sizes")[0])
+    assert (low, high) == (min(sizes), max(sizes))
+
+
+def test_the_fixed_content_sweep_reverses_where_the_total_profile_does_not() -> None:
+    """The paper's central numerical contrast, recomputed from the aggregate.
+
+    Mutation verdict: swapping the rotary and total sweep rates, or quoting
+    3.9%/8.5% as the fixed-content result, fails the aggregate comparison and
+    the per-head range; the provenance rows are checked to the same literals.
+    """
+    qk = _artifact(QK_PATH)
+    aggregate = qk["aggregate"]
+    sweep_feature = aggregate["sweep_feature"]["sign_flip_fraction"]
+    sweep_rotary = aggregate["sweep_rotary"]["sign_flip_fraction"]
+    sweep_pair = aggregate["sweep_pair"]["sign_flip_fraction"]
+    feature = aggregate["feature"]["sign_flip_fraction"]
+    feature_rotary = aggregate["feature_rotary"]["sign_flip_fraction"]
+
+    setup_pairs, grid_points, grid_first, grid_last = groups("feat_sweep_setup")[0]
+    assert int(setup_pairs) == qk["pairs_per_delta"]
+    assert int(grid_points) == len(qk["sweep_deltas"])
+    assert (int(grid_first), int(grid_last)) == (
+        min(qk["sweep_deltas"]),
+        max(qk["sweep_deltas"]),
+    )
+
+    rates = groups("feat_sweep_rates")[0]
+    assert_paper_number_matches(sweep_feature * 100, rates[0], "sweep total")
+    assert_paper_number_matches(sweep_rotary * 100, rates[1], "sweep rotary")
+    assert_paper_number_matches(sweep_pair * 100, rates[4], "sweep pairs")
+    assert_paper_number_matches(feature * 100, literal("feat_rates", 1), "realized total")
+    assert_paper_number_matches(
+        feature_rotary * 100, literal("feat_rates", 2), "realized rotary"
+    )
+    assert_paper_number_matches(
+        sweep_feature * 100, literal("feat_total_table"), "the total table"
+    )
+    assert_paper_number_matches(
+        sweep_rotary * 100, literal("qk_scope_reversal", 1), "intro rotary restatement"
+    )
+    assert_paper_number_matches(
+        sweep_feature * 100, literal("qk_scope_reversal", 2), "intro total restatement"
+    )
+
+    per_head = sorted(
+        head["sweep_rotary_metrics"]["sign_flip_fraction"] * 100 for head in qk["heads"]
+    )
+    assert_paper_number_matches(per_head[0], rates[2], "per-head rotary min")
+    assert_paper_number_matches(per_head[-1], rates[3], "per-head rotary max")
+
+    # The sweep and the headline are deliberately not compared: 27.0% is per
+    # rotary pair on trained checkpoints, 21.5% is per SAE feature on one
+    # dictionary. The paper must say so rather than imply a shared scale.
+    assert groups("feat_sweep_units") == [()]
+    assert "not directly comparable" in TEX_FLAT
+
+    shares = groups("feat_shares")[0]
+    assert_paper_number_matches(aggregate["base_share_mean"], shares[0], "base share")
+    assert int(shares[1]) == qk["top_k"]
+    assert_paper_number_matches(aggregate["top_k_share_mean"], shares[2], "top-k share")
+
+    # Provenance rows for this section, in the order the table prints them.
+    exact = groups("prov_features_exact_row")[0]
+    assert_paper_sci_matches(
+        aggregate["max_relative_exactness_error"],
+        exact[0],
+        int(exact[1]),
+        "provenance exactness",
+    )
+    assert_paper_sci_matches(
+        qk["ln_residual"], exact[2], int(exact[3]), "provenance LN residual"
+    )
+    flips = groups("prov_features_flip_row")[0]
+    for actual, written, what in (
+        (feature * 100, flips[0], "realized total"),
+        (feature_rotary * 100, flips[1], "realized rotary"),
+        (sweep_feature * 100, flips[2], "sweep total"),
+        (sweep_rotary * 100, flips[3], "sweep rotary"),
+    ):
+        assert_paper_number_matches(actual, written, f"provenance {what}")
+    prov_shares = groups("prov_features_share_row")[0]
+    assert_paper_number_matches(aggregate["base_share_mean"], prov_shares[0], "prov base share")
+    assert_paper_number_matches(aggregate["top_k_share_mean"], prov_shares[1], "prov top-k share")
+
+
+def test_the_second_dictionary_reproduces_the_contrast() -> None:
+    """The external-validity paragraph is checked against both artifacts.
+
+    Mutation verdict: quoting the primary dictionary's rates as the second one,
+    or dropping the qualitative ordering, fails the six-way comparison; changing
+    the TopK width, layout or activation fails the metadata assertions, so a
+    different artifact cannot be substituted silently.
+    """
+    primary = _artifact(QK_PATH)
+    second = _artifact(QK_P2_PATH)
+
+    assert second["schema"] == "qk-attribution/v1"
+    assert second["model_id"] == primary["model_id"]
+    assert second["dictionary_format"] == "eleuther"
+    assert second["dictionary_activation"] == "topk"
+    assert second["dictionary_top_k"] == second["top_k"] == 16
+    assert second["sae_reconstruction_relative_error"] < 0.5
+    assert second["aggregate"]["max_relative_exactness_error"] < 1e-9
+
+    setup = groups("qk_p2_setup")[0]
+    assert int(setup[0]) == second["sae_layer"]
+    assert int(setup[1]) == second["dictionary_top_k"]
+    assert int(setup[2]) * 1000 + int(setup[3]) == 32 * 1024
+    assert_paper_number_matches(
+        second["sae_reconstruction_relative_error"], setup[4], "second reconstruction"
+    )
+    assert_paper_sci_matches(
+        second["aggregate"]["max_relative_exactness_error"],
+        setup[5],
+        int(setup[6]),
+        "second exactness",
+    )
+
+    written = groups("qk_p2_rates")[0]
+    for actual, literal_text, what in (
+        (
+            second["aggregate"]["sweep_rotary"]["sign_flip_fraction"] * 100,
+            written[0],
+            "second rotary",
+        ),
+        (
+            second["aggregate"]["sweep_feature"]["sign_flip_fraction"] * 100,
+            written[1],
+            "second total",
+        ),
+        (
+            second["aggregate"]["sweep_pair"]["sign_flip_fraction"] * 100,
+            written[2],
+            "second pairs",
+        ),
+        (
+            primary["aggregate"]["sweep_rotary"]["sign_flip_fraction"] * 100,
+            written[3],
+            "primary rotary",
+        ),
+        (
+            primary["aggregate"]["sweep_feature"]["sign_flip_fraction"] * 100,
+            written[4],
+            "primary total",
+        ),
+        (
+            primary["aggregate"]["sweep_pair"]["sign_flip_fraction"] * 100,
+            written[5],
+            "primary pairs",
+        ),
+    ):
+        assert_paper_number_matches(actual, literal_text, what)
+
+    # The contrast is the claim, not the individual values: the total view is
+    # blind to the reversal that the rotary view shows, under both dictionaries.
+    for name, artifact in (("primary", primary), ("second", second)):
+        aggregate = artifact["aggregate"]
+        total = aggregate["sweep_feature"]["sign_flip_fraction"]
+        pairs = aggregate["sweep_pair"]["sign_flip_fraction"]
+        rotary = aggregate["sweep_rotary"]["sign_flip_fraction"]
+        assert total < pairs < rotary, name
+
+
+def test_the_depth_table_restates_the_depth_artifact() -> None:
+    """Every cell of Table~\\ref{tab:qk-depth} is recomputed from its own row.
+
+    Mutation verdict: swapping two rows, or replacing a rotary cell with the
+    total cell beside it, fails the per-row comparison; so does a stale artifact
+    after a re-run, because each cell is compared at its own layer. The prose
+    range and the provenance row are checked against the same minimum, maximum
+    and ceiling, so editing either without the artifact fails here too.
+    """
+    depth = _artifact(DEPTH_PATH)
+    layers = depth["layers"]
+    rows = []
+    for chunk in table_block("tab:qk-depth").split(r"\\"):
+        cells = chunk.split("&")
+        if len(cells) != 5:
+            continue
+        plain = [_tex_plain(cell) for cell in cells]
+        if not (plain[0].isdigit() and plain[1].isdigit()):
+            continue
+        rows.append(plain)
+    assert len(rows) == len(layers) == 5, rows
+
+    for plain, layer in zip(rows, layers, strict=True):
+        where = f"depth layer {plain[0]}"
+        assert int(plain[0]) == layer["sae_layer"], where
+        assert int(plain[1]) == layer["attention_layer"], where
+        assert_paper_number_matches(
+            layer["sweep_rotary_sign_flip_fraction"] * 100, plain[2], f"{where} rotary"
+        )
+        assert_paper_number_matches(
+            layer["sweep_feature_sign_flip_fraction"] * 100, plain[3], f"{where} total"
+        )
+        assert_paper_number_matches(
+            layer["sweep_pair_sign_flip_fraction"] * 100, plain[4], f"{where} pairs"
+        )
+
+    # The prose range, both occurrences of the layer span, and the provenance row
+    # all restate the same artifact.
+    span = (layers[0]["sae_layer"], layers[-1]["sae_layer"])
+    for low, high in groups("qk_depth_scope"):
+        assert (int(low), int(high)) == span, (low, high, span)
+
+    rotary = [row["sweep_rotary_sign_flip_fraction"] * 100 for row in layers]
+    low, high = groups("qk_depth_range")[0]
+    assert_paper_number_matches(min(rotary), low, "depth rotary minimum")
+    assert_paper_number_matches(max(rotary), high, "depth rotary maximum")
+
+    prov_low, prov_high, prov_total = groups("prov_qk_depth_row")[0]
+    assert_paper_number_matches(min(rotary), prov_low, "provenance depth minimum")
+    assert_paper_number_matches(max(rotary), prov_high, "provenance depth maximum")
+    total = [row["sweep_feature_sign_flip_fraction"] * 100 for row in layers]
+    assert_paper_number_matches(max(total), prov_total, "provenance depth total ceiling")
+
+    # The structural claim of the table: the rotary rate is above the total rate
+    # at every layer, which is what the prose says and what the table shows.
+    for row in layers:
+        assert (
+            row["sweep_rotary_sign_flip_fraction"]
+            > row["sweep_feature_sign_flip_fraction"]
+        ), row
+
+
+def test_the_trajectory_table_restates_the_trajectory_artifact() -> None:
+    """Every cell of Table~\\ref{tab:qk-trajectory} is recomputed from its layer.
+
+    Mutation verdict: swapping two rows, or replacing the top-1 column with the
+    flatten column beside it, fails the per-row comparison; so does a stale
+    artifact after a re-run, because each cell is compared at its own layer. The
+    pooled prose, the layer split and the provenance row are compared against
+    the same artifact, so editing any one of them alone fails here.
+    """
+    data = _artifact(QK_TRAJECTORY_PATH)
+    layers = data["layers"]
+    rows = []
+    for chunk in table_block("tab:qk-trajectory").split(r"\\"):
+        cells = chunk.split("&")
+        if len(cells) != 7:
+            continue
+        plain = [_tex_plain(cell) for cell in cells]
+        if not (plain[0].isdigit() and plain[1].isdigit()):
+            continue
+        rows.append(plain)
+    assert len(rows) == len(layers) == 5, rows
+
+    for plain, layer in zip(rows, layers, strict=True):
+        where = f"trajectory layer {plain[0]}"
+        assert int(plain[0]) == layer["sae_layer"], where
+        assert int(plain[1]) == layer["attention_layer"], where
+        pr = layer["trajectory_participation_ratio"]
+        assert_paper_number_matches(pr["mean"], plain[2], f"{where} PR")
+        assert_paper_number_matches(pr["min"], plain[3], f"{where} PR min")
+        assert_paper_number_matches(pr["max"], plain[4], f"{where} PR max")
+        assert_paper_number_matches(
+            layer["trajectory_energy_top1"]["mean"] * 100, plain[5], f"{where} top-1"
+        )
+        assert_paper_number_matches(
+            layer["flatten_relative_error"]["mean"] * 100, plain[6], f"{where} flatten"
+        )
+
+    # The bound is an identity about the family, and every layer attains it.
+    assert data["rank_bound"] == 1 + data["rotary_dim"]
+    for layer in layers:
+        assert int(layer["trajectory_rank_numerical"]["mean"]) == data["rank_bound"]
+
+    bound_channels, bound_total = groups("qk_traj_bound")[0]
+    assert int(bound_channels) == data["rotary_dim"]
+    assert int(bound_total) == data["rank_bound"]
+    pairs, bound_app = groups("qk_traj_bound_app")[0]
+    assert int(pairs) == data["rotary_dim"] // 2
+    assert int(bound_app) == data["rank_bound"]
+    rank, heads = groups("qk_traj_rank_heads")[0]
+    assert int(rank) == int(data["pooled"]["trajectory_rank_numerical"]["mean"])
+    assert int(heads) == data["n_heads"]
+    rank_app, heads_app = groups("qk_traj_rank_app")[0]
+    assert int(rank_app) == int(data["pooled"]["trajectory_rank_numerical"]["mean"])
+    assert int(heads_app) == data["n_heads"]
+    dims = groups("qk_traj_dims")[0]
+    assert int(dims[0]) == data["rank_bound"]
+
+    matrix_rows, matrix_columns = groups("qk_traj_matrix")[0]
+    assert int(matrix_rows) == len(data["deltas"])
+    assert int(matrix_columns) == data["top_k"] ** 2
+    for chunk in groups("qk_traj_block")[0] + groups("qk_traj_block_app")[0]:
+        assert int(chunk) == data["top_k"]
+
+    pooled = data["pooled"]
+    assert_paper_number_matches(
+        pooled["trajectory_energy_top1"]["mean"] * 100,
+        groups("qk_traj_energy")[0][0],
+        "main top-1 energy",
+    )
+    assert_paper_number_matches(
+        pooled["flatten_relative_error"]["mean"] * 100,
+        groups("qk_traj_flatten")[0][0],
+        "main flatten",
+    )
+    app_energy = groups("qk_traj_energy_app")[0]
+    assert int(groups("qk_traj_heads_pooled")[0][0]) == data["n_heads"]
+    assert_paper_number_matches(
+        pooled["trajectory_energy_top1"]["mean"] * 100,
+        app_energy[0],
+        "appendix top-1 energy",
+    )
+    assert_paper_number_matches(
+        pooled["trajectory_energy_top4"]["mean"] * 100,
+        app_energy[1],
+        "appendix top-4 energy",
+    )
+    assert_paper_number_matches(
+        pooled["trajectory_participation_ratio"]["mean"],
+        app_energy[2],
+        "appendix participation ratio",
+    )
+    app_flatten = groups("qk_traj_flatten_app")[0]
+    for key, written, what in (
+        ("mean", app_flatten[0], "appendix flatten mean"),
+        ("min", app_flatten[1], "appendix flatten min"),
+        ("max", app_flatten[2], "appendix flatten max"),
+    ):
+        assert_paper_number_matches(
+            pooled["flatten_relative_error"][key] * 100, written, what
+        )
+
+    last_pr, below_pr, first_flat, last_flat = groups("qk_traj_layer_curve")[0]
+    assert max(
+        layer["trajectory_participation_ratio"]["mean"] for layer in layers[:4]
+    ) <= float(below_pr) + 1e-12
+    assert_paper_number_matches(
+        layers[-1]["trajectory_participation_ratio"]["mean"], last_pr, "last-layer PR"
+    )
+    assert_paper_number_matches(
+        layers[0]["flatten_relative_error"]["mean"] * 100,
+        first_flat,
+        "first-layer flatten",
+    )
+    assert_paper_number_matches(
+        layers[-1]["flatten_relative_error"]["mean"] * 100,
+        last_flat,
+        "last-layer flatten",
+    )
+
+    content_pairs = groups("qk_traj_pairs")[0]
+    assert int(content_pairs[0]) == data["pairs_per_head"]
+    for layer in layers:
+        for head in layer["heads"]:
+            assert head["n_content_pairs"] == data["pairs_per_head"]
+
+    prov = groups("prov_qk_trajectory_row")[0]
+    assert int(prov[0]) == data["rank_bound"]
+    assert_paper_number_matches(
+        pooled["trajectory_energy_top1"]["mean"] * 100, prov[1], "provenance top-1"
+    )
+    assert_paper_number_matches(
+        pooled["flatten_relative_error"]["mean"] * 100, prov[2], "provenance flatten"
+    )
+
+
+def test_the_attention_provenance_rows_name_the_measured_values() -> None:
+    """The provenance table is an audit trail, so its cells are recomputed.
+
+    Mutation verdict: pointing the pooled row back at ``statistics.json`` fails
+    the file-existence check below; changing ``0.2676`` to ``0.2675`` fails the
+    interval comparison; so does moving the 9.5e-3 residual into the other slot.
+    """
+    artifact = _artifact(ATTENTION_COST_PATH)
+    aggregates = [model["aggregate"] for model in artifact["models"]]
+    top1 = [row["top1_flip_rate"] * 100 for row in aggregates]
+    variation = [row["total_variation_mean"] * 100 for row in aggregates]
+    top5 = [row["top5_overlap_mean"] for row in aggregates]
+    kl = [row["kl_exact_surrogate_mean"] for row in aggregates]
+
+    rates = groups("prov_attention_rates_row")[0]
+    for actual, written, what in (
+        (min(top1), rates[0], "argmax low"),
+        (max(top1), rates[1], "argmax high"),
+        (min(variation), rates[2], "total variation low"),
+        (max(variation), rates[3], "total variation high"),
+    ):
+        assert_paper_number_matches(actual, written, f"provenance {what}")
+
+    top5_row = groups("prov_attention_top5_row")[0]
+    for actual, written, what in (
+        (min(top5), top5_row[0], "top-5 low"),
+        (max(top5), top5_row[1], "top-5 high"),
+        (min(kl), top5_row[2], "KL low"),
+        (max(kl), top5_row[3], "KL high"),
+    ):
+        assert_paper_number_matches(actual, written, f"provenance {what}")
+
+    residuals = {
+        model["model_id"]: max(
+            prompt["max_attention_residual"] for prompt in model["per_prompt"]
+        )
+        for model in artifact["models"]
+    }
+    llm = max(value for key, value in residuals.items() if "pythia" not in key)
+    pythia = next(value for key, value in residuals.items() if "pythia" in key)
+    mantissa, exponent, pythia_mantissa, pythia_exponent = groups(
+        "prov_attention_residual_row"
+    )[0]
+    assert_paper_sci_matches(llm, mantissa, int(exponent), "provenance llama/SmolLM residual")
+    assert_paper_sci_matches(
+        pythia, pythia_mantissa, int(pythia_exponent), "provenance pythia residual"
+    )
+
+    uncertainty = _artifact(UNCERTAINTY_PATH)
+    pooled = uncertainty["pooled"]
+    written, low, high = groups("prov_pooled_row")[0]
+    assert_paper_number_matches(pooled["mean"] * 100, written, "pooled mean")
+    assert_paper_number_matches(pooled["ci_low"], low, "pooled interval low")
+    assert_paper_number_matches(pooled["ci_high"], high, "pooled interval high")
+    # The row now names the files that actually hold these keys.
+    assert "statistics.json :: pooled" not in TEX_FLAT
+    assert (_REPO / "results" / "usefulness.json").exists()
+
+
+def test_the_compressed_statistics_restate_the_two_artifacts() -> None:
+    """The appendix and the ranking paragraph restate the same two artifacts.
+
+    Mutation verdict: changing the bootstrap unit from 558 to 2790 (or the
+    reverse) fails the equality with ``uncertainty.json``; quoting the
+    agreement range as ``56.6--60.1`` fails the minimum, which is 49.4.
+    """
+    uncertainty = _artifact(UNCERTAINTY_PATH)
+    pooled = uncertainty["pooled"]
+    assert_paper_number_matches(
+        pooled["sd"], literal("stats_between_head_sd_app"), "between-head SD"
+    )
+
+    heads, instances = (int(x) for x in groups("stats_boot_unit_app")[0])
+    assert heads == pooled["n"] == uncertainty["n_heads"]
+    assert instances == uncertainty["n_head_prompt_instances"]
+    assert instances == heads * 5, "five prompts per head is the recorded design"
+
+    agreement = _artifact(AGREEMENT_PATH)
+    rates = sorted(model["top1_agreement"] * 100 for model in agreement["models"])
+    chance = [model["chance_top1"] * 100 for model in agreement["models"]]
+    low, high, chance_low, chance_high = groups("stats_rank_range")[0]
+    assert_paper_number_matches(rates[0], low, "ranking agreement min")
+    assert_paper_number_matches(rates[-1], high, "ranking agreement max")
+    assert_paper_number_matches(min(chance), chance_low, "chance agreement min")
+    assert_paper_number_matches(max(chance), chance_high, "chance agreement max")
+
+
+def _window_row(model: dict, span: int) -> dict:
+    row = next(r for r in model["by_window"] if int(r["span"]) == span)
+    return row
+
+
+def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
+    """Every number the law section quotes is recomputed from ``collapse.json``.
+
+    Mutation verdict: changing 44 to 42 fails the bin count; changing any of the
+    three past-threshold fractions fails the per-model comparison; swapping the
+    partial-RoPE score-level error with a full-RoPE one fails the architecture
+    pairing; and moving the exact past-threshold minimum off 1 fails the
+    exactness assertion, which is the part float64 round-off once obscured.
+    """
+    artifact = _artifact(COLLAPSE_PATH)
+    models = artifact["models"]
+    counts = [len(model["bins"]) for model in models]
+    total = sum(counts)
+    assert total == 44
+
+    for name in ("collapse_bins_abstract", "collapse_bins_body", "collapse_bins_intro"):
+        assert int(literal(name)) == total, name
+
+    prov = groups("collapse_bins_per_model")[0]
+    assert int(prov[0]) == total
+    assert [int(value) for value in prov[1:]] == counts
+    assert [int(value) for value in groups("collapse_bins_per_model_body")[0]] == counts
+
+    conclusion_bins, conclusion_unit, conclusion_window = groups("collapse_conclusion")[0]
+    assert int(conclusion_bins) == total
+    assert int(conclusion_window) == 4096
+    for model in models:
+        assert_paper_number_matches(
+            _window_row(model, 4096)["channel_rel_minimax_median"],
+            conclusion_unit,
+            f"{model['model_id']}: conclusion pair-level error",
+        )
+
+    for name in ("collapse_unit_abstract", "collapse_unit_body", "collapse_unit_intro"):
+        captured = groups(name)[0]
+        if name == "collapse_unit_intro":
+            span, written = int(captured[0]), captured[1]
+        else:
+            written, span = captured[0], int(captured[1])
+        assert span == 4096
+        for model in models:
+            assert_paper_number_matches(
+                _window_row(model, span)["channel_rel_minimax_median"],
+                written,
+                f"{model['model_id']}: {name}",
+            )
+
+    for name in ("collapse_past_abstract", "collapse_past_body"):
+        written = groups(name)[0]
+        for model, value in zip(models, written):
+            assert_paper_number_matches(
+                _window_row(model, 4096)["past_threshold_fraction"],
+                value,
+                f"{model['model_id']}: {name}",
+            )
+
+    exact_written = {value for value in groups("collapse_exact_past")[0]}
+    assert exact_written == {"1"}
+    past = [
+        entry for model in models for entry in model["bins"]
+        if float(entry["x_lo"]) >= 2.0 * math.pi
+    ]
+    assert past, "no bin lies past the threshold; the claim is vacuous"
+    for entry in past:
+        assert entry["rel_minimax_min"] == 1.0
+        assert entry["rel_minimax_max"] == 1.0
+        assert entry["rel_minimax_median"] == 1.0
+        assert entry["past_threshold_fraction"] == 1.0
+
+    for name in (
+        "collapse_score_abstract",
+        "collapse_score_body",
+    ):
+        captured = groups(name)[0]
+        if name == "collapse_score_body":
+            span, written = int(captured[0]), [captured[1], captured[3], captured[4]]
+            assert span == 4096
+        else:
+            written = captured
+        for model, value in zip(models, written):
+            assert_paper_number_matches(
+                _window_row(model, 4096)["score_rel_median"],
+                value,
+                f"{model['model_id']}: {name}",
+            )
+
+    pythia = models[0]
+    assert_paper_number_matches(
+        _window_row(pythia, 4096)["tail_share_median"],
+        literal("collapse_tail"),
+        "pythia tail share",
+    )
+    assert_paper_number_matches(
+        _window_row(pythia, 4096)["channel_rel_mean_median"],
+        literal("collapse_ls_median", 1),
+        "pythia least-squares median",
+    )
+    assert_paper_number_matches(
+        _window_row(pythia, 4096)["channel_rel_minimax_median"],
+        literal("collapse_ls_median", 3),
+        "pythia minimax median",
+    )
+    assert int(literal("collapse_ls_exceed")) == 1
+
+    for name in ("collapse_tail_channels_abstract", "collapse_tail_channels"):
+        unrotated, channels = (int(value) for value in groups(name)[0])
+        assert channels == MEASUREMENTS["structural_facts"]["dim"]
+        assert unrotated + pythia["rope_dim"] == channels
+        assert unrotated == 48
+
+    low, high = (int(value) for value in groups("collapse_bin_edges")[0])
+    from rope_attribution.position_free_collapse import X_BINS
+
+    assert X_BINS[0] == 10.0 ** low
+    assert X_BINS[-1] == 10.0 ** high
+    assert low == math.floor(math.log10(min(e["x_lo"] for m in models for e in m["bins"])))
+
+    rate = _artifact(USEFULNESS_PATH)["pooled"]["sign_flip_fraction"] * 100
+    for name in ("collapse_sign_abstract", "collapse_sign_intro", "collapse_sign_error_rate"):
+        assert_paper_number_matches(rate, literal(name), f"27.0% restatement ({name})")
+
+    # The proposition and its proof are symbols, not measurements, but their
+    # constants must still be the ones the closed form and the artifact use.
+    assert tuple(int(v) for v in groups("threshold_law_abstract")[0]) == (1, 2, 2, 2, 2)
+    assert tuple(int(v) for v in groups("threshold_law_intro")[0]) == (1, 2, 2, 2, 2)
+    assert tuple(int(v) for v in groups("threshold_prop_ceiling")[0]) == (2, 1)
+    assert tuple(int(v) for v in groups("threshold_prop_floor")[0]) == (2, 1, 2, 2)
+    assert tuple(int(v) for v in groups("threshold_prop_band")[0]) == (1, 2, 2, 2)
+    assert tuple(int(v) for v in groups("threshold_bounded")[0]) == (1, 1)
+    assert tuple(int(v) for v in groups("threshold_proof_large")[0]) == (2, 2, 2)
+    assert int(literal("threshold_proof_collapse")) == 1
+    assert int(literal("threshold_r2_heading")) == 2
+    assert int(literal("threshold_amplitude")) == 0
+    assert int(literal("threshold_midrange")) == 2
+    assert tuple(int(v) for v in groups("threshold_conclusion")[0]) == (1, 2)
+    assert int(literal("threshold_related")) == 2
+    assert int(literal("figure_threshold_line")) == 2
+    assert total == sum(len(model["bins"]) for model in models)
+
+    # The band drawn in the figure is the proposition's, evaluated exactly.
+    for x in (0.5, 1.0, 2.0, 5.0, 2.0 * math.pi):
+        if x >= 2.0 * math.pi:
+            assert (1.0 - math.cos(x / 2.0)) / 2.0 == pytest.approx(1.0)
+            assert math.sin(min(x, math.pi) / 2.0) == pytest.approx(1.0)
+            continue
+        lower = (1.0 - math.cos(x / 2.0)) / 2.0
+        upper = math.sin(min(x, math.pi) / 2.0)
+        assert lower <= upper + 1e-15
+
+
+def test_the_yarn_ratio_restated_in_the_abstract_is_the_measured_one() -> None:
+    ratios = [
+        row["amplitude_weighted_err"]
+        for row in csv_rows("fig05_linearization_error")
+        if row["method"] == "yarn" and int(row["delta"]) == 8192
+    ]
+    assert len(ratios) == 1
+    control = [
+        row["amplitude_weighted_err"]
+        for row in csv_rows("fig05_linearization_error")
+        if row["method"] == "rope_base_10k" and int(row["delta"]) == 8192
+    ]
+    assert len(control) == 1
+    assert_paper_number_matches(
+        float(ratios[0]) / float(control[0]),
+        literal("yarn_ratio_abstract"),
+        "abstract YaRN/RoPE amplitude-weighted ratio",
+    )
+
+
+def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
+    """The intervention section, abstract, conclusion and provenance are one run.
+
+    Mutation verdict: changing the number of interventions from 96 to 64 fails
+    the cell count; changing 25 or 7 fails the two totals; and replacing the
+    exact oracle's 1.000 with anything else fails because the artifact stores
+    ``achieved == intended`` bit-for-bit in every cell.
+    """
+    artifact = _artifact(INTERVENTION_PATH)
+    models = artifact["models"]
+    cells = [cell for model in models for cell in model["cells"]]
+    assert len(cells) == 96
+
+    for name in ("intervention_abstract", "intervention_intro"):
+        total, differ, reversed_count = (int(v) for v in groups(name)[0])
+        assert total == len(cells)
+        assert differ == sum(1 for cell in cells if not cell["same_pair"])
+        assert reversed_count == sum(
+            1 for cell in cells
+            if cell["surrogate"]["suppression_ratio"] is not None
+            and cell["surrogate"]["suppression_ratio"] < 0.0
+        )
+
+    exact_ratios = {cell["exact"]["suppression_ratio"] for cell in cells}
+    assert exact_ratios == {1.0}
+    assert_paper_number_matches(1.0, literal("intervention_oracle_abstract"), "abstract oracle")
+    oracle_value, oracle_cells = groups("intervention_oracle")[0]
+    assert int(oracle_cells) == len(cells)
+    assert_paper_number_matches(1.0, oracle_value, "body oracle")
+    assert int(literal("intervention_figure_oracle")) == 1
+
+    for model in models:
+        selection = model["cell_selection"]
+        assert_paper_number_matches(selection["max_peak"], literal("intervention_peak"), "max peak")
+        assert int(literal("intervention_visible")) == selection["min_visible_keys"]
+        assert int(literal("intervention_window")) == 1
+        assert int(literal("intervention_saturation")) == 1
+        assert selection["max_peak"] < 1.0
+
+    claimed_cells, claimed_heads = (int(v) for v in groups("intervention_cells")[0])
+    assert claimed_cells == len(cells)
+    assert claimed_heads == sum(
+        len({(cell["layer"], cell["head"]) for cell in model["cells"]}) for model in models
+    ) // len(models)
+    for model in models:
+        assert len({(cell["layer"], cell["head"]) for cell in model["cells"]}) == 32
+
+    claimed_differ, claimed_total, claimed_reversed = (
+        int(v) for v in groups("intervention_counts")[0]
+    )
+    assert claimed_total == len(cells)
+    assert claimed_differ == sum(1 for cell in cells if not cell["same_pair"])
+    assert claimed_reversed == sum(
+        1 for cell in cells
+        if cell["surrogate"]["suppression_ratio"] is not None
+        and cell["surrogate"]["suppression_ratio"] < 0.0
+    )
+
+    per_model = [int(v) for v in groups("intervention_per_model")[0]]
+    assert per_model == [13, 5, 9, 2, 3, 0]
+    for model, (differ, reversed_count) in zip(models, ((13, 5), (9, 2), (3, 0))):
+        assert model["n_selection_differs"] == differ
+        assert sum(
+            1 for cell in model["cells"]
+            if cell["surrogate"]["suppression_ratio"] is not None
+            and cell["surrogate"]["suppression_ratio"] < 0.0
+        ) == reversed_count
+
+    for model, written in zip(models, groups("intervention_medians")[0]):
+        assert_paper_number_matches(
+            model["pooled"]["surrogate_suppression_ratio_median"],
+            written,
+            f"{model['model_id']}: median suppression ratio",
+        )
+    assert_paper_number_matches(
+        min(
+            cell["surrogate"]["suppression_ratio"] for cell in cells
+            if cell["surrogate"]["suppression_ratio"] is not None
+        ),
+        literal("intervention_min"),
+        "minimum suppression ratio",
+    )
+
+    identity = groups("intervention_identity")[0]
+    assert_paper_sci_matches(
+        models[0]["pooled"]["exact_prediction_error_median"],
+        identity[0], int(identity[1]), "pythia identity error",
+    )
+    assert int(identity[4]) == -7
+    assert_paper_sci_matches(
+        models[1]["pooled"]["exact_prediction_error_median"],
+        identity[3], int(identity[4]), "llama identity error (upper end of the range)",
+    )
+    assert_paper_sci_matches(
+        models[2]["pooled"]["exact_prediction_error_median"],
+        identity[2], int(identity[4]), "SmolLM identity error (lower end of the range)",
+    )
+
+    control = groups("intervention_control")[0]
+    for model, (mantissa, exponent) in zip(
+        models, ((control[0], control[1]), (control[2], control[3]), (control[4], control[5]))
+    ):
+        assert_paper_sci_matches(
+            model["pooled"]["baseline_prediction_error_median"],
+            mantissa, int(exponent), f"{model['model_id']}: baseline error",
+        )
+
+    faithful, nothing = (int(v) for v in groups("intervention_currency")[0])
+    assert (faithful, nothing) == (1, 0)
+    assert all(
+        cell["surrogate"]["suppression_ratio"] not in (0.0, None) for cell in cells
+    ), "a zero ratio would be an arithmetic artifact, not a suppression measurement"
+
+    conclusion = [int(v) for v in groups("intervention_conclusion")[0][:3]]
+    assert conclusion == [25, 7, 96]
+
+    prov = groups("prov_collapse_row")[0]
+    assert int(prov[0]) == 44
+    assert_paper_number_matches(1.0, prov[1], "provenance pair-level error")
+    assert int(prov[2]) == 1
+    collapse = _artifact(COLLAPSE_PATH)
+    for model, value in zip(collapse["models"], groups("prov_collapse_past_row")[0]):
+        assert_paper_number_matches(
+            _window_row(model, 4096)["past_threshold_fraction"], value, "provenance past fraction"
+        )
+    score_row = groups("prov_collapse_score_row")[0]
+    for model, value in zip(collapse["models"], score_row[:3]):
+        assert_paper_number_matches(
+            _window_row(model, 4096)["score_rel_median"], value, "provenance score error"
+        )
+    assert_paper_number_matches(
+        _window_row(collapse["models"][0], 4096)["tail_share_median"], score_row[3],
+        "provenance tail",
+    )
+
+    prov = [int(v) for v in groups("prov_intervention_row")[0]]
+    assert prov[:3] == [96, 25, 7]
+    assert prov[3:] == [13, 5, 9, 2, 3, 0]
+    prov = groups("prov_intervention_medians_row")[0]
+    assert_paper_number_matches(1.0, prov[0], "provenance oracle")
+    for model, value in zip(models, prov[1:]):
+        assert_paper_number_matches(
+            model["pooled"]["surrogate_suppression_ratio_median"], value, "provenance median"
+        )
+    prov = groups("prov_intervention_identity_row")[0]
+    assert_paper_number_matches(
+        min(cell["surrogate"]["suppression_ratio"] for cell in cells
+            if cell["surrogate"]["suppression_ratio"] is not None),
+        prov[0], "provenance minimum ratio",
+    )
+    assert_paper_sci_matches(
+        models[0]["pooled"]["exact_prediction_error_median"], prov[1], int(prov[2]),
+        "provenance identity error",
+    )
+    assert_paper_sci_matches(
+        models[0]["pooled"]["baseline_prediction_error_median"], prov[3], int(prov[4]),
+        "provenance baseline error",
+    )
+
+
+def _extension_row(artifact: dict, scheme: str, context: int) -> dict:
+    """The one row of ``extension_law.json`` at the paper's canonical scale."""
+    rows = [
+        row
+        for row in artifact["rows"]
+        if row["scheme"] == scheme
+        and row["context"] == context
+        and row["scale"] == EXT_SCALE
+    ]
+    assert len(rows) == 1, (scheme, context, len(rows))
+    return rows[0]
+
+
+def test_the_extension_table_restates_the_extension_artifact() -> None:
+    """Every cell of Table~\\ref{tab:extension-law} is recomputed from its row.
+
+    Mutation verdict: moving one count by one channel fails the per-row
+    comparison against ``results/extension_law.json``; swapping the untouched
+    column with the ``L=4096`` column fails because the untouched count is a
+    different field; editing the appendix sentence, the R3 remark, the critical
+    scale or the figure caption without regenerating the artifact fails the
+    corresponding claim comparison. A stale artifact after a re-run fails at
+    the first cell whose row moved.
+    """
+    artifact = _artifact(EXTENSION_PATH)
+    assert artifact["schema"] == "rope-extension-law/v1"
+    contexts = [int(value) for value in artifact["configuration"]["context_lengths"]]
+    assert contexts == list(XL.CONTEXT_LENGTHS)
+
+    parsed: list[tuple[str, list[str]]] = []
+    header: list[str] = []
+    labels = {
+        "plain RoPE": "rope",
+        r"\yarn": "yarn",
+        "position interpolation": "position_interpolation",
+        "base": "base_500k",
+    }
+    for chunk in table_block("tab:extension-law").split(r"\\"):
+        cells = chunk.split("&")
+        if len(cells) != 7:
+            continue
+        first = cells[0]
+        if "scheme" in first:
+            header = [_tex_plain(cell) for cell in cells[1:]]
+            continue
+        for needle, key in labels.items():
+            if needle in first:
+                parsed.append((key, [_tex_plain(cell) for cell in cells[1:]]))
+                break
+        else:
+            raise AssertionError(f"unrecognised extension-table row: {first!r}")
+    assert [key for key, _ in parsed] == list(XL.SCHEMES), parsed
+
+    # The header names the untouched column and the five context lengths.
+    assert header[0].lower() == "untouched", header
+    header_contexts = [int(re.search(r"(\d+)", cell).group(1)) for cell in header[1:]]
+    assert header_contexts == contexts, (header_contexts, contexts)
+
+    for key, values in parsed:
+        assert len(values) == 6, (key, values)
+        untouched = _extension_row(artifact, key, contexts[0])["untouched_channels"]
+        assert int(values[0]) == untouched, (key, values[0], untouched)
+        for context, cell in zip(contexts, values[1:], strict=True):
+            row = _extension_row(artifact, key, context)
+            assert int(cell) == row["n_past_threshold"], (
+                key,
+                context,
+                cell,
+                row["n_past_threshold"],
+            )
+            assert row["n_channels"] == int(literal("ext_caption_channels"))
+
+    # The caption is a literal equality statement: plain RoPE leaves every one
+    # of its own channels unchanged, so its untouched count is the full ladder.
+    # A convention that reported zero here would contradict the caption.
+    rope_untouched = _extension_row(artifact, "rope", contexts[0])
+    assert rope_untouched["untouched_channels"] == rope_untouched["n_channels"] == int(
+        literal("ext_caption_channels")
+    )
+
+    headline = artifact["headline"]["context_4096"]
+    assert int(literal("ext_caption_scale")) == EXT_SCALE
+    assert int(literal("ext_caption_scale")) == int(
+        _extension_row(artifact, "rope", 4096)["scale"]
+    )
+    assert int(literal("ext_threshold")) * math.pi == pytest.approx(
+        artifact["configuration"]["threshold_radians"], rel=0, abs=1e-12
+    )
+    assert int(literal("ext_threshold")) == int(literal("ext_figcap_threshold"))
+
+    # The appendix paragraph: counts, the YaRN floor and the critical scale.
+    (
+        claimed_context,
+        rope_count,
+        n_channels,
+        yarn_count,
+        claimed_scale,
+        pi_count,
+        base_count,
+    ) = (int(value) for value in groups("ext_counts")[0])
+    assert claimed_context == 4096
+    assert n_channels == int(literal("ext_caption_channels"))
+    assert rope_count == headline["rope"]["n_past_threshold"]
+    assert yarn_count == headline["yarn"]["n_past_threshold"]
+    assert pi_count == headline["position_interpolation"]["n_past_threshold"]
+    assert base_count == headline["base_500k"]["n_past_threshold"]
+    assert claimed_scale == EXT_SCALE == int(
+        artifact["headline"]["yarn_floor"]["scale"]
+    )
+
+    fastest, all_past, floor, denominator = (int(v) for v in groups("ext_floor")[0])
+    assert fastest == headline["yarn"]["untouched_channels"]
+    assert all_past == headline["yarn"]["untouched_past_threshold"]
+    assert floor == all_past == artifact["headline"]["yarn_floor"][
+        "untouched_past_threshold_4096"
+    ]
+    assert denominator == int(literal("ext_caption_channels"))
+
+    critical, critical_context = groups("ext_critical")[0]
+    assert int(critical_context) == 4096
+    assert_paper_number_matches(
+        artifact["headline"]["position_interpolation_critical_scale_4096"],
+        critical,
+        "position-interpolation critical scale",
+    )
+    assert float(literal("ext_theta_zero")) == pytest.approx(
+        artifact["canonical_channels_4096"]["rope"][0]["inv_freq"], rel=0, abs=1e-12
+    )
+
+    (
+        prov_rope,
+        prov_yarn,
+        prov_pi,
+        prov_base,
+        prov_channels,
+        prov_floor,
+        prov_critical,
+    ) = (int(value) if value.isdigit() else value for value in groups("prov_extension_row")[0])
+    assert prov_channels == int(literal("ext_caption_channels"))
+    assert prov_rope == headline["rope"]["n_past_threshold"]
+    assert prov_yarn == headline["yarn"]["n_past_threshold"]
+    assert prov_pi == headline["position_interpolation"]["n_past_threshold"]
+    assert prov_base == headline["base_500k"]["n_past_threshold"]
+    assert prov_floor == headline["yarn"]["untouched_past_threshold"]
+    assert_paper_number_matches(
+        artifact["headline"]["position_interpolation_critical_scale_4096"],
+        prov_critical,
+        "provenance critical scale",
+    )
+
+    # The R3 remark restates the same counts in the main text.
+    (
+        remark_context,
+        remark_rope,
+        remark_denominator,
+        remark_yarn,
+        remark_denominator_again,
+        remark_scale,
+        remark_pi,
+        remark_denominator_last,
+    ) = (int(value) for value in groups("ext_remark_counts")[0])
+    assert remark_context == claimed_context == 4096
+    assert remark_denominator == remark_denominator_again == remark_denominator_last
+    assert remark_denominator == int(literal("ext_caption_channels"))
+    assert remark_rope == headline["rope"]["n_past_threshold"]
+    assert remark_yarn == headline["yarn"]["n_past_threshold"]
+    assert remark_pi == headline["position_interpolation"]["n_past_threshold"]
+    assert remark_scale == EXT_SCALE
+    remark_floor, remark_floor_denominator = (
+        int(value) for value in groups("ext_remark_floor")[0]
+    )
+    assert remark_floor == floor
+    assert remark_floor_denominator == remark_denominator
+
+
+def test_the_measured_extension_cost_matches_its_artifact() -> None:
+    """Every literal of Appendix~\\ref{app:extension-cost} is recomputed.
+
+    Mutation verdict: changing a pooled rate, a per-checkpoint bound, a
+    past-threshold fraction or the grid size without re-running
+    ``usefulness_extension`` fails the corresponding comparison.  Swapping the
+    YaRN and position-interpolation rows fails because the two rates differ by
+    a factor of nearly two, and reinstating the old ``no worse'' intervention
+    claim fails the ratio test, which is the only place the 17--27\\% is
+    allowed to come from.
+    """
+    artifact = _artifact(_REPO / "results" / "usefulness_extension.json")
+    pooled = {(row["scheme"], row["scale"]): row for row in artifact["pooled"]}
+    rope = pooled[("rope", 1.0)]
+    yarn = pooled[("yarn", 32.0)]
+    pi = pooled[("position_interpolation", 32.0)]
+    rates = {
+        "rope": rope["sign_flip_fraction_mean"] * 100.0,
+        "yarn": yarn["sign_flip_fraction_mean"] * 100.0,
+        "pi": pi["sign_flip_fraction_mean"] * 100.0,
+    }
+    bounds = {
+        "yarn_low": yarn["sign_flip_fraction_min"] * 100.0,
+        "yarn_high": yarn["sign_flip_fraction_max"] * 100.0,
+        "pi_low": pi["sign_flip_fraction_min"] * 100.0,
+        "pi_high": pi["sign_flip_fraction_max"] * 100.0,
+    }
+    fractions = {
+        "rope": rope["fraction_past_threshold_4096_mean"],
+        "yarn": yarn["fraction_past_threshold_4096_mean"],
+        "pi": pi["fraction_past_threshold_4096_mean"],
+    }
+
+    abstract = groups("extcost_abstract")[0]
+    assert_paper_number_matches(rates["rope"], abstract[0], "abstract plain-RoPE rate")
+    assert_paper_number_matches(rates["yarn"], abstract[1], "abstract YaRN rate")
+    assert_paper_number_matches(rates["pi"], abstract[2], "abstract PI rate")
+
+    main = groups("extcost_main")[0]
+    assert_paper_number_matches(rates["rope"], main[0], "R3 plain-RoPE rate")
+    assert_paper_number_matches(rates["yarn"], main[1], "R3 YaRN rate")
+    assert int(main[2]) == 32
+    assert_paper_number_matches(rates["pi"], main[3], "R3 PI rate")
+
+    assert int(literal("extcost_grid")) == len(artifact["distance_grid"])
+
+    appendix = groups("extcost_appendix")[0]
+    assert int(appendix[0]) == 32
+    assert_paper_number_matches(rates["yarn"], appendix[1], "appendix YaRN rate")
+    assert_paper_number_matches(bounds["yarn_low"], appendix[2], "YaRN bound low")
+    assert_paper_number_matches(bounds["yarn_high"], appendix[3], "YaRN bound high")
+    assert_paper_number_matches(rates["pi"], appendix[4], "appendix PI rate")
+    assert_paper_number_matches(bounds["pi_low"], appendix[5], "PI bound low")
+    assert_paper_number_matches(bounds["pi_high"], appendix[6], "PI bound high")
+    assert_paper_number_matches(rates["rope"], appendix[7], "appendix plain-RoPE rate")
+    assert int(appendix[8]) == 4096
+    assert_paper_number_matches(fractions["yarn"], appendix[9], "appendix YaRN fraction")
+    assert_paper_number_matches(fractions["pi"], appendix[10], "appendix PI fraction")
+    assert_paper_number_matches(fractions["rope"], appendix[11], "appendix RoPE fraction")
+
+    scale_low, scale_high = (int(value) for value in groups("extcost_figcap_scale")[0])
+    assert (scale_low, scale_high) == (2, 32)
+    threshold, context = (int(value) for value in groups("extcost_figcap_threshold")[0])
+    assert threshold * math.pi == pytest.approx(XL.THRESHOLD, rel=0, abs=1e-12)
+    assert context == 4096
+
+    prov = groups("prov_extension_cost_row")[0]
+    assert_paper_number_matches(rates["rope"], prov[0], "provenance plain-RoPE rate")
+    assert_paper_number_matches(rates["yarn"], prov[1], "provenance YaRN rate")
+    assert_paper_number_matches(rates["pi"], prov[2], "provenance PI rate")
+    for value, written, what in zip(
+        (fractions["rope"], fractions["yarn"], fractions["pi"]),
+        prov[3:],
+        ("provenance RoPE fraction", "provenance YaRN fraction", "provenance PI fraction"),
+        strict=True,
+    ):
+        assert_paper_number_matches(value, written, what)
+
+    # The 17--27% is the ratio of the intervened pass's prediction error to the
+    # unedited pass's, on the two Llama-family checkpoints.  Pythia is the
+    # exception and the paper says so; both directions are pinned here.
+    intervention = _artifact(INTERVENTION_PATH)
+    low_ratio, high_ratio = (int(value) for value in groups("intervention_error_ratio")[0])
+    measured = []
+    for model in intervention["models"][1:]:
+        row = model["pooled"]
+        measured.append(
+            100.0
+            * (
+                row["exact_prediction_error_median"]
+                / row["baseline_prediction_error_median"]
+                - 1.0
+            )
+        )
+    assert sorted(round(value) for value in measured) == sorted(
+        (low_ratio, high_ratio)
+    ), (measured, low_ratio, high_ratio)
+    pythia = intervention["models"][0]["pooled"]
+    assert (
+        pythia["exact_prediction_error_median"]
+        < pythia["baseline_prediction_error_median"]
+    )
+
+
+def test_the_spacing_sensitivity_matches_its_artifact() -> None:
+    """Every spacing number in the paper is recomputed from its artifact.
+
+    Mutation verdict: replacing the uniform grid with the log grid makes the
+    per-model rates fall toward 0.28, 0.26, 0.26 and fails the comparisons;
+    changing the pooled 39.8 or the 38.5 at 13 points fails the corresponding
+    ``assert_paper_number_matches``; editing the provenance row without moving
+    the artifact fails the last block.
+    """
+    path = _REPO / "results" / "usefulness_spacing.json"
+    artifact = json.loads(path.read_text(encoding="utf-8"))
+    assert artifact["schema"] == "rope_attribution/usefulness_spacing/v1"
+    models = artifact["models"]
+    assert len(models) == 3
+    uniform65 = [m["uniform65"]["sign_flip_fraction_pooled"] * 100 for m in models]
+    uniform13 = artifact["pooled"]["uniform13"] * 100
+    log13 = artifact["pooled"]["log13"] * 100
+    rel_log = float(np.median([m["log13"]["rel_err_median"] for m in models]))
+    rel_uniform = float(np.median([m["uniform65"]["rel_err_median"] for m in models]))
+
+    abstract = groups("abstract_spacing")[0]
+    assert_paper_number_matches(log13, abstract[0], "abstract log-grid rate")
+    assert_paper_number_matches(
+        artifact["pooled"]["uniform65"] * 100, abstract[1], "abstract uniform rate"
+    )
+
+    grid = groups("worth_spacing_grid")[0]
+    assert int(grid[0]) == 65
+    assert_paper_number_matches(
+        artifact["pooled"]["uniform65"] * 100, grid[1], "main uniform pooled rate"
+    )
+
+    compare = groups("worth_spacing_compare")[0]
+    assert_paper_number_matches(log13, compare[0], "main log-grid rate")
+    assert int(compare[1]) == 13
+    assert_paper_number_matches(rel_log, compare[2], "main log-grid rel error")
+    assert_paper_number_matches(rel_uniform, compare[3], "main uniform rel error")
+
+    head = groups("app_spacing_head")[0]
+    assert_paper_number_matches(log13, head[0], "appendix log-grid rate")
+    assert int(head[1]) == 13
+
+    uniform = groups("app_spacing_uniform")[0]
+    assert int(uniform[0]) == 65
+    assert_paper_number_matches(
+        artifact["pooled"]["uniform65"] * 100, uniform[1], "appendix uniform rate"
+    )
+    for actual, written, what in zip(
+        uniform65, uniform[2:5], ("pythia", "llama", "SmolLM"), strict=True
+    ):
+        assert_paper_number_matches(actual, written, f"appendix uniform {what}")
+    assert int(uniform[5]) == 13
+    assert_paper_number_matches(uniform13, uniform[6], "appendix 13-point uniform rate")
+
+    assert_paper_number_matches(
+        log13, groups("app_spacing_conservative")[0][0], "appendix conservative rate"
+    )
+    rel = groups("app_spacing_rel")[0]
+    assert_paper_number_matches(rel_log, rel[0], "appendix log-grid rel error")
+    assert_paper_number_matches(rel_uniform, rel[1], "appendix uniform rel error")
+    assert int(rel[2]) == 65
+
+    prov = groups("prov_spacing_row")[0]
+    assert_paper_number_matches(
+        artifact["pooled"]["uniform65"] * 100, prov[0], "provenance uniform rate"
+    )
+    for actual, written, what in zip(
+        uniform65, prov[1:4], ("pythia", "llama", "SmolLM"), strict=True
+    ):
+        assert_paper_number_matches(actual, written, f"provenance uniform {what}")
+    assert_paper_number_matches(rel_uniform, prov[4], "provenance rel error")
+
+
+def test_the_context_summary_restates_the_spectrum_table() -> None:
+    """The compressed context paragraph keeps the table's two exact endpoints.
+
+    Mutation verdict: writing 2048 instead of 4096 for the untouched angle
+    fails the equality with both methods' rows; changing 1225.06 fails the
+    fig05 lookup at delta = 8192.
+    """
+    rope_delta, claimed_angle = (int(x) for x in groups("ctx_max_angle_main")[0])
+    rope = spectrum_row("rope_base_10k", rope_delta)
+    yarn = spectrum_row("yarn", rope_delta)
+    assert_paper_says_exactly(rope["max_abs_angle"], claimed_angle, "RoPE max angle")
+    assert_paper_says_exactly(yarn["max_abs_angle"], claimed_angle, "YaRN max angle")
+    assert rope["max_abs_angle"] == yarn["max_abs_angle"]
+
+    pi_value = {
+        row["method"]: float(row["amplitude_weighted_err"])
+        for row in csv_rows("fig05_linearization_error")
+        if int(row["delta"]) == FIG_DELTA_MAX
+    }["position_interpolation"]
+    assert_paper_number_matches(pi_value, literal("ctx_pi_main"), "PI at the far end")
+
+
 def test_no_number_in_the_paper_is_left_unverified() -> None:
     orphans = unaccounted_numbers() - EXEMPT_ALGEBRA
     assert not orphans, (
@@ -3276,6 +5632,7 @@ def test_the_claim_registry_is_not_vacuous() -> None:
         "table_d_base",  # "\mathrm{base} = 10^{4}" as written in the table header
         "partial_p",  # a definition, not a measurement
         "fig02_eight_distances",  # "at eight distances"
+        "feat_sweep_units",  # a units disclaimer, no number to capture
     }
     uncapturing = {entry.name for entry in CLAIMS} - {
         entry.name

@@ -188,13 +188,24 @@ def structural_facts(
     scales = np.array([0.0, 1.0, 2.0, -3.0, 7.5, 1e-3, 1e3])
     deltas = [1, 13, 29, 61, 127]
     bilin_err = 0.0
+    n_bilinear = 0
     for d in deltas:
         s_unit = score_relative(v, u, freqs, d)
         if s_unit == 0.0:
+            # Scaling a zero score tests nothing. Skip it, but count only the
+            # evaluations that actually happened: reporting the planned
+            # len(deltas) * len(scales) here is how a vacuous pass looked
+            # exactly like a full one.
             continue
         for a in scales:
             s_scaled = score_relative(a * v, u, freqs, d)
             bilin_err = max(bilin_err, abs(s_scaled - a * s_unit) / (abs(a * s_unit) + 1e-12))
+            n_bilinear += 1
+    if n_bilinear == 0:
+        raise RuntimeError(
+            "the bilinearity check evaluated no (distance, scale) pair: every "
+            "unit score was zero, so a zero error would prove nothing"
+        )
 
     pair_err = 0.0
     for d in deltas:
@@ -212,7 +223,7 @@ def structural_facts(
         "key_norm_preservation_max_abs_err": key_norm_err,
         "bilinearity_max_rel_err": bilin_err,
         "pair_closed_form_max_abs_err": pair_err,
-        "scores_tested": len(deltas) * len(scales),
+        "scores_tested": n_bilinear,
     }
 
 

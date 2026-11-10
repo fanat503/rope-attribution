@@ -46,34 +46,42 @@ FLOAT32_EPS = 1.1920928955078125e-07
 _USEFULNESS = _REPO / "results" / "usefulness.json"
 _AGREEMENT = _REPO / "results" / "agreement.json"
 _SEEDS = _REPO / "results" / "usefulness_seeds.json"
+_GRID = _REPO / "results" / "usefulness_grid_independence.json"
 
 
 @pytest.fixture(scope="module")
 def trained() -> dict:
     if not _JSON.exists():
-        pytest.skip("results/real_model.json is absent; run real_model.py")
+        pytest.fail("results/real_model.json is absent; it is committed evidence, not an optional input")
     return json.loads(_JSON.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def agreement_data() -> dict:
     if not _AGREEMENT.exists():
-        pytest.skip("results/agreement.json is absent; run agreement.py")
+        pytest.fail("results/agreement.json is absent; it is committed evidence")
     return json.loads(_AGREEMENT.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def usefulness() -> dict:
     if not _USEFULNESS.exists():
-        pytest.skip("results/usefulness.json is absent; run usefulness.py")
+        pytest.fail("results/usefulness.json is absent; it is committed evidence")
     return json.loads(_USEFULNESS.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def seeds() -> dict:
     if not _SEEDS.exists():
-        pytest.skip("results/usefulness_seeds.json is absent; run seed_variance.py")
+        pytest.fail("results/usefulness_seeds.json is absent; it is committed evidence")
     return json.loads(_SEEDS.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def grid_independence() -> dict:
+    if not _GRID.exists():
+        pytest.fail("results/usefulness_grid_independence.json is absent; it is committed evidence")
+    return json.loads(_GRID.read_text(encoding="utf-8"))
 
 
 def _ident(trained: dict, model_id: str, name: str) -> dict:
@@ -85,7 +93,15 @@ def _shares(trained: dict, model_id: str) -> dict:
 
 
 def _blind(trained: dict, model_id: str) -> float:
-    return trained["aggregates"][model_id]["frac_position_blind_across_heads"]["mean"]
+    """The fraction of live pair-channel cells meeting the cutoff.
+
+    This is the pooled count over the pooled live denominator, not the mean of
+    per-prompt head medians (``frac_position_blind_across_heads``). The paper
+    says "the fraction meeting the cutoff" and "of pairs", so the pooled
+    fraction is the estimand; using the median-of-medians here would quote a
+    number 34% low for pythia.
+    """
+    return trained["aggregates"][model_id]["frac_position_blind_pooled"]
 
 
 # --------------------------------------------------------------------------
@@ -163,9 +179,9 @@ def test_the_relative_position_identity_is_exact_on_trained_weights(trained: dic
     )
     assert worst < 1e-10, f"the identity is not exact on trained weights: {worst}"
     # The literal *string*, not a float: the accepted interval is derived from the
-    # decimal the paper wrote, and float("1.14") would hand it exponent -52.
+    # decimal the paper wrote, and float("4.55") would hand it exponent -52.
     assert_paper_sci_matches(
-        worst, literal("trained_relpos_worst"), -12, "the trained relative-position error"
+        worst, literal("trained_relpos_worst"), -13, "the trained relative-position error"
     )
 
 
@@ -174,6 +190,50 @@ def test_the_dtype_floor_the_paper_names_is_the_real_one(trained: dict) -> None:
         FLOAT32_EPS, literal("trained_float32_eps"), -7, "the float32 epsilon"
     )
     assert trained["models"], "no per-model records to check the dtype against"
+
+
+def test_the_norm_bound_is_quoted_where_it_belongs(trained: dict) -> None:
+    """Norm preservation is the loose identity; the paper separates it.
+
+    Mutation verdict: reinstating the blanket "at the dtype floor" header, or
+    quoting the scaled bilinearity residual in place of the norm bound, fails
+    here. The eps multiples are recomputed per model and per side, so an
+    endpoint-only edit fails.
+    """
+    low, high = (int(x) for x in groups("trained_norm_eps")[0])
+    multiples = [
+        _ident(trained, model, name)["max"] / FLOAT32_EPS
+        for model in (PYTHIA, LLAMA, SMOLLM)
+        for name in (
+            "key_norm_preservation_max_abs_err",
+            "query_norm_preservation_max_abs_err",
+        )
+    ]
+    assert round(min(multiples)) == low, (min(multiples), low)
+    assert round(max(multiples)) == high, (max(multiples), high)
+    # The paper calls the unscaled ratio worse; it has to actually be worse.
+    for model in (PYTHIA, LLAMA, SMOLLM):
+        assert (
+            _ident(trained, model, "bilinearity_max_rel_err")["max"]
+            > _ident(trained, model, "bilinearity_max_scaled_err")["max"]
+        ), model
+
+
+def test_the_checkpoints_rotate_the_channels_the_paper_names(trained: dict) -> None:
+    """Two architecture families, not three unrelated ones.
+
+    Mutation verdict: calling all three full-RoPE (the old "three unrelated
+    architectures" sentence) fails on pythia's 16/64 split; the artifact's
+    ``rope_dim`` is compared directly, not inferred from the family name.
+    """
+    rotated, dim, full = (int(x) for x in groups("trained_rope_layout")[0])
+    models = {model["model_id"]: model for model in trained["models"]}
+    assert models[PYTHIA]["rope_dim"] == rotated
+    assert models[PYTHIA]["head_dim"] == dim
+    for model_id in (LLAMA, SMOLLM):
+        assert models[model_id]["rope_dim"] == full, model_id
+        assert models[model_id]["head_dim"] == full, model_id
+    assert 0 < rotated < dim == full
 
 
 def test_the_closed_form_and_bilinearity_sit_at_that_floor(trained: dict) -> None:
@@ -245,7 +305,7 @@ def test_the_quoted_interquartile_range_is_pythias_own(trained: dict) -> None:
     """A one-checkpoint sentence, and the paper now says which checkpoint.
 
     Both ends of the printed range are pythia-160m's own quartiles
-    (0.1169 and 0.9919). The label used to say 'pooled'; llama and
+    (0.1860 and 0.9917). The label used to say 'pooled'; llama and
     SmolLM sit at 0.151/0.988 and 0.154/0.989, so naming the model is
     the honest version of what was measured.
     """
@@ -262,7 +322,7 @@ def test_the_quoted_interquartile_range_is_pythias_own(trained: dict) -> None:
 
 
 def test_almost_every_channel_is_position_carrying(trained: dict) -> None:
-    """The claim that makes the gate/phase split useless on real weights."""
+    """The claim that most pairs carry a non-negligible phase on real weights."""
     for model, index in ((PYTHIA, 1), (LLAMA, 2), (SMOLLM, 3)):
         written = float(literal("trained_blind_fraction", index))
         assert_paper_number_matches(
@@ -270,8 +330,11 @@ def test_almost_every_channel_is_position_carrying(trained: dict) -> None:
         )
     fractions = [_blind(trained, m) for m in (PYTHIA, LLAMA, SMOLLM)]
     assert all(0.001 < f < 0.02 for f in fractions), fractions
-    # "remarkably consistent across three unrelated architectures"
-    assert max(fractions) / min(fractions) < 1.5, fractions
+    # The paper says the rate is "within a factor of two" across three
+    # unrelated architectures.  The spread is wider than the pre-fix
+    # artifact's 1.5x but still under 2x; the threshold is stated here so a
+    # future drift is visible rather than absorbed by a loose inequality.
+    assert max(fractions) / min(fractions) < 2.0, fractions
     assert trained["position_blind_ratio"] == 0.01
 
 
@@ -280,7 +343,76 @@ def test_the_stated_band_brackets_every_checkpoint(trained: dict) -> None:
     hi = float(literal("trained_blind_band", 2))
     for model in (PYTHIA, LLAMA, SMOLLM):
         pct = 100.0 * _blind(trained, model)
+        # The band is deliberately wider than the printed per-model values:
+        # pythia's exact 0.5405% must lie inside it without relying on
+        # rounding to 0.54%. A band that only contains the rounded numbers
+        # would exclude the measurement it is summarising.
         assert lo <= pct <= hi, (model, pct, lo, hi)
+        assert hi - lo < 0.5, (lo, hi)
+
+
+def test_the_position_blind_cutoff_matches_the_code(trained: dict) -> None:
+    """The paper's cutoff is ``|B_k|/R_k < 1%``, not a movement of that share.
+
+    Mutation verdict: restoring "its share moves by less than 1% across the
+    distance range" fails here. ``real_model.py`` tests
+    ``|B_k| < BLIND_RATIO * |A_k|``; the paper must describe that convention,
+    and it must keep the reminder that even ``B_k = 0`` still oscillates.
+    """
+    assert "$|B_k|/R_k$" in TEX_FLAT
+    assert "below one percent" in TEX_FLAT
+    assert "|B_k| < 0.01\\,|A_k|" in TEX_FLAT
+    assert "share moves by less than" not in TEX_FLAT
+    assert "even when $B_k$ vanishes" in TEX_FLAT
+    assert float(literal("trained_blind_cutoff")) == trained["position_blind_ratio"]
+    assert trained["position_blind_ratio"] == 0.01
+
+
+def test_the_seed_sd_is_not_overstated_as_three_orders(trained: dict) -> None:
+    """0.0170 / 4.58e-5 is about 370x, i.e. 2.6 orders, not three.
+
+    Mutation verdict: restoring "three orders of magnitude" fails here. The
+    numerical ratio is already checked by the seed-variance tests; this keeps
+    the prose from rounding it up by half an order of magnitude.
+    """
+    assert "three orders of magnitude" not in TEX_FLAT
+    assert "more than two orders of magnitude" in TEX_FLAT
+    # The ratio the sentence is describing, recomputed from the two artifacts.
+    head_sd = 0.0170
+    seed_sd = 4.5835751380061324e-05
+    ratio = head_sd / seed_sd
+    assert 300.0 < ratio < 500.0, ratio
+
+
+def test_the_limitations_scope_the_configuration_claim() -> None:
+    """The old sentence said all measurements use one configuration; false.
+
+    Mutation verdict: restoring "All measurements use $d = 64$" fails here.
+    The sensitivity sweep varies base and head dimension, and the trained
+    section uses checkpoints and 256 content pairs per head and prompt.
+    """
+    assert "Single synthetic configuration" in TEX_FLAT
+    assert "All measurements use" not in TEX_FLAT
+    assert "varies the base and the head dimension" in TEX_FLAT
+    assert (
+        "Section~\\ref{sec:trained} uses the three checkpoints and their content-pair"
+        in TEX_FLAT
+    )
+
+
+def test_the_worth_section_discloses_the_grid_it_measured(usefulness: dict) -> None:
+    """The section used to say "pre-registered grid" without its size.
+
+    A reader coming from the 54-point synthetic grid would assume 54. The
+    measured grid is 13 points; the paper must say so.
+
+    Mutation verdict: deleting the disclosure makes ``groups`` find nothing.
+    """
+    n, lo, hi = (int(x) for x in groups("worth_distance_grid")[0])
+    grid = usefulness["distance_grid"]
+    assert n == len(grid) == 13
+    assert lo == min(grid) == 1
+    assert hi == max(grid) == 4096
 
 
 def test_the_worth_section_prices_the_best_surrogate_not_a_strawman(
@@ -349,12 +481,37 @@ def test_the_seed_variance_is_as_printed(seeds: dict) -> None:
     assert (prov_mean, prov_sd) == (mean, sd)
 
 
+def test_the_sampling_disclosure_matches_the_artifact(trained: dict) -> None:
+    """The sample count and the excluded degenerate entries are not decoration.
+
+    Mutation verdict: changing the paper's 256, 1.47, 11.06 or 462{,}144 without
+    re-running ``real_model.py`` fails here. The values are read from
+    ``results/real_model.json``; the paper cannot silently describe a different
+    sweep from the one that produced the shares.
+    """
+    assert int(literal("trained_content_pairs")) == trained["n_content_pairs_per_head"]
+    aggregates = trained["aggregates"]
+    samples = [entry["n_samples"] for entry in aggregates.values()]
+    lo, hi = groups("trained_sample_range")[0]
+    assert_paper_number_matches(min(samples) / 1e6, lo, "the smallest sample count")
+    assert_paper_number_matches(max(samples) / 1e6, hi, "the largest sample count")
+
+    degenerate = sum(entry["n_degenerate_pairs_excluded"] for entry in aggregates.values())
+    written = int(literal("trained_degenerate").replace("{,}", ""))
+    assert written == degenerate, (written, degenerate)
+    # The excluded entries are llama-specific; the other two checkpoints have
+    # none. If that changes, the sentence's model name must change with it.
+    assert aggregates[LLAMA]["n_degenerate_pairs_excluded"] > 0
+    assert aggregates[PYTHIA]["n_degenerate_pairs_excluded"] == 0
+    assert aggregates[SMOLLM]["n_degenerate_pairs_excluded"] == 0
+
+
 def test_the_head_range_is_not_one_outlier(usefulness: dict) -> None:
     """If a single head failed, the honest claim would be about that head.
 
     The band's two ends are pinned at the paper's own precision instead
-    of a +-1.0-point slack: the extremes over all 2790 heads are 22.378%
-    and 34.859%, which round to the printed 22.4% and 34.9%. A one-point
+    of a +-1.0-point slack: the extremes over all 558 layer-heads are 21.268%
+    and 33.913%, which round to the printed 21.3% and 33.9%. A one-point
     slack would have passed a band that is nearly a point off the data.
     """
     total = sum(m["n_heads"] for m in usefulness["models"])
@@ -379,7 +536,7 @@ def test_the_relative_error_exceeds_the_signal(usefulness: dict) -> None:
         assert model["rel_err_median"] > 1.0, model["model_id"]
 
 
-def test_the_materiality_cut_is_disclosed(usefulness: dict) -> None:
+def test_the_materiality_cut_is_disclosed(usefulness: dict, grid_independence: dict) -> None:
     """A threshold that helps the result must be stated where it is used."""
     assert int(literal("worth_materiality")) == 5
     assert "numerically indistinguishable from zero" in TEX_FLAT
@@ -387,8 +544,37 @@ def test_the_materiality_cut_is_disclosed(usefulness: dict) -> None:
     # on, and the earlier 14x span is named as the earlier version's error.
     assert "the sweep actually run" in TEX_FLAT
     assert "An earlier version of this" in TEX_FLAT
-    drift = float(literal("worth_grid_drift"))
-    assert 0 < drift < 50, drift
+    assert_paper_number_matches(
+        grid_independence["sign_flip_drift"],
+        literal("worth_grid_drift"),
+        "the sign-flip grid drift",
+    )
+
+
+def test_the_grid_sweep_reports_the_realized_density(
+    grid_independence: dict,
+) -> None:
+    """The requested density is not the density that was run.
+
+    ``65`` is the requested spacing; integer rounding collapses it to 56
+    distinct distances, so the realized span is 56/9 = 6.2x, not 7x. The
+    artifact carries both numbers, and the paper must not quote the nominal
+    one as if it were measured.
+
+    Mutation verdict: restoring "which spans densities 9, 17 and 65 --- a
+    7x change" fails the phrase assertion below, and claiming 65 realized
+    distances fails the ``n_deltas`` assertion.
+    """
+    densities = grid_independence["densities"]
+    assert densities == [9, 17, 65], densities
+    realized = [
+        grid_independence["per_density"][str(d)]["n_deltas"] for d in densities
+    ]
+    assert realized == [9, 17, 56], realized
+    assert max(realized) / min(realized) < 7.0, realized
+    assert "do not all survive integer rounding" in TEX_FLAT
+    assert "realized span is below the nominal $7\\times$" in TEX_FLAT
+    assert "--- a $7\\times$ change" not in TEX_FLAT
 
 
 def test_the_ranking_agreement_rates_are_as_printed(agreement_data: dict) -> None:
@@ -496,3 +682,69 @@ def test_the_section_does_not_claim_a_downstream_result(trained: dict) -> None:
     # And the synthetic measurements the characterisation rests on are still
     # present, so the two halves cannot be confused.
     assert MEASUREMENTS["feature_attribution"]["n_features"] == 8
+
+
+def test_the_grid_drift_is_restated_in_both_places(
+    grid_independence: dict, usefulness: dict
+) -> None:
+    """The main text and the limitations quote the same realized grid sweep.
+
+    Mutation verdict: reverting "materially sensitive" to "mildly sensitive"
+    while keeping the numbers fails the ratio check; editing only one of the two
+    prose copies fails the cross-copy equality.
+    """
+    low, high, ratio = groups("worth_grid_realized")[0]
+    lim_low, lim_high = groups("limitations_grid_drift")[0]
+    rates = [
+        grid_independence["per_density"][str(density)]["sign_flip_fraction_pooled"]
+        * 100.0
+        for density in grid_independence["densities"]
+    ]
+    assert_paper_number_matches(min(rates), low, "main-text grid low")
+    assert_paper_number_matches(max(rates), high, "main-text grid high")
+    assert (lim_low, lim_high) == (low, high), (lim_low, lim_high, low, high)
+    between_head = 100.0 * usefulness["pooled"]["sign_flip_fraction_sd_head"]
+    assert_paper_number_matches(
+        (max(rates) - min(rates)) / between_head,
+        ratio,
+        "the drift in between-head standard deviations",
+    )
+    assert "materially sensitive" in TEX_FLAT
+    assert "mildly sensitive" not in TEX_FLAT
+
+
+def test_the_provenance_rows_name_the_measured_values(
+    trained: dict, agreement_data: dict
+) -> None:
+    """The real-model and ranking rows are pinned to their own artifacts.
+
+    Mutation verdict: dropping either row leaves the main-text numbers
+    unaccounted for; swapping the closed-form median for the relative-position
+    error fails the scientific-notation comparison.
+    """
+    rel, rel_exp, closed, closed_exp, low, high = groups("prov_real_model_row")[0]
+    worst = max(
+        _ident(trained, model, "relative_position_max_abs_err")["max"]
+        for model in (PYTHIA, LLAMA, SMOLLM)
+    )
+    assert_paper_sci_matches(worst, rel, int(rel_exp), "provenance relative position")
+    median = _ident(trained, PYTHIA, "pair_closed_form_max_rel_err")["median"]
+    assert_paper_sci_matches(median, closed, int(closed_exp), "provenance closed form")
+    multiples = [
+        _ident(trained, model, name)["max"] / FLOAT32_EPS
+        for model in (PYTHIA, LLAMA, SMOLLM)
+        for name in (
+            "key_norm_preservation_max_abs_err",
+            "query_norm_preservation_max_abs_err",
+        )
+    ]
+    assert round(min(multiples)) == int(low)
+    assert round(max(multiples)) == int(high)
+
+    agree_low, agree_high, chance_low, chance_high = groups("prov_agreement_row")[0]
+    rates = sorted(100.0 * model["top1_agreement"] for model in agreement_data["models"])
+    chance = [100.0 * model["chance_top1"] for model in agreement_data["models"]]
+    assert_paper_number_matches(rates[0], agree_low, "provenance agreement low")
+    assert_paper_number_matches(rates[-1], agree_high, "provenance agreement high")
+    assert_paper_number_matches(min(chance), chance_low, "provenance chance low")
+    assert_paper_number_matches(max(chance), chance_high, "provenance chance high")

@@ -28,6 +28,7 @@ Run it from the repository root either way::
 from __future__ import annotations
 
 import csv
+import json
 import math
 import sys
 from collections.abc import Sequence
@@ -48,6 +49,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from rope_attribution import extension_law as EL  # noqa: E402
+from rope_attribution import usefulness_extension as UX  # noqa: E402
 from rope_attribution.experiments import (  # noqa: E402
     PairTerms,
     method_spectrum,
@@ -1387,6 +1390,762 @@ def fig11_sensitivity_sweep() -> FigureRecord:
 # --------------------------------------------------------------------------
 
 
+def fig12_qk_case_study() -> FigureRecord:
+    """The trained-dictionary result as a picture, from the committed artifact.
+
+    The table in Section~\\ref{sec:features} reports two numbers that disagree:
+    the total per-feature profile reverses on 0.01% of cells, the rotary
+    sub-score on 21.5%. A reader can accept the arithmetic and still not see
+    how the same feature can be flat in one view and oscillating in the other.
+    This figure shows one feature on one head: the total profile is flat to
+    within a fraction of a percent of its own scale, while the rotary sub-score
+    runs from negative to positive and crosses zero.
+
+    Nothing is recomputed here. The artifact is the one
+    ``rope_attribution.qk_attribution`` writes and the claim gates read; the
+    guard below refuses a different schema or a head set that does not match
+    the artifact's own ``n_heads``.
+    """
+    path = REPO_ROOT / "results" / "qk_attribution.json"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} is missing; run `python -m projects.rope_attribution.qk_attribution`"
+        )
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != "qk-attribution/v1":
+        raise ValueError(
+            f"{path}: schema {data.get('schema')!r}, expected 'qk-attribution/v1'"
+        )
+    heads = data.get("heads") or []
+    if len(heads) != int(data.get("n_heads", -1)):
+        raise ValueError(
+            f"{path}: {len(heads)} head records for n_heads={data.get('n_heads')}"
+        )
+
+    # One feature that is in both top lists, so the two curves are the same
+    # feature's total and rotary sub-score rather than two different features.
+    chosen = None
+    for head in heads:
+        total_rows = {int(row["feature"]): row for row in head["top_sweep_features"]}
+        rotary_rows = {int(row["feature"]): row for row in head["top_sweep_rotary"]}
+        common = sorted(set(total_rows) & set(rotary_rows))
+        if common:
+            feature = common[0]
+            chosen = (head, feature, total_rows[feature], rotary_rows[feature])
+            break
+    if chosen is None:
+        raise ValueError(f"{path}: no feature appears in both top-sweep lists")
+
+    head, feature, total_row, rotary_row = chosen
+    deltas = np.asarray(data["sweep_deltas"], dtype=np.float64)
+    total = np.asarray(total_row["profile"], dtype=np.float64)
+    rotary = np.asarray(rotary_row["profile"], dtype=np.float64)
+    if total.size != deltas.size or rotary.size != deltas.size:
+        raise ValueError(
+            f"{path}: profile length {total.size}/{rotary.size} != {deltas.size}"
+        )
+    total_scale = float(np.mean(np.abs(total)))
+    rotary_scale = float(np.mean(np.abs(rotary)))
+    if total_scale == 0.0 or rotary_scale == 0.0:
+        raise ValueError(f"{path}: a chosen profile has zero scale")
+    total_n = total / total_scale
+    rotary_n = rotary / rotary_scale
+
+    fig, (ax_profile, ax_bars) = plt.subplots(
+        1, 2, figsize=(6.6, 2.7), gridspec_kw={"width_ratios": [1.15, 1.0]}
+    )
+    ax_profile.axhline(0.0, color="#555555", lw=0.8)
+    ax_profile.plot(
+        deltas, total_n, color=PALETTE[0], marker="o", ms=2.0,
+        label="total $c_i(\\delta)$",
+    )
+    ax_profile.plot(
+        deltas, rotary_n, color=PALETTE[1], marker="s", ms=2.0,
+        label="rotary sub-score",
+    )
+    ax_profile.set_xscale("log", base=2)
+    ax_profile.set_xlabel("relative distance $\\delta$")
+    ax_profile.set_ylabel("contribution / mean $|c_i|$")
+    ax_profile.set_title(
+        f"One feature (head {head['head']}, feature {feature})", fontsize=9
+    )
+    ax_profile.legend(fontsize=7, loc="lower left")
+
+    n_heads = len(heads)
+    positions = np.arange(n_heads, dtype=np.float64)
+    width = 0.26
+    bars = (
+        ("sweep_feature_metrics", "total", PALETTE[0], -width),
+        ("sweep_rotary_metrics", "rotary", PALETTE[1], 0.0),
+        ("sweep_pair_metrics", "pair", PALETTE[2], width),
+    )
+    for key, label, colour, offset in bars:
+        values = [float(head_row[key]["sign_flip_fraction"]) for head_row in heads]
+        ax_bars.bar(
+            positions + offset, values, width=width, label=label, color=colour
+        )
+    ax_bars.set_xticks(positions)
+    ax_bars.set_xticklabels([str(head_row["head"]) for head_row in heads], fontsize=7)
+    ax_bars.set_xlabel("head")
+    ax_bars.set_ylabel("sign-flip fraction")
+    ax_bars.set_yscale("log")
+    ax_bars.set_ylim(1e-4, 0.5)
+    ax_bars.set_title("Sign reversal by head", fontsize=9)
+    ax_bars.legend(fontsize=7, loc="lower right")
+
+    stem = "fig12_qk_case_study"
+    png = _save(fig, stem, "The total profile hides the rotary reversal")
+
+    csv_path = _write_csv(
+        stem,
+        [
+            "delta",
+            "total_profile",
+            "rotary_profile",
+            "total_normalized",
+            "rotary_normalized",
+        ],
+        [
+            [float(d), float(t), float(r), float(tn), float(rn)]
+            for d, t, r, tn, rn in zip(
+                deltas, total, rotary, total_n, rotary_n, strict=True
+            )
+        ],
+    )
+    aggregate = data["aggregate"]
+    total_pooled = float(aggregate["sweep_feature"]["sign_flip_fraction"])
+    rotary_pooled = float(aggregate["sweep_rotary"]["sign_flip_fraction"])
+    pair_pooled = float(aggregate["sweep_pair"]["sign_flip_fraction"])
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/qk_attribution.json (pythia-70m-deduped + public 32k SAE, layer 3); "
+            f"head {head['head']}, feature {feature}"
+        ),
+        headline=(
+            f"the total profile stays within {100 * (total_n.max() - total_n.min()):.2f}% "
+            f"of its mean absolute value while the rotary sub-score runs "
+            f"{rotary.min():.1f} to {rotary.max():.1f} and changes sign; pooled "
+            f"sign-flip fractions are {100 * total_pooled:.2f}% (total), "
+            f"{100 * rotary_pooled:.2f}% (rotary), {100 * pair_pooled:.2f}% (pair)"
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
+
+
+def _load_json_artifact(name: str, schema: str) -> dict:
+    """Read a committed artifact, refusing a different schema.
+
+    The figures must plot the numbers the claim gates read, so a stale or
+    renamed artifact is an error rather than a silent re-derivation.
+    """
+    path = REPO_ROOT / "results" / name
+    if not path.exists():
+        raise FileNotFoundError(f"{path} is missing; run its producer module first")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != schema:
+        raise ValueError(f"{path}: schema {data.get('schema')!r}, expected {schema!r}")
+    return data
+
+
+def _band(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Proposition 5(3): the attainable range of the minimax relative error."""
+    lower = (1.0 - np.cos(x / 2.0)) / 2.0
+    upper = np.sin(np.minimum(x, np.pi) / 2.0)
+    return lower, upper
+
+
+def fig13_collapse_law() -> FigureRecord:
+    """The sign-error rate is a value of a function, not a constant.
+
+    Left: the measured minimax relative error per pair, binned by the phase the
+    window sweeps, against the exact attainable band of Proposition 5(3) and the
+    threshold at ``theta L = 2 pi``. Every model's curve saturates at exactly 1
+    when it reaches the threshold.
+
+    Right: the dilution of Corollary 7. The pair-level error and the score-level
+    error are plotted against window length for the same three checkpoints. On
+    pythia-160m, which rotates 16 of 64 channels, the score-level error stays an
+    order of magnitude below the pair-level one; on the two full-RoPE
+    checkpoints the two curves coincide, because there is no unrotated tail to
+    hide behind.
+    """
+    data = _load_json_artifact("collapse.json", "rope-collapse/v1")
+    models = list(data["models"])
+    fig, (ax_band, ax_ladder) = plt.subplots(
+        1, 2, figsize=(10.6, 4.2), gridspec_kw={"width_ratios": [1.0, 1.0]}
+    )
+
+    grid = np.geomspace(1e-3, 1e4, 400)
+    lower, upper = _band(grid)
+    ax_band.fill_between(
+        grid, lower, upper, color="#E8E8E8", zorder=0,
+        label="attainable range",
+    )
+    ax_band.plot(grid, lower, color="#8A8A8A", lw=0.9, ls="--", zorder=1)
+    ax_band.plot(grid, upper, color="#8A8A8A", lw=0.9, ls="--", zorder=1)
+    ax_band.axvline(2.0 * np.pi, color=PALETTE[1], lw=1.2, ls=":", zorder=1)
+    ax_band.axhline(UNIT_RELATIVE_ERROR, color="#444444", lw=0.8, ls=":", zorder=1)
+    ax_band.text(
+        2.0 * np.pi * 1.12, 0.62, r"$\theta L = 2\pi$", color=PALETTE[1],
+        fontsize=8, rotation=90, va="center",
+    )
+
+    rows: list[list[object]] = []
+    for index, model in enumerate(models):
+        bins = sorted(model["bins"], key=lambda b: b["x_lo"])
+        centres = np.sqrt(np.asarray([b["x_lo"] for b in bins]) * np.asarray([b["x_hi"] for b in bins]))
+        y = np.asarray([b["rel_minimax_median"] for b in bins])
+        ax_band.plot(
+            centres, y, color=_colour(index), marker="o", ms=3.0,
+            label=model["model_id"], zorder=3,
+        )
+        for b, cxx, _yy in zip(bins, centres, y, strict=True):
+            rows.append(
+                [
+                    model["model_id"], float(b["x_lo"]), float(b["x_hi"]), float(cxx),
+                    int(b["n"]), float(b["rel_minimax_median"]),
+                    float(b["rel_minimax_min"]), float(b["rel_minimax_max"]),
+                    float(b["rel_mean_median"]), float(b["past_threshold_fraction"]),
+                ]
+            )
+    ax_band.set_xscale("log")
+    ax_band.set_xlim(1e-3, 1e4)
+    ax_band.set_ylim(0.0, 1.06)
+    ax_band.set_xlabel(r"phase swept by the window, $x=\theta L$ (rad)")
+    ax_band.set_ylabel("minimax relative error")
+    ax_band.set_title("The rate is a value of this function", fontsize=9)
+    ax_band.legend(fontsize=7, loc="lower right")
+
+    for index, model in enumerate(models):
+        spans = [int(r["span"]) for r in model["by_window"]]
+        channel = [float(r["channel_rel_minimax_median"]) for r in model["by_window"]]
+        score = [float(r["score_rel_median"]) for r in model["by_window"]]
+        tail = [float(r["tail_share_median"]) for r in model["by_window"]]
+        ax_ladder.plot(
+            spans, channel, color=_colour(index), ls="--", marker="o", ms=2.5,
+            label=f"{model['model_id']} (pair)",
+        )
+        ax_ladder.plot(
+            spans, score, color=_colour(index), ls="-", marker="s", ms=2.5,
+            label=f"{model['model_id']} (score)",
+        )
+        for span, ch, sc, tl in zip(spans, channel, score, tail, strict=True):
+            rows.append([model["model_id"], "ladder", span, "", "", ch, "", "", sc, tl])
+    ax_ladder.set_xscale("log", base=2)
+    ax_ladder.set_xlabel("window length $L$ (tokens)")
+    ax_ladder.set_ylabel("median relative error")
+    ax_ladder.set_ylim(0.0, 1.06)
+    ax_ladder.set_title("Partial RoPE hides it; full RoPE does not", fontsize=9)
+    ax_ladder.legend(fontsize=5.6, ncol=1, loc="upper left")
+
+    stem = "fig13_collapse_law"
+    png = _save(fig, stem, "A position-free summary collapses at $\\theta L = 2\\pi$")
+    csv_path = _write_csv(
+        stem,
+        [
+            "model_id", "x_lo", "x_hi", "x_centre", "n", "rel_minimax_median",
+            "rel_minimax_min", "rel_minimax_max", "rel_mean_median", "score_or_tail",
+        ],
+        rows,
+    )
+    pythia = next(m for m in models if m["model_id"].startswith("EleutherAI"))
+    full = next(m for m in models if m["model_id"].startswith("JackFram"))
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/collapse.json (three checkpoints, 32 content pairs per head, "
+            "windows 8..4096); the band is Proposition 5(3), drawn from the formula"
+        ),
+        headline=(
+            f"every checkpoint reaches a pair-level error of exactly 1.000 at the "
+            f"threshold and stays there; at L=4096 the score-level error is "
+            f"{pythia['by_window'][-1]['score_rel_median']:.3f} on partial-RoPE "
+            f"pythia-160m against {full['by_window'][-1]['score_rel_median']:.3f} on "
+            f"full-RoPE llama-160m"
+        ),
+        extra=(
+            f"png={png.name} csv={csv_path.name} "
+            f"threshold_span_pythia="
+            f"{pythia['threshold_span_per_pair'][0]:.1f}"
+        ),
+    )
+
+
+def fig14_intervention() -> FigureRecord:
+    """What the attribution is worth when you act on it.
+
+    Left: for each cell, the achieved-over-intended suppression of the pair the
+    position-free table ranks first. ``1`` is a faithful summary; values below
+    zero are cells where the edit *amplified* the score it was meant to suppress.
+    The exact rule is not plotted as a competitor --- it is 1 by construction ---
+    so the panel is the measured cost of the surrogate alone.
+
+    Right: the closed-form prediction of the post-softmax change against the
+    measured change for the same cells. This is a harness identity, and it is the
+    evidence that the per-pair decomposition plus softmax is the whole mechanism.
+    """
+    data = _load_json_artifact("intervention.json", "rope-intervention/v1")
+    models = list(data["models"])
+    fig, (ax_ratio, ax_identity) = plt.subplots(
+        1, 2, figsize=(10.6, 4.2), gridspec_kw={"width_ratios": [1.15, 1.0]}
+    )
+
+    rows: list[list[object]] = []
+    for index, model in enumerate(models):
+        cells = [c for c in model["cells"] if c["surrogate"]["suppression_ratio"] is not None]
+        ratios = np.asarray([c["surrogate"]["suppression_ratio"] for c in cells])
+        order = np.argsort(ratios)
+        xs = np.arange(order.size, dtype=np.float64)
+        colours = [
+            PALETTE[1] if ratios[i] < 0.0 else _colour(index) for i in order
+        ]
+        ax_ratio.bar(xs, ratios[order], color=colours, width=0.8)
+        ax_ratio.axhline(0.0, color="#333333", lw=0.9)
+        ax_ratio.axhline(1.0, color="#333333", lw=0.9, ls="--")
+        ax_ratio.set_yscale("symlog", linthresh=0.1)
+        ax_ratio.set_xlabel("cells, sorted within checkpoint")
+        ax_ratio.set_ylabel("achieved / intended suppression")
+        ax_ratio.set_title(
+            f"{model['model_id']}: {100 * model['pooled']['surrogate_sign_reversal_fraction']:.0f}% "
+            f"of edits move the score the wrong way",
+            fontsize=8,
+        )
+        for c in cells:
+            rows.append(
+                [
+                    model["model_id"], c["layer"], c["head"], c["query"], c["delta"],
+                    c["surrogate"]["suppression_ratio"],
+                    c["surrogate"]["predicted_delta_attention"],
+                    c["surrogate"]["delta_attention"],
+                    c["surrogate"]["prediction_error"], int(c["same_pair"]),
+                ]
+            )
+        del index
+
+    ax_ratio.text(
+        0.02, 0.04, "red = sign reversed\n(dashed line = faithful)",
+        transform=ax_ratio.transAxes, fontsize=7,
+        bbox={"facecolor": "white", "edgecolor": "#BBBBBB", "pad": 3.0},
+    )
+
+    predicted: list[float] = []
+    measured: list[float] = []
+    for model in models:
+        for c in model["cells"]:
+            predicted.append(abs(float(c["exact"]["predicted_delta_attention"])))
+            measured.append(abs(float(c["exact"]["delta_attention"])))
+    predicted_arr = np.asarray(predicted)
+    measured_arr = np.asarray(measured)
+    keep = (predicted_arr > 0.0) & (measured_arr > 0.0)
+    ax_identity.loglog(
+        measured_arr[keep], predicted_arr[keep], "o", ms=3.0,
+        color=PALETTE[0], alpha=0.8,
+    )
+    limits = [
+        max(1e-12, float(min(measured_arr[keep].min(), predicted_arr[keep].min())) / 4.0),
+        float(max(measured_arr[keep].max(), predicted_arr[keep].max())) * 4.0,
+    ]
+    ax_identity.plot(limits, limits, color="#333333", lw=0.9, ls="--")
+    ax_identity.set_xlim(limits)
+    ax_identity.set_ylim(limits)
+    ax_identity.set_xlabel("measured $|\\Delta$ attention$|$")
+    ax_identity.set_ylabel("closed-form prediction")
+    ax_identity.set_title("The closed form is the mechanism", fontsize=9)
+    worst = max(
+        max(float(c["exact"]["prediction_error"]) for c in model["cells"])
+        for model in models
+    )
+    ax_identity.text(
+        0.02, 0.96, f"worst |predicted - measured|={worst:.1e}",
+        transform=ax_identity.transAxes, va="top", fontsize=7,
+        bbox={"facecolor": "white", "edgecolor": "#BBBBBB", "pad": 3.0},
+    )
+
+    stem = "fig14_intervention"
+    png = _save(fig, stem, "The price of a position-free summary, measured")
+    csv_path = _write_csv(
+        stem,
+        [
+            "model_id", "layer", "head", "query", "delta", "suppression_ratio",
+            "predicted_delta_attention", "measured_delta_attention",
+            "prediction_error", "same_pair",
+        ],
+        rows,
+    )
+    total_cells = sum(m["n_cells"] for m in models)
+    total_reversed = sum(
+        round(m["pooled"]["surrogate_sign_reversal_fraction"] * m["n_cells"]) for m in models
+    )
+    differing = sum(m["n_selection_differs"] for m in models)
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/intervention.json (three checkpoints, one 320-token passage, "
+            "32 heads per checkpoint, one pair ablated in q_proj only)"
+        ),
+        headline=(
+            f"{total_reversed} of {total_cells} edits suppress the score with the "
+            f"wrong sign; the exact and surrogate selections differ in {differing} "
+            f"cells, and the closed form reproduces every intervened forward pass "
+            f"to {worst:.0e}"
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
+
+
+def fig15_extension_law() -> FigureRecord:
+    """Context extension against the threshold, not against a vibe.
+
+    Left: the fraction of rotary channels whose window sweeps at least
+    ``2*pi`` radians, for the four schemes the paper compares. The dashed line
+    is YaRN's floor: the fastest nine channels are bit-for-bit untouched, so
+    YaRN cannot go below nine past-threshold channels at ``L = 4096`` no matter
+    how large the scale is.
+
+    Right: the mean best-placement minimax error of the same rows. It is a
+    smooth consequence of the same counts, and it makes the cost of a scheme
+    visible: a scheme can lower the count and still leave the mean error high
+    because the channels it does not touch are the ones with the largest
+    amplitude.
+
+    Both panels read ``results/extension_law.json``; no number is typed in.
+    """
+    data = _load_json_artifact("extension_law.json", "rope-extension-law/v1")
+    rows = [row for row in data["rows"] if row["scale"] == 32.0]
+    schemes = list(EL.SCHEMES)
+    labels = {
+        "rope": "plain RoPE",
+        "yarn": "YaRN, $s=32$",
+        "position_interpolation": "position interpolation, $s=32$",
+        "base_500k": "base $5\\times10^5$",
+    }
+    fig, (ax_count, ax_error) = plt.subplots(
+        1, 2, figsize=(10.6, 4.2), gridspec_kw={"width_ratios": [1.0, 1.0]}
+    )
+    csv_rows: list[list[object]] = []
+    for index, scheme in enumerate(schemes):
+        group = sorted(
+            [row for row in rows if row["scheme"] == scheme],
+            key=lambda row: row["context"],
+        )
+        contexts = np.asarray([row["context"] for row in group], dtype=np.float64)
+        counts = np.asarray([row["n_past_threshold"] for row in group], dtype=np.float64)
+        errors = np.asarray([row["mean_minimax_error"] for row in group])
+        ax_count.plot(
+            contexts, counts, marker="o", ms=4.0, color=_colour(index),
+            label=labels[scheme],
+        )
+        ax_error.plot(
+            contexts, errors, marker="o", ms=4.0, color=_colour(index),
+            label=labels[scheme],
+        )
+        for row in group:
+            csv_rows.append(
+                [
+                    scheme, row["context"], row["n_past_threshold"],
+                    row["fraction_past_threshold"], row["mean_minimax_error"],
+                    row["mean_worst_case_error"], row["untouched_channels"],
+                    row["untouched_past_threshold"],
+                ]
+            )
+    floor = data["headline"]["yarn_floor"]["untouched_past_threshold_4096"]
+    ax_count.axhline(
+        floor, color="#8A8A8A", lw=1.0, ls="--",
+        label=f"YaRN floor ({floor}/32)",
+    )
+    ax_count.set_xscale("log", base=2)
+    ax_count.set_xlabel("context length $L$ (tokens)")
+    ax_count.set_ylabel("channels past $\\theta L = 2\\pi$ (of 32)")
+    ax_count.set_title("How many channels a constant cannot describe", fontsize=9)
+    ax_count.set_ylim(0, 32)
+    ax_count.legend(fontsize=6.5, loc="lower right")
+
+    ax_error.set_xscale("log", base=2)
+    ax_error.set_xlabel("context length $L$ (tokens)")
+    ax_error.set_ylabel("mean minimax relative error")
+    ax_error.set_ylim(0.0, 1.05)
+    ax_error.set_title("The best constant's price", fontsize=9)
+    ax_error.legend(fontsize=6.5, loc="upper left")
+
+    stem = "fig15_extension_law"
+    png = _save(fig, stem, "No practical extension scheme makes a constant exact")
+    csv_path = _write_csv(
+        stem,
+        [
+            "scheme", "context", "n_past_threshold", "fraction_past_threshold",
+            "mean_minimax_error", "mean_worst_case_error", "untouched_channels",
+            "untouched_past_threshold",
+        ],
+        csv_rows,
+    )
+    at_4096 = data["headline"]["context_4096"]
+    critical = data["headline"]["position_interpolation_critical_scale_4096"]
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/extension_law.json (four schemes, seven scales, five context "
+            "lengths; the plotted rows are scale 32)"
+        ),
+        headline=(
+            f"at L=4096, {at_4096['rope']['n_past_threshold']}/32 channels are past "
+            f"threshold under plain RoPE, {at_4096['yarn']['n_past_threshold']}/32 "
+            f"under YaRN (floor {at_4096['yarn']['untouched_past_threshold']}/32), "
+            f"{at_4096['position_interpolation']['n_past_threshold']}/32 under "
+            f"position interpolation and {at_4096['base_500k']['n_past_threshold']}/32 "
+            f"under base 5e5; position interpolation needs s={critical:.2f} to reach "
+            f"zero"
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
+
+
+def fig16_extension_cost() -> FigureRecord:
+    """The measured price of a position-free summary under extension geometry.
+
+    Left: the same three checkpoints, the same content pairs and the same
+    13-point grid, re-priced under YaRN and position-interpolation ladders at
+    scales 2--32.  The plain-RoPE point at scale 1 is the control and reproduces
+    the headline artifact exactly.  Right: the fraction of rotary channels past
+    ``theta L = 2*pi`` at ``L = 4096`` for the same ladders, i.e. the geometric
+    quantity the law controls.  The two panels are deliberately side by side:
+    extension lowers both, but neither reaches zero.
+    """
+    data = _load_json_artifact("usefulness_extension.json", UX.SCHEMA)
+    scales = [2.0, 4.0, 8.0, 16.0, 32.0]
+    families = (
+        ("yarn", "YaRN", PALETTE[0]),
+        ("position_interpolation", "position interpolation", PALETTE[1]),
+    )
+    rope = next(
+        row
+        for row in data["pooled"]
+        if row["scheme"] == "rope" and row["scale"] == 1.0
+    )
+    fig, (ax_rate, ax_channels) = plt.subplots(
+        1, 2, figsize=(10.6, 4.0), gridspec_kw={"width_ratios": [1.15, 1.0]}
+    )
+
+    csv_rows: list[list[object]] = []
+    for ax, key, ylabel, title in (
+        (
+            ax_rate,
+            "sign_flip_fraction_mean",
+            "measured sign-error rate",
+            "What the summary costs",
+        ),
+        (
+            ax_channels,
+            "fraction_past_threshold_4096_mean",
+            r"channels past $\theta L=2\pi$ at $L=4096$",
+            "Why: the geometry",
+        ),
+    ):
+        if key == "sign_flip_fraction_mean":
+            baseline = rope[key]
+        else:
+            baseline = rope["fraction_past_threshold_4096_mean"]
+        ax.axhline(
+            baseline,
+            color="#444444",
+            lw=1.0,
+            ls=":",
+            label="plain RoPE (control)",
+            zorder=1,
+        )
+        for scheme, label, colour in families:
+            rows = [
+                next(
+                    row
+                    for row in data["pooled"]
+                    if row["scheme"] == scheme and row["scale"] == scale
+                )
+                for scale in scales
+            ]
+            means = np.asarray([row[key] for row in rows])
+            lows = np.asarray(
+                [
+                    row[
+                        "sign_flip_fraction_min"
+                        if key == "sign_flip_fraction_mean"
+                        else "fraction_past_threshold_4096_mean"
+                    ]
+                    for row in rows
+                ]
+            )
+            highs = np.asarray(
+                [
+                    row[
+                        "sign_flip_fraction_max"
+                        if key == "sign_flip_fraction_mean"
+                        else "fraction_past_threshold_4096_mean"
+                    ]
+                    for row in rows
+                ]
+            )
+            # The pooled rows only carry a min/max for the measured rate; the
+            # channel fraction is a property of the ladder and is identical
+            # across models with the same rotary width, so its band is a point.
+            if key != "sign_flip_fraction_mean":
+                lows = highs = means
+            ax.plot(
+                scales,
+                means,
+                color=colour,
+                marker="o",
+                ms=4.0,
+                label=label,
+                zorder=3,
+            )
+            ax.fill_between(scales, lows, highs, color=colour, alpha=0.16, zorder=2)
+            ax.annotate(
+                f"{100 * means[-1]:.1f}%",
+                xy=(scales[-1], means[-1]),
+                xytext=(4, 4),
+                textcoords="offset points",
+                color=colour,
+                fontsize=7.5,
+                ha="left",
+            )
+
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(scales)
+        ax.set_xticklabels([f"{scale:g}" for scale in scales])
+        ax.set_xlim(1.6, 40.0)
+        ax.set_xlabel("extension scale $s$ (dimensionless, log scale)")
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontsize=9)
+        ax.legend(fontsize=7, loc="lower left")
+
+    ax_rate.set_ylim(0.08, 0.32)
+    ax_channels.set_ylim(0.30, 0.80)
+    ax_rate.text(
+        0.02,
+        0.98,
+        "three checkpoints; same pairs, grid and seed",
+        transform=ax_rate.transAxes,
+        va="top",
+        ha="left",
+        fontsize=7.0,
+        family="monospace",
+        bbox={"facecolor": "white", "edgecolor": "#BBBBBB", "pad": 3.0},
+    )
+    # The sidecar carries every array the panels plot: the control at s=1, the
+    # pooled mean at each scale, and the per-model points behind the band.
+    for panel, key in (
+        ("rate", "sign_flip_fraction_mean"),
+        ("channels", "fraction_past_threshold_4096_mean"),
+    ):
+        csv_rows.append(
+            [
+                panel,
+                "rope",
+                1.0,
+                "pooled",
+                float(rope[key]),
+                float(rope[key]),
+                float(rope[key]),
+                float(rope[key]),
+            ]
+        )
+        for scheme, _label, _colour in families:
+            for scale in scales:
+                pooled = next(
+                    row
+                    for row in data["pooled"]
+                    if row["scheme"] == scheme and row["scale"] == scale
+                )
+                if key == "sign_flip_fraction_mean":
+                    low = pooled["sign_flip_fraction_min"]
+                    high = pooled["sign_flip_fraction_max"]
+                else:
+                    low = high = pooled[key]
+                csv_rows.append(
+                    [
+                        panel,
+                        scheme,
+                        float(scale),
+                        "pooled",
+                        float(pooled[key]),
+                        float(pooled[key]),
+                        float(low),
+                        float(high),
+                    ]
+                )
+                for model in data["models"]:
+                    row = next(
+                        row
+                        for row in model["rows"]
+                        if row["scheme"] == scheme and row["scale"] == scale
+                    )
+                    value = (
+                        row["sign_flip_fraction_pooled"]
+                        if key == "sign_flip_fraction_mean"
+                        else row["channels"]["4096"]["fraction_past_threshold"]
+                    )
+                    csv_rows.append(
+                        [
+                            panel,
+                            scheme,
+                            float(scale),
+                            model["model_id"],
+                            float(value),
+                            float(pooled[key]),
+                            float(low),
+                            float(high),
+                        ]
+                    )
+
+    stem = "fig16_extension_cost"
+    csv_path = _write_csv(
+        stem,
+        [
+            "panel",
+            "scheme",
+            "scale",
+            "model_id",
+            "value",
+            "pooled_mean",
+            "pooled_min",
+            "pooled_max",
+        ],
+        csv_rows,
+    )
+    png = _save(fig, stem, "Extension lowers the price; it does not remove it")
+    yarn32 = next(
+        row
+        for row in data["pooled"]
+        if row["scheme"] == "yarn" and row["scale"] == 32.0
+    )
+    pi32 = next(
+        row
+        for row in data["pooled"]
+        if row["scheme"] == "position_interpolation" and row["scale"] == 32.0
+    )
+    return FigureRecord(
+        stem=stem,
+        producer=(
+            "results/usefulness_extension.json (three checkpoints, eleven "
+            "scheme rows, 256 content pairs per head)"
+        ),
+        headline=(
+            f"at s=32 the measured sign-error rate is "
+            f"{100 * yarn32['sign_flip_fraction_mean']:.1f}% under YaRN "
+            f"({100 * yarn32['sign_flip_fraction_min']:.1f}--"
+            f"{100 * yarn32['sign_flip_fraction_max']:.1f}) and "
+            f"{100 * pi32['sign_flip_fraction_mean']:.1f}% under position "
+            f"interpolation ({100 * pi32['sign_flip_fraction_min']:.1f}--"
+            f"{100 * pi32['sign_flip_fraction_max']:.1f}), against "
+            f"{100 * rope['sign_flip_fraction_mean']:.1f}% under plain RoPE; "
+            f"the past-threshold channel fraction falls from "
+            f"{100 * rope['fraction_past_threshold_4096_mean']:.1f}% to "
+            f"{100 * yarn32['fraction_past_threshold_4096_mean']:.1f}% and "
+            f"{100 * pi32['fraction_past_threshold_4096_mean']:.1f}%"
+        ),
+        extra=f"png={png.name} csv={csv_path.name}",
+    )
+
+
 def _method_rows() -> dict[str, list[dict]]:
     """Call ``experiments.method_spectrum`` once and group it by method."""
     rows = method_spectrum(
@@ -1411,10 +2170,13 @@ def _write_readme(records: Sequence[FigureRecord]) -> Path:
         "`projects/rope_attribution/figures.py`. No number in these PNGs, in the",
         "CSV sidecars, or in the table below is typed into the source: each one is",
         "returned at run time by `rope_attribution.experiments`,",
-        "`rope_attribution.rope` or `rope_attribution.statistics` -- except fig11,",
-        "which reads `results/sensitivity.json`, the artifact that `make results`",
-        "regenerates and CI diff-reports; the figure asserts the artifact's grid",
-        "against `sensitivity.BASES`/`HEAD_DIMS` before plotting. The literals",
+        "`rope_attribution.rope` or `rope_attribution.statistics` -- except fig11",
+        "to fig15, which read committed artifacts under `results/`: fig11 the",
+        "sensitivity sweep, fig12 the QK case study, fig13 the collapse law, fig14",
+        "the intervention and fig15 the extension law. Each asserts its artifact's",
+        "schema and grid before plotting, so a stale or renamed artifact fails the",
+        "regeneration.",
+        "The literals",
         "that do appear in `figures.py` are",
         "configuration (head dim, RoPE base, extension scale, seeds), the distance",
         "grid definition, plotting parameters, and two dimensionless thresholds that",
@@ -1470,6 +2232,14 @@ def _write_readme(records: Sequence[FigureRecord]) -> Path:
         "",
         "fig11 is the configuration sweep behind the paper's robustness paragraph,",
         "read from its artifact; the artifact's grid is asserted against the module.",
+        "fig12 is the trained-dictionary case study: the same feature's total and",
+        "rotary profiles, read from `results/qk_attribution.json`.",
+        "fig15 is the design consequence of the threshold law: how many channels",
+        "each context-extension scheme leaves past `theta L = 2 pi`, read from",
+        "`results/extension_law.json`. fig16 closes the loop: it re-prices the",
+        "same content pairs under those ladders and shows that the measured",
+        "sign-error rate falls with extension but does not reach zero, read from",
+        "`results/usefulness_extension.json`.",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
@@ -1497,6 +2267,11 @@ def main() -> int:
         fig09_position_conditional_attribution(),
         fig10_seed_variance(),
         fig11_sensitivity_sweep(),
+        fig12_qk_case_study(),
+        fig13_collapse_law(),
+        fig14_intervention(),
+        fig15_extension_law(),
+        fig16_extension_cost(),
     ]
     readme = _write_readme(records)
 
