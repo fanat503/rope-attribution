@@ -29,15 +29,23 @@ def _layer_pattern(n_layers: int) -> list[str]:
     return (pattern * (n_layers // len(pattern) + 1))[:n_layers]
 
 
-def _e4b_config(n_layers: int = 30) -> dict:
+def _e4b_config(n_layers: int = 42) -> dict:
+    """The E4B text-tower fields that matter to the planner.
+
+    These are the public ``google/gemma-4-E4B-it`` values as of 2026-11-11:
+    42 layers, 5 sliding + 1 full repeated seven times, hidden size 2560, two
+    KV heads, 18 shared-KV layers.  The earlier fixture said 30 layers / four
+    KV heads; the planner's geometry is unchanged, but the transcription was
+    wrong and this test now pins the real numbers.
+    """
     return {
         "model_type": "gemma4",
         "text_config": {
             "model_type": "gemma4_text",
             "num_hidden_layers": n_layers,
-            "hidden_size": 2304,
+            "hidden_size": 2560,
             "num_attention_heads": 8,
-            "num_key_value_heads": 4,
+            "num_key_value_heads": 2,
             "head_dim": 256,
             "global_head_dim": 512,
             "attention_k_eq_v": False,
@@ -58,14 +66,14 @@ def test_e4b_has_two_families_with_different_ladders() -> None:
 
     assert plan["text_tower_nested"] is True
     assert plan["tower_type"] == "gemma4_text"
-    assert plan["n_layers"] == 30
+    assert plan["n_layers"] == 42
     assert [family["name"] for family in plan["families"]] == [
         "sliding_attention",
         "full_attention",
     ]
 
     sliding, full = plan["families"]
-    assert sliding["n_layers"] == 25
+    assert sliding["n_layers"] == 35
     assert sliding["layers"][:6] == [0, 1, 2, 3, 4, 6]
     assert sliding["head_dim"] == 256
     assert sliding["rotated_channels"] == 256
@@ -74,7 +82,7 @@ def test_e4b_has_two_families_with_different_ladders() -> None:
     assert sliding["rope_theta"] == 10_000.0
     assert sliding["rope_type"] == "default"
 
-    assert full["layers"] == [5, 11, 17, 23, 29]
+    assert full["layers"] == [5, 11, 17, 23, 29, 35, 41]
     assert full["head_dim"] == 512
     assert full["rotated_channels"] == 128
     assert full["rotated_pairs"] == 64

@@ -23,7 +23,7 @@ measurement.
 
 | Field | Sliding layers | Full-attention layers |
 | --- | ---: | ---: |
-| Layer count in the 30-layer tower | 25 | 5 |
+| Layer count in the 42-layer tower | 35 | 7 |
 | `head_dim` | 256 | 512 (`global_head_dim`) |
 | `rope_theta` | 10,000 | 1,000,000 |
 | `rope_type` | `default` | `proportional` |

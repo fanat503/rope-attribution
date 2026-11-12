@@ -17,3 +17,15 @@ paper/build/
 # Training runs (train.py). metrics.jsonl grows with the run; regenerate with
 # `python -m projects.rope_attribution.train --config <name>`.
 runs/
+
+# Dataset streams prepared by `data.py`; they are built locally and are far too
+# large to commit. The manifest is reproducible from the source and seed.
+data/
+
+# Local environments and generated PDFs.
+.venv/
+*.pdf
+.coverage
+.mypy_cache/
+Thumbs.db
+.DS_Store

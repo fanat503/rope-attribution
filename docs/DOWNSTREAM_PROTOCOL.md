@@ -76,7 +76,19 @@ documented RoPE configuration:
 
 Gemma 4 is excluded for the structural reason in `docs/GEMMA4.md`: its
 per-layer attention families cannot be described by one frequency ladder. The
-grid spans three families, two rotary fractions, and 1.2B--8B.
+grid spans four architecture families, two rotary fractions, and 1.2B--8B.
+
+**Adapter requirement for Gemma 2.** `google/gemma-2-2b-it` applies
+`q_norm`/`k_norm` after the projections. A hook on `q_proj`/`k_proj` sees the
+unnormalised vector, while RoPE rotates the normalised one, so the eviction
+adapter must read the post-normalisation tensors (or apply the same
+normalisation before rotating). The repository's attribution adapter
+`real_model.collect_head_vectors` refuses Gemma 2 for exactly this reason. The
+eviction core in `eviction.py` takes the post-RoPE query and key tensors and is
+therefore agnostic; the deferred Hugging Face adapter is where the post-norm
+hook has to live. If that hook is not implemented before the run, the
+partial-RoPE arm is dropped and the dilution test is reported as not run --- it
+is never replaced by a silently wrong tensor.
 
 ## 3. Tasks and prompts
 
@@ -168,19 +180,31 @@ significance tests. No alpha adjustment is claimed for exploratory cells.
 The run writes `results/downstream_eviction.json` with:
 
 ```
-protocol_version, git_commit, date, seed, prompt_sha256,
+schema, status, protocol_version, git_commit, date, seed, prompt_sha256,
 models: [{id, params, rope_base, partial_rotary_factor, layers, kv_heads}],
 cells: [{model, task, context, retention, arm, n_prompts,
          nll_mean, nll_sd, accuracy, accuracy_ci, rank_correlation_with_exact}],
-ceiling: {model, task, context, nll_mean, accuracy}
+ceiling: {model, task, context, nll_mean, accuracy},
+note
 ```
 
-The implementation lives in `projects/rope_attribution/eviction.py` and is
-tested by `tests/test_eviction.py`. The identity test above is the mutation
-detector for the masking path; a second test checks that the exact arm's ranking
-on a synthetic pair reproduces the closed form in
-`THEORY_AND_PROOFS.md`. No test asserts a task outcome, because the outcome is
-the experiment.
+The ranking and masking core lives in
+`projects/rope_attribution/eviction.py` and is tested by
+`tests/test_eviction.py`. It implements the six arms, the grouped-query
+reduction, the forced prefix/current keys, and masked attention; the exact
+arm is checked against an independent `rope.apply_rope` construction, and the
+all-kept mask is checked against ordinary softmax. `--dry-run` writes the
+schema with empty `models`, `cells` and `ceiling` and a note saying that no
+checkpoint was run. No test asserts a task outcome, because the outcome is the
+experiment.
+
+**What is deferred.** The Hugging Face cache adapter is not shipped. Evicting a
+real model's cache requires architecture-specific surgery on the attention
+forward: Llama/Qwen/Mistral expose a `DynamicCache` with post-RoPE keys but no
+query, Gemma 2 adds post-projection QK-normalisation, and Gemma 4 has two
+per-layer rotary families. The adapter must be written and identity-tested per
+family before the confirmatory run. Until then the artifact is a dry run, and
+the paper's limitation --- no task is evaluated --- remains true.
 
 ## 8. Compute
 

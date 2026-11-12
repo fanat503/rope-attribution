@@ -5,9 +5,10 @@ Everything in this directory is written by
 CSV sidecars, or in the table below is typed into the source: each one is
 returned at run time by `rope_attribution.experiments`,
 `rope_attribution.rope` or `rope_attribution.statistics` -- except fig11
-to fig15, which read committed artifacts under `results/`: fig11 the
+to fig16, which read committed artifacts under `results/`: fig11 the
 sensitivity sweep, fig12 the QK case study, fig13 the collapse law, fig14
-the intervention and fig15 the extension law. Each asserts its artifact's
+the intervention, fig15 the extension law and fig16 the measured extension
+cost. Each asserts its artifact's
 schema and grid before plotting, so a stale or renamed artifact fails the
 regeneration.
 The literals
@@ -21,8 +22,7 @@ reference line in fig06 and fig11.
 
 ## Regenerate
 
-```powershell
-$env:PYTHONPATH = "projects"
+```sh
 python -m projects.rope_attribution.figures
 ```
 

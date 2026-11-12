@@ -70,6 +70,8 @@ _REMOVED_CASES = (
 
 
 def _tracked(path: str) -> list[str]:
+    if not (_REPO / ".git").exists():
+        pytest.skip("not a git checkout; the tombstone needs git ls-files")
     proc = subprocess.run(
         ["git", "ls-files", "--", path],
         cwd=_REPO,

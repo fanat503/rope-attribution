@@ -35,7 +35,19 @@ AUTHOR_NAME_VARIANTS = frozenset({EXPECTED_AUTHOR, "Ilya"})
 FIRST_PAPER_SUBJECT = "feat(statistics): withdraw the 920x claim"
 
 
+def _require_git_checkout() -> None:
+    """Skip the history checks when the artifact was unpacked without ``.git``.
+
+    An artifact evaluator commonly receives a ZIP or tarball, not a clone. The
+    science does not depend on the history, and a red suite for a missing
+    ``.git`` directory would be a false failure.
+    """
+    if not (_REPO / ".git").exists():
+        pytest.skip("not a git checkout; history checks do not apply")
+
+
 def _git(*args: str) -> str:
+    _require_git_checkout()
     proc = subprocess.run(
         ["git", *args], cwd=_REPO, capture_output=True, text=True, encoding="utf-8"
     )
@@ -171,13 +183,19 @@ def test_the_commits_written_for_the_paper_name_only_the_author() -> None:
 
 
 def test_the_local_identity_produces_the_right_attribution() -> None:
-    """The next ``git commit`` must not re-introduce a different name."""
-    ok, out = _git_ok("config", "user.name")
+    """A repository-local identity must name the author, if one is set.
+
+    A reviewer's global ``user.name`` is their own, not this repository's
+    configuration, so only ``--local`` is inspected.  CI sets no local identity
+    and skips; a maintainer who sets one is checked.
+    """
+    _require_git_checkout()
+    ok, out = _git_ok("config", "--local", "user.name")
     if not ok or not out.strip():
-        pytest.skip("no git identity configured in this checkout")
+        pytest.skip("no repository-local git identity configured")
     name = out.strip()
     assert name == EXPECTED_AUTHOR, f"user.name is {name!r}; expected {EXPECTED_AUTHOR!r}"
-    ok, out = _git_ok("config", "user.email")
+    ok, out = _git_ok("config", "--local", "user.email")
     if ok and out.strip():
         assert out.strip() == EXPECTED_EMAIL, (
             f"user.email is {out.strip()!r}; expected {EXPECTED_EMAIL!r}"

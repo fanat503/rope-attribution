@@ -26,6 +26,7 @@
 # root with no PYTHONPATH at all. That is the form every document here uses.
 PYTHON  ?= python
 PKG      = projects.rope_attribution
+PAPER_TECTONIC ?= tectonic
 
 .PHONY: all test results figures paper checkpoints qk qk-depth qk-trajectory postedit clean help
 
@@ -46,10 +47,9 @@ results:
 figures:
 	$(PYTHON) -m $(PKG).figures
 
-## paper: compile paper/main.tex (needs tectonic on PATH, or .tmp/tectonic/)
+## paper: compile paper/main.tex (needs tectonic on PATH; override PAPER_TECTONIC=...)
 paper:
-	cd paper && (command -v tectonic >/dev/null && tectonic -X compile --outdir build main.tex \
-		|| ../.tmp/tectonic/tectonic.exe -X compile --outdir build main.tex)
+	cd paper && $(PAPER_TECTONIC) -X compile --outdir build main.tex
 
 ## postedit: syntax + ruff + the affected module's own tests, on what changed.
 # The check Fan et al. (arXiv:2609.20804) found worth running after every

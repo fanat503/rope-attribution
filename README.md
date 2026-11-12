@@ -33,6 +33,10 @@ We explicitly do **not** claim novelty for the algebra: it is already published
 under-explored in general, or that anything here evaluates a downstream task.
 The pre-registered design for the follow-up task-level test at 1B–8B is
 `docs/DOWNSTREAM_PROTOCOL.md`; it has no results yet and changes no number here.
+Its ranking and masking core is implemented and tested in
+`projects/rope_attribution/eviction.py` and `tests/test_eviction.py`; the
+Hugging Face cache adapter and the 1B–8B run are deferred, and `--dry-run`
+writes the artifact schema with no task numbers.
 
 ## Dataflow
 
@@ -76,7 +80,7 @@ the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1774 tests (CPU-only install)
+pytest -q                                        # 1796 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -272,7 +276,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1774 tests (CPU-only install)
+tests/            1796 tests (CPU-only install)
 figures/          sixteen figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
