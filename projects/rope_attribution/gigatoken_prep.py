@@ -75,7 +75,7 @@ def flatten_token_documents(documents: Iterable) -> np.ndarray:
     # Awkward arrays (what gigatoken actually returns) expose ``layout`` and
     # flatten in one pass; a plain list of lists goes through itertools.
     if hasattr(documents, "layout"):
-        import awkward as ak  # noqa: PLC0415 - optional, only for this branch
+        import awkward as ak
 
         flat = ak.flatten(documents, axis=None)
         return np.asarray(flat, dtype=np.uint32)
@@ -106,7 +106,7 @@ def encode_text_files(
     """
     if tokenizer_factory is None or source_factory is None:
         try:
-            import gigatoken as gt  # noqa: PLC0415 - optional dependency
+            import gigatoken as gt
         except ImportError as exc:  # pragma: no cover - exercised without it
             raise RuntimeError(
                 "gigatoken is not installed; run `pip install gigatoken` on the "
@@ -117,7 +117,7 @@ def encode_text_files(
             tokenizer_factory = gt.Tokenizer
         if source_factory is None:
 
-            def source_factory(paths, separator):  # noqa: ANN001 - tiny adapter
+            def source_factory(paths, separator):
                 return gt.TextFileSource(
                     [str(p) for p in paths], separator=separator
                 )
