@@ -58,11 +58,13 @@ python -m projects.rope_attribution.train \
     --batch-size 8 --grad-accum 4 --log-every 5
 ```
 
-Read `runs/timing/metrics.jsonl`: `tok_per_s` is wall-clock tokens per second,
-and `tokens_per_step` is `batch_size * grad_accum * ctx`. A step budget is
+Read `runs/timing/metrics.jsonl`: the first `run_start` record carries
+`global_batch_size` and the resolved `config` (including `ctx`), and each later
+record carries `tok_per_s`. One optimizer step consumes
+`global_batch_size * config.ctx` tokens, so a step budget is
 
 ```
-steps = session_seconds * tok_per_s / tokens_per_step
+steps = session_seconds * tok_per_s / (global_batch_size * ctx)
 ```
 
 Leave 20% headroom for evaluation and checkpoint writes. If the projected run

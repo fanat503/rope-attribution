@@ -184,7 +184,8 @@ observations that would change our mind.
 approximation fact is textbook \citep{powell1981approximation}. We claim none of
 it. What we claim is the consequence for reporting practice: the scalar is not
 identified by the model, the total table hides the rotary error, and the
-position dependence reaches the loss. We measure $135$--$160$M checkpoints and
+position dependence reaches the loss. We measure checkpoints at
+$135$--$160$M parameters and
 one public $32$k dictionary; we do not claim a population estimate, a circuit,
 or a task-level benchmark. The $1$B--$8$B eviction test is pre-registered in
 Appendix~\ref{app:downstream-protocol} and is not run here.
@@ -1317,8 +1318,8 @@ possible: from here on, ``position'' means $\delta$ and nothing else.
 
 \begin{proposition}[The gate is position-free]
 \label{prop:gate}
-$\bigl|\R_{\delta} k\bigr| = \bigl|k\bigr|$ for all $\delta$. Consequently the
-magnitude of the query and of the key is exactly position-independent, and all
+$\bigl|\R_{\delta} k\bigr| = \bigl|k\bigr|$ for all $\delta$. Consequently
+query and key magnitudes are exactly position-independent, and all
 position information in $s(\delta)$ is carried by the rotation angle alone.
 \end{proposition}
 
@@ -2293,8 +2294,9 @@ from three pretrained checkpoints; they are used as measurement instruments and
 are not evaluated on a task. There is no retrieval benchmark and no accuracy
 measurement: we report no perplexity and no needle-in-a-haystack score. We
 cannot and do not report anything of the form ``the model retrieves the needle
-with accuracy $0.7$'', because nothing like that is measured. The checkpoints at
-$135$--$160$M parameters are measurement instruments, and three checkpoints with
+with accuracy $0.7$'', because nothing like that is measured.
+The checkpoints at $135$--$160$M parameters are measurement instruments, and
+three checkpoints with
 one prompt family and no downstream task cannot tell you whether per-distance
 attribution identifies anything a circuit cares about. We do not claim any
 scheme is better in practice: all are in real use, and a favourable ranking on
