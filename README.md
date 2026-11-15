@@ -31,7 +31,8 @@ which maps `4096` tokens onto six positions.
 
 We explicitly do **not** claim novelty for the algebra: it is already published
 (arXiv:2607.25507, Sections 3–4). Nor do we claim that RoPE internals are
-under-explored in general, or that anything here evaluates a downstream task.
+under-explored in general, or that anything here evaluates a downstream *task*:
+the NLL probe is a loss measurement on held-out passages, not a benchmark.
 The pre-registered design for the follow-up task-level test at 1B–8B is
 `docs/DOWNSTREAM_PROTOCOL.md`; it has no results yet and changes no number here.
 Its ranking and masking core is implemented and tested in
