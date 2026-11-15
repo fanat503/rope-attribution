@@ -1,27 +1,27 @@
-"""Tombstones for the legacy-file cleanup executed on 2026-10-17.
+"""Tombstones for the pre-paper archive removed on 2026-10-17.
 
 Why these tests exist
 ---------------------
-An audit of the pre-paper tree under `projects/frontier-01-*` recommended
-removing two classes of file, which was done on 2026-10-17:
-`settings.json` / `settings-ideal.json` — machine-readable, results-shaped
-objects whose contents were typed-in illustrative constants — and the six
-near-duplicate "FINAL" bundles the audit called the documents a reader is most
-likely to mistake for a result. Three process documents that operated against a
-`projects/bundle/` directory that does not exist were removed with them. The
-rest of that archive was removed from the working tree in October 2026; it
-remains in git history at tag `pre-legacy-cleanup-2026-10-20`.
+An audit of the pre-paper tree recommended removing three classes of file, which
+was done on 2026-10-17: machine-readable, results-shaped JSON whose contents were
+typed-in illustrative constants; near-duplicate "final" status documents that a
+reader could mistake for a result; and process documents that operated against a
+directory which does not exist. The rest of that archive was removed from the
+working tree in October 2026 and remains in git history at tag
+`pre-legacy-cleanup-2026-10-20`.
 
 The check runs against `git ls-files`, not the filesystem, and the difference
-matters. A local regeneration of the two JSON files is not the hazard: a
-*tracked* file is, because it is what a reader of the repository would find and
-could cite.
+matters. A local regeneration of a removed file is not the hazard: a *tracked*
+file is, because it is what a reader of the repository would find and could cite.
 
-Mutation verdict: regenerate `projects/settings.json`, run `git add -f
-projects/settings.json`, and `test_removed_legacy_file_stays_untracked` fails
+The patterns are deliberately broad. They name the *classes* the audit removed,
+not the individual filenames, so a renamed copy of the same hazard is caught too.
+
+Mutation verdict: track any file matching one of the patterns below (for
+example `git add -f projects/settings.json`) and the corresponding test fails
 naming that path; `git rm --cached` it again and the test passes. No maintained
-code path produces any of the other ten files, so for them the same verdict
-holds by construction.
+code path produces such a file, so the same verdict holds for the rest of each
+class.
 """
 
 from __future__ import annotations
@@ -33,47 +33,21 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[1]
 
-_REMOVED_RESULT_ARTIFACTS = (
-    "projects/settings.json",
-    "projects/settings-ideal.json",
-)
-
-_REMOVED_FINAL_BUNDLES = (
-    "projects/frontier-01-FINAL-V13-ABSOLUTE-IDEAL-ULTIMATE-BEST-POSSIBLE.md",
-    "projects/frontier-01-FINAL-V25-ABSOLUTE-IDEAL-ULTIMATE-BEST-POSSIBLE.md",
-    "projects/frontier-01-FINAL-V26-ABSOLUTE-IDEAL-ULTIMATE-BEST-POSSIBLE.md",
-    "projects/frontier-01-FINAL-V27-ABSOLUTE-IDEAL-ULTIMATE-BEST-POSSIBLE.md",
-    "projects/frontier-01-FINAL-ANSWER-IDEAL-v4.md",
-    "projects/frontier-01-FINAL-HIGHEST-IDEAL-v3.md",
-)
-
-_REMOVED_PROCESS_DOCUMENTS = (
-    "projects/COMMIT-SAFE-INSTRUCTION.md",
-    "projects/COMMIT-SAFE-CODESPACE-PATCH.md",
-    "projects/PUSH-INSTRUCTIONS-FASTEST.md",
-)
-
-_REMOVED_CASES = (
-    [
-        pytest.param(path, id=f"result-artifact:{Path(path).name}")
-        for path in _REMOVED_RESULT_ARTIFACTS
-    ]
-    + [
-        pytest.param(path, id=f"final-bundle:{Path(path).name}")
-        for path in _REMOVED_FINAL_BUNDLES
-    ]
-    + [
-        pytest.param(path, id=f"process-document:{Path(path).name}")
-        for path in _REMOVED_PROCESS_DOCUMENTS
-    ]
+# One pattern per class of removed file. The patterns are the contract: they are
+# intentionally broader than the removed names so that a renamed copy is caught.
+_FORBIDDEN_PATTERNS = (
+    "projects/*settings*.json",
+    "projects/*FINAL*.md",
+    "projects/*COMMIT-SAFE*",
+    "projects/*PUSH-INSTRUCTION*",
 )
 
 
-def _tracked(path: str) -> list[str]:
+def _tracked(pattern: str) -> list[str]:
     if not (_REPO / ".git").exists():
         pytest.skip("not a git checkout; the tombstone needs git ls-files")
     proc = subprocess.run(
-        ["git", "ls-files", "--", path],
+        ["git", "ls-files", "--", pattern],
         cwd=_REPO,
         capture_output=True,
         text=True,
@@ -86,22 +60,22 @@ def _tracked(path: str) -> list[str]:
     return [line for line in proc.stdout.splitlines() if line.strip()]
 
 
-def test_the_tombstone_list_is_not_silently_shrunk() -> None:
-    """Guard: the list is the contract; shrinking it would mute the checks."""
-    assert len(_REMOVED_CASES) == 11, (
-        f"expected 11 tombstoned paths, found {len(_REMOVED_CASES)}; if a path "
-        f"was intentionally restored to the repository, remove its case and "
-        f"record why in the commit message"
+def test_the_tombstone_patterns_are_not_silently_shrunk() -> None:
+    """Guard: the pattern list is the contract; shrinking it would mute checks."""
+    assert len(_FORBIDDEN_PATTERNS) == 4, (
+        f"expected 4 tombstoned classes, found {len(_FORBIDDEN_PATTERNS)}; if a "
+        f"class was intentionally restored, remove its pattern and record why in "
+        f"the commit message"
     )
 
 
-@pytest.mark.parametrize("path", _REMOVED_CASES)
-def test_removed_legacy_file_stays_untracked(path: str) -> None:
-    tracked = _tracked(path)
+@pytest.mark.parametrize("pattern", _FORBIDDEN_PATTERNS)
+def test_no_tracked_file_recreates_a_removed_class(pattern: str) -> None:
+    tracked = _tracked(pattern)
     assert not tracked, (
-        f"{tracked!r} is tracked again, but it was removed on 2026-10-17 as "
-        f"part of the legacy cleanup (history at tag "
-        f"pre-legacy-cleanup-2026-10-20). Re-adding it re-creates the hazard "
-        f"the cleanup removed: machine-readable fake results, or a procedure "
-        f"addressed to an agent that asserts them."
+        f"{tracked!r} matches {pattern!r} and is tracked again, but that class "
+        f"was removed on 2026-10-17 as part of the legacy cleanup (history at tag "
+        f"pre-legacy-cleanup-2026-10-20). Re-adding it re-creates the hazard the "
+        f"cleanup removed: machine-readable fake results, or a process document "
+        f"that asserts them."
     )

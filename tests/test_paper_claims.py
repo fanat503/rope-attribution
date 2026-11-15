@@ -210,8 +210,10 @@ CLAIMS: tuple[Claim, ...] = (
         "additivity_54pt_ceiling",
         r"feature additivity, \$54\$-pt grid & \$<(10)\^\{-(13)\}\$",
     ),
-    Claim("abstract_additivity", r"we measure the residual at \$(3\.9)\\times10\^\{-14\}\$"),
-    Claim("r1_additivity", r"additive decomposition holds to \$(3\.9)\\times10\^\{-14\}\$"),
+    Claim(
+        "abstract_additivity",
+        r"holds to \$(3\.9)\\times10\^\{-14\}\$ on the \$5\$-point grid",
+    ),
     Claim(
         "corr_bilinearity",
         r"doubles the score to a relative error of \$(7\.4)\\times10\^\{-16\}\$",
@@ -222,9 +224,10 @@ CLAIMS: tuple[Claim, ...] = (
         r"\$(5\.0)\\times10\^\{-14\}\$ on the \$54\$-point grid",
     ),
     Claim("synthesis_additivity", r"is exact to \$(5\.0)\\times10\^\{-14\}\$"),
-    Claim("abstract_additivity_54", r"the total remains additive to \$(5\.0)\\times10\^\{-14\}\$"),
-    Claim("r2_additivity", r"additivity residual of \$(5\.0)\\times10\^\{-14\}\$"),
-    Claim("cond_additivity", r"total (?:stays|remains) additive to \$(5\.0)\\times10\^\{-14\}\$"),
+    Claim(
+        "abstract_additivity_54",
+        r"and \$(5\.0)\\times10\^\{-14\}\$ on the \$54\$-point grid",
+    ),
     # ---- how the structural tests are built ---------------------------------
     Claim(
         "relpos_pairs_prose",
@@ -306,8 +309,6 @@ CLAIMS: tuple[Claim, ...] = (
         "nfeatures_grid",
         r"With \$F = (\d+)\$ features on the \$(\d+)\$-point distance grid",
     ),
-    Claim("ngrid_54", r"bit-identical to plain RoPE at every one of \$(\d+)\$ tested"),
-    Claim("ngrid_54_point", r"across a \$(\d+)\$-point distance grid"),
     Claim("ngrid_54_linearizable", r"Plain RoPE retains no linearizable channel at all from \$\\delta = (-?\d+(?:\.\d+)?)\$ onward"),
     Claim(
         "ngrid_54_fig06",
@@ -319,10 +320,6 @@ CLAIMS: tuple[Claim, ...] = (
     # The paper's earlier "16 orders" divided the withdrawn 920x swing by the
     # additivity residual. It is now the measured position-free residual, whose
     # denominator is additive, so it does not degenerate as the grid gets denser.
-    Claim(
-        "orders_claim_provenance",
-        r"additive to \$5\.0\\times10\^\{-14\}\$",
-    ),
     # ---- YaRN ramp bookkeeping (fig01) --------------------------------------
     Claim("yarn_unchanged_caption", r"leaves the fastest \$(\d+)\$ of \$(\d+)\$ entries bit-for-bit identical"),
     Claim("yarn_unchanged_body", r"fastest \$(\d+)\$ of the \$(\d+)\$ rotary pairs have inverse"),
@@ -363,7 +360,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("table_d_base", r"\$\\mathrm\{base\} = 10\^\{4\}\$"),
     # ---- median angle ratio -------------------------------------------------
     Claim("median_ratio", r"(?:constant|factor\}:) \$(0\.4464)\\times\$ (?:that of|at every distance)"),
-    Claim("median_ratio_abstract", r"constant factor of \$(0\.4464)\$"),
+    Claim("median_ratio_abstract", r"\$(0\.4464)\\times\$ at every distance"),
     Claim(
         "median_at_512",
         r"\$([\d.]+)\$ against \$([\d.]+)\\rad\$ at \$\\delta = (\d+)\$",
@@ -395,8 +392,6 @@ CLAIMS: tuple[Claim, ...] = (
     # ---- fig05 amplitude-weighted ---------------------------------------------
     Claim("amp_at_8192", r"amplitude-weighted error(?: at \$\\delta = \d+\$)? is \$(1\.24572)\\times10\^\{(6)\}\$ for RoPE (?:and|against) \$(1\.24179)\\times10\^\{(6)\}\$ for \\yarn"),
     Claim("amp_ratio", r"a ratio of \$(0\.996840)\$"),
-    Claim("amp_ratio_r3", r"error ratio \\yarn/RoPE is \$(0\.99684)\$ at \$\\delta = (\d+)\$"),
-    Claim("amp_ratio_conclusion", r"amplitude-weighted error ratio is \$(0\.99684)\$"),
     Claim("amp_percent", r"buys less than \$(-?\d+(?:\.\d+)?)\\%\$"),
     Claim("rms_ratio", r"per-pair RMS ratio is \$(0\.999977)\$"),
     Claim("pi_amp", r"here \(\$(-?\d+(?:\.\d+)?)\$ at \$\\delta = (-?\d+(?:\.\d+)?)\$, roughly \$(-?\d+(?:\.\d+)?)\\times\$ below RoPE\)"),
@@ -411,7 +406,6 @@ CLAIMS: tuple[Claim, ...] = (
     # ---- partial RoPE ----------------------------------------------------------
     Claim("partial_p", r"\\pip\\ rotates only a fraction \$p = n_\{\\mathrm\{rot\}\}/d\$"),
     Claim("partial_p_value", r"Partial RoPE at \$p = (0\.25)\$"),
-    Claim("partial_p_abstract", r"at \$p = (0\.25)\$ the unrotated sub-score"),
     Claim("partial_nrot", r"At \$d = (\d+)\$ with \$n_\{\\mathrm\{rot\}\} = (\d+)\$"),
     Claim(
         "partial_clean_spread",
@@ -478,7 +472,7 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("negated_accuracy", r"accuracy \$(0\.7)\$'', because nothing like that"),
     # ---- restatements of already-verified literals, claimed so that the
     # ---- exhaustiveness scan below can see that they are accounted for ------
-    Claim("r3_base_500k", r"``\$\\mathrm\{base\} = (500000)\$'' heuristic"),
+    Claim("r3_base_500k", r"\$10000\$ to \$(500000)\$'' recipe"),
     Claim("background_scale_32", r"Under \\yarn\\ at \$s = (\d+)\$"),
     Claim("mscale_scale_32", r"At \$s = (\d+)\$ we measure"),
     Claim("related_base_10000", r"\$\\mathrm\{base\}\$ from \$(10000)\$ to \$(500000)\$'' recipe"),
@@ -642,8 +636,13 @@ CLAIMS += (
     # test_the_spacing_sensitivity_matches_its_artifact below.
     Claim(
         "abstract_spacing",
-        r"\$(27\.0)\\%\$ on our log grid, \$(\d+\.\d+)\\%\$ "
-        r"under uniform weighting",
+        r"the same measurement is \$(27\.0)\\%\$ on our pre-registered log grid "
+        r"and \$(39\.8)\\%\$ under uniform weighting",
+    ),
+    Claim(
+        "intro_spacing",
+        r"\$(27\.0)\\%\$ sign-error rate on our pre-registered \$(13)\$-point "
+        r"log grid and \$(39\.8)\\%\$ under uniform weighting",
     ),
     Claim(
         "worth_spacing_grid",
@@ -1082,23 +1081,12 @@ CLAIMS += (
     # results/qk_attribution.json, whose aggregate block is the source.
     Claim(
         "qk_intro_dictionary",
-        r"public \$(\d+)\$k dictionary on \\texttt\{pythia-70m(?:-deduped)?\}, where the bucket "
-        r"identity closes to \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$",
-    ),
-    Claim(
-        "qk_intro_residual",
-        r"the dictionary residual is \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$: in the rotary",
-    ),
-    Claim(
-        "qk_intro_flip",
-        r"in the rotary subspace the best position-free scalar mis-signs \$(\d+\.\d+)\\%\$ of "
-        r"material cells, while the total profile --- dominated by the \$(\d+)\$ of \$(\d+)\$ "
-        r"channels that partial RoPE never rotates --- mis-signs \$(\d+\.\d+)\\%\$",
+        r"bucket sum reproduces the score to a relative \$(\d+\.\d+)\\times10\^\{(-\d+)\}\$",
     ),
     Claim(
         "qk_scope_reversal",
-        r"reversal reappears at \$(\d+\.\d+)\\%\$ of material cells --- but only in the rotary "
-        r"channels: the total profile reverses on \$(\d+\.\d+)\\%\$ of cells",
+        r"total profile of a public dictionary mis-signs \$(\d+\.\d+)\\%\$ of "
+        r"material cells while its rotary subspace mis-signs \$(\d+\.\d+)\\%\$",
     ),
     Claim("qk_scope_dictionary", r"adds one public \$(\d+)\$k dictionary on a fourth"),
     Claim(
@@ -1352,24 +1340,6 @@ CLAIMS += (
     ),
     # ---- the threshold law and its measurement (Sec.~\ref{sec:worth}) --------
     Claim(
-        "collapse_bins_abstract",
-        r"every one of \$(\d+)\$ measured bins lies inside the band",
-    ),
-    Claim(
-        "collapse_unit_abstract",
-        r"median per-pair error is \$(\d+\.\d+)\$ at \$L=(\d+)\$",
-    ),
-    Claim(
-        "collapse_past_abstract",
-        r"fraction of pairs past threshold there is \$(\d+\.\d+)\$, \$(\d+\.\d+)\$ "
-        r"and \$(\d+\.\d+)\$",
-    ),
-    Claim(
-        "collapse_score_abstract",
-        r"rotary fraction: \$(\d+\.\d+)\$\s+on partial-RoPE "
-        r"\\texttt\{pythia-160m\} against \$(\d+\.\d+)\$ and \$(\d+\.\d+)\$",
-    ),
-    Claim(
         "collapse_pairs",
         r"\$(\d+)\$ content pairs per head, and windows \$L=8,16,\\dots,(\d+)\$",
     ),
@@ -1414,14 +1384,14 @@ CLAIMS += (
     # ---- the law itself: statements, proposition and proof -------------------
     Claim(
         "threshold_law_abstract",
-        r"the minimax relative error is exactly \$(\d+)\$ once \$x\\ge(\d+)\\pi\$, and "
-        r"below the threshold the attainable set is exactly "
+        r"the best position-free constant has minimax relative error exactly \$(\d+)\$ once "
+        r"\$\\theta L\\ge(\d+)\\pi\$, and below the threshold its attainable error is exactly "
         r"\$\[\(1-\\cos\(x/(\d+)\)\)/(\d+),\\ \\sin\(\\min\(x,\\pi\)/(\d+)\)\]\$",
     ),
     Claim(
         "threshold_law_intro",
-        r"The minimax relative error is exactly \$(\d+)\$ for \$x\\ge(\d+)\\pi\$, and "
-        r"below the threshold the attainable set is exactly "
+        r"the best position-free constant has minimax relative error exactly \$(\d+)\$ "
+        r"for \$x=\\theta L\\ge(\d+)\\pi\$, and below the threshold the attainable set is exactly "
         r"\$\[\(1-\\cos\(x/(\d+)\)\)/(\d+),\\ \\sin\(\\min\(x,\\pi\)/(\d+)\)\]\$",
     ),
     Claim(
@@ -1452,7 +1422,6 @@ CLAIMS += (
         r"Translating \$R\$ back to \$E_\{\\mathrm\{rel\}\}=R/2\$ gives the stated "
         r"band; at \$x=2\\pi\$ the band collapses to the single point \$(\d+)\$",
     ),
-    Claim("threshold_r2_heading", r"phase swept, with a threshold at \$(\d+)\\pi\$"),
     # ---- the extension-law consequence (Appendix~\ref{app:extension-law}) ----
     Claim(
         "ext_threshold",
@@ -1513,12 +1482,6 @@ CLAIMS += (
     # figure caption and the provenance row all state the same six numbers, so
     # each location is registered rather than one shared pattern.
     Claim(
-        "extcost_abstract",
-        r"Under those ladders the measured sign-error rate falls from "
-        r"\$(\d+\.\d+)\\%\$ to \$(\d+\.\d+)\\%\$ \(\\yarn\) and "
-        r"\$(\d+\.\d+)\\%\$ \(position interpolation\), not to zero",
-    ),
-    Claim(
         "extcost_main",
         r"cuts the sign-error rate from \$(\d+\.\d+)\\%\$ to "
         r"\$(\d+\.\d+)\\%\$ under \\yarn\\ at \$s=(\d+)\$ and "
@@ -1570,19 +1533,6 @@ CLAIMS += (
         "threshold_conclusion",
         r"minimax error is exactly \$(\d+)\$ once the window sweeps \$(\d+)\\pi\$",
     ),
-    Claim("threshold_related", r"it saturates at \$x=(\d+)\\pi\$"),
-    Claim(
-        "checkpoint_sizes_abstract",
-        r"On three \$(\d+)\$--\$(\d+)\$M checkpoints every one of",
-    ),
-    Claim(
-        "collapse_bins_intro",
-        r"On three trained checkpoints all \$(\d+)\$ measured bins lie inside that band",
-    ),
-    Claim(
-        "collapse_unit_intro",
-        r"at \$L=(\d+)\$ the median per-pair error is \$(\d+\.\d+)\$",
-    ),
     Claim(
         "collapse_bins_per_model_body",
         r"--- \$(\d+)\$, \$(\d+)\$ and \$(\d+)\$ per checkpoint, because the bin grid",
@@ -1596,20 +1546,8 @@ CLAIMS += (
         r"so its error can slightly exceed \$(\d+)\$; the median is",
     ),
     Claim(
-        "collapse_sign_abstract",
-        r"The \$(\d+\.\d+)\\%\$ sign-error rate is a different functional",
-    ),
-    Claim(
-        "collapse_sign_intro",
-        r"The \$(\d+\.\d+)\\%\$ sign-error rate below is a different functional",
-    ),
-    Claim(
         "collapse_sign_error_rate",
         r"reports the wrong sign on \$(\d+\.\d+)\\%\$ of per-pair, per-distance cells",
-    ),
-    Claim(
-        "collapse_tail_channels_abstract",
-        r"the \$(\d+)\$ of \$(\d+)\$ channels that partial RoPE never rotates",
     ),
     Claim(
         "collapse_tail_channels",
@@ -1622,21 +1560,10 @@ CLAIMS += (
         r"pair-level error is \$(\d+\.\d+)\$ at \$L=(\d+)\$",
     ),
 
-    Claim(
-        "yarn_ratio_abstract",
-        r"the amplitude-weighted error ratio is \$(\d+\.\d+)\$",
-    ),
     # ---- the intervention (Sec.~\ref{sec:intervention}) ----------------------
     Claim(
-        "intervention_abstract",
-        r"Over \$(\d+)\$ single-pair interventions the position-free table selects "
-        r"a different pair in \$(\d+)\$ cells and reverses the sign of the "
-        r"suppression in \$(\d+)\$",
-    ),
-    Claim("intervention_oracle_abstract", r"exact rule is a \$(\d+\.\d+)\$ oracle"),
-    Claim(
         "intervention_intro",
-        r"over \$(\d+)\$ single-pair interventions the position-free selection "
+        r"[Oo]ver \$(\d+)\$ single-pair interventions the position-free selection "
         r"differs from the exact one in \$(\d+)\$ cells and reverses the "
         r"suppression in \$(\d+)\$",
     ),
@@ -1660,13 +1587,6 @@ CLAIMS += (
         "intervention_counts",
         r"selection differs from the exact one in \$(\d+)\$ of \$(\d+)\$ cells, "
         r"and in \$(\d+)\$ of those",
-    ),
-    Claim(
-        "intervention_per_model",
-        r"with \$(\d+)\$ differing selections and \$(\d+)\$ reversals on "
-        r"\\texttt\{pythia-160m\}, against \$(\d+)\$/\$(\d+)\$ on "
-        r"\\texttt\{llama-160m\} and \$(\d+)\$/\$(\d+)\$ on "
-        r"\\texttt\{SmolLM-135M\}",
     ),
     Claim(
         "intervention_medians",
@@ -1696,11 +1616,6 @@ CLAIMS += (
     Claim(
         "intervention_saturation",
         r"since a head already at \$(\d+)\$ cannot respond to a score edit",
-    ),
-    Claim(
-        "intervention_conclusion",
-        r"Acting on the attribution costs \$(\d+)\$ differing selections and "
-        r"\$(\d+)\$ sign reversals in \$(\d+)\$ interventions",
     ),
     # ---- provenance rows for the two new artifacts ---------------------------
     Claim(
@@ -1735,6 +1650,158 @@ CLAIMS += (
         r"\$(\d+\.\d+)\\\!\\times\\\!10\^\{(-?\d+)\}\$ & same, "
         r"\\texttt\{pooled\}",
     ),
+    # ---- the position-paper reframe (2026-11-12) ----------------------------
+    # Every literal below was added with the position framing. The numbers are
+    # checked in test_the_downstream_nll_matches_its_artifacts and
+    # test_the_position_section_restates_the_artifacts.
+    Claim(
+        "abstract_dictionary",
+        r"the rotary subspace mis-signs \$(21\.5)\\%\$ of material cells while "
+        r"the total profile mis-signs \$(0\.01)\\%\$",
+    ),
+    Claim(
+        "intro_dictionary",
+        r"total profile of a public dictionary mis-signs \$(0\.01)\\%\$ of "
+        r"material cells while its rotary subspace mis-signs \$(21\.5)\\%\$",
+    ),
+    Claim(
+        "position_dictionary",
+        r"the total rate is \$(0\.01)\\%\$ while the rotary rate is \$(21\.5)\\%\$",
+    ),
+    Claim(
+        "nll_short",
+        r"raises next-token NLL by \$(2\.5)\$--\$(3\.1)\$ nats on \$(512)\$-token prefixes",
+        at_least=2,
+    ),
+    Claim(
+        "nll_position",
+        r"raises NLL by \$(2\.5)\$--\$(3\.1)\$ nats at \$(512)\$ tokens",
+    ),
+    Claim(
+        "nll_main_setup",
+        r"with \$(512)\$-token prefixes",
+    ),
+    Claim(
+        "nll_scope",
+        r"next-token NLL probe on \$(512)\$-token prefixes",
+    ),
+    Claim(
+        "nll_main",
+        r"the replacement raises next-token NLL by \$(2\.46)\$, \$(2\.71)\$ and "
+        r"\$(3\.10)\$ nats \(NLL ratios \$(14\.6)\$, \$(15\.7)\$ and \$(34\.4)\$\)",
+    ),
+    Claim(
+        "nll_circular",
+        r"raises it by \$(2\.94)\$, \$(4\.80)\$ and \$(3\.33)\$ nats",
+    ),
+    Claim(
+        "position_interval",
+        r"bootstrap interval over heads, \$\[(0\.2676),(0\.2704)\]\$",
+    ),
+    Claim(
+        "position_spec_grid",
+        r"\$(24\.4)\\%\$ to \$(32\.1)\\%\$ over the three grids",
+    ),
+    Claim(
+        "position_spec_base",
+        r"\$(18\.3)\\%\$ to \$(32\.0)\\%\$ over the base sweep",
+    ),
+    Claim(
+        "position_spec_weight",
+        r"\$(27\.0)\\%\$ to \$(39\.8)\\%\$ over weighting",
+    ),
+    Claim(
+        "position_range_all",
+        r"the rate ranges from \$(18\.3)\\%\$ to \$(39\.8)\\%\$",
+    ),
+    Claim(
+        "intervention_abs_delta",
+        r"\(\$(0\.116)\$ vs \$(0\.108)\$ on \\texttt\{pythia-160m\}, "
+        r"\$(0\.347)\$ vs \$(0\.328)\$ on \\texttt\{llama-160m\}, "
+        r"\$(0\.847)\$ vs \$(0\.847)\$ on \\texttt\{SmolLM-135M\}\)",
+    ),
+    Claim(
+        "intervention_conditional",
+        r"\$(7)/(25)\$",
+        at_least=2,
+    ),
+    Claim(
+        "intervention_per_model",
+        r"with \$(13)\$ differing selections and \$(5)\$ reversals "
+        r"\(\$5/13\$\) on \\texttt\{pythia-160m\}, against "
+        r"\$(9)\$/\$(2)\$ \(\$2/9\$\) on \\texttt\{llama-160m\} and "
+        r"\$(3)\$/\$(0)\$ \(\$0/3\$\) on \\texttt\{SmolLM-135M\}",
+    ),
+    Claim(
+        "checkpoint_range",
+        r"\$(135)\$--\$(160)\$M",
+        at_least=3,
+    ),
+    Claim(
+        "protocol_scale",
+        r"\$(1)\$B--\$(8)\$B",
+        at_least=3,
+    ),
+    Claim(
+        "protocol_retention",
+        r"retention fractions \$(0\.5)\$, \$(0\.25)\$ and \$(0\.125)\$ on "
+        r"\$(300)\$ prompts, with next-token NLL as the primary endpoint and a "
+        r"pre-registered difference of \$(0\.10)\$ nats",
+    ),
+    Claim("scope_dictionary", r"one public \$(32)\$k dictionary"),
+    Claim(
+        "alt_yarn_floor",
+        r"floor of \$(9)/(32)\$ at \$s=(32)\$",
+    ),
+    Claim(
+        "law_saturation",
+        r"minimax relative error (?:is )?exactly \$(1)\$",
+        at_least=3,
+    ),
+    Claim(
+        "law_threshold",
+        r"\\theta L(?:\\ge|=)(2)\\pi",
+        at_least=3,
+    ),
+    Claim(
+        "position_threshold_pairs",
+        r"fraction of rotary pairs with \$\\theta_k L\\ge(2)\\pi\$",
+    ),
+    Claim(
+        "position_pi_scale",
+        r"position interpolation needs \$s>L/\((2)\\pi\)\$ to zero the count",
+    ),
+    Claim(
+        "law_band",
+        r"\$\[\(1-\\cos\(x/2\)\)/2,\\ \\sin\(\\min\(x,\\pi\)/2\)\]\$",
+    ),
+    # The conclusion and the position section restate the same three results in
+    # their own words; each restatement is registered so the exhaustiveness
+    # scan cannot mistake a changed conclusion for an unclaimed number.
+    Claim(
+        "conclusion_dictionary",
+        r"the rotary subspace of a public dictionary mis-signs \$(21\.5)\\%\$ "
+        r"while the total profile mis-signs \$(0\.01)\\%\$",
+    ),
+    Claim(
+        "conclusion_rate",
+        r"[Tt]he scalar rate moves from \$(27\.0)\\%\$ to \$(39\.8)\\%\$ with the grid",
+    ),
+    Claim("conclusion_nll", r"costs \$(2\.5)\$--\$(3\.1)\$ nats"),
+    Claim(
+        "position_rate_restate",
+        r"same content pairs give \$(27\.0)\\%\$ on the log grid and "
+        r"\$(39\.8)\\%\$ under uniform weighting",
+    ),
+    Claim(
+        "limitations_nll_scope",
+        r"next-token NLL on \$(512)\$-token prefixes, not accuracy",
+    ),
+    Claim(
+        "limitations_cutoff",
+        r"exceeds \$(5)\\%\$ of that feature's own peak",
+    ),
+
 )
 
 
@@ -2387,7 +2454,7 @@ def test_feature_additivity_claim_on_the_5_point_grid() -> None:
     assert_paper_asserts_below(
         coarse, "additivity_5pt_ceiling", "feature additivity, 5-point grid"
     )
-    for name in ("abstract_additivity", "r1_additivity"):
+    for name in ("abstract_additivity",):
         assert_paper_sci_matches(coarse, literal(name), -14, name)
     assert_paper_sci_matches(
         coarse, literal("eq_additivity_grids", 1), -14, "the 5-point residual in the prose"
@@ -2410,8 +2477,6 @@ def test_feature_additivity_claim_on_the_54_point_grid() -> None:
     )
     for name in (
         "abstract_additivity_54",
-        "r2_additivity",
-        "cond_additivity",
         "synthesis_additivity",
     ):
         assert_paper_sci_matches(fine, literal(name), -14, name)
@@ -2546,8 +2611,6 @@ def test_the_position_free_residual_replaces_the_orders_claim() -> None:
     assert lo == pytest.approx(band["min"], abs=0.05)
     assert hi == pytest.approx(band["max"], abs=0.05)
     assert lo <= claimed <= hi, f"paper claims {claimed}, measured {band}"
-
-    groups("orders_claim_provenance")
 
     # The stability claim, exactly as printed: 120x denser, same factor.
     denser = int(literal("position_free_denser"))
@@ -3047,11 +3110,9 @@ def test_the_amplitude_weighted_error_ratio_at_8192() -> None:
         "measurements.json now holds delta=8192; this test's fig05-based source needs revisiting"
     )
     measured_ratio = values["yarn"] / values["rope_base_10k"]
-    for name in ("amp_ratio", "amp_ratio_conclusion"):
-        assert_paper_number_matches(measured_ratio, literal(name), f"the amp-weighted ratio ({name})")
-    r3_ratio, delta = groups("amp_ratio_r3")[0]
-    assert int(delta) == 8192
-    assert_paper_number_matches(measured_ratio, r3_ratio, "the R3 ratio")
+    assert_paper_number_matches(
+        measured_ratio, literal("amp_ratio"), "the amp-weighted ratio"
+    )
     mantissa_rope, exp_rope, mantissa_yarn, exp_yarn = groups("amp_at_8192")[0]
     assert int(exp_rope) == int(exp_yarn) == 6
     assert_paper_sci_matches(values["rope_base_10k"], mantissa_rope, 6, "RoPE amp-weighted err at 8192")
@@ -3122,7 +3183,7 @@ def test_position_interpolation_is_a_thousand_times_below_rope_on_this_axis() ->
 def test_partial_rope_split_fractions_and_dimensions() -> None:
     partial = MEASUREMENTS["partial_rope"]
     assert_paper_number_matches(partial["rotated_fraction"], literal("partial_p_value"), "p")
-    assert_paper_number_matches(partial["rotated_fraction"], literal("partial_p_abstract"), "p")
+    assert_paper_number_matches(partial["rotated_fraction"], literal("partial_p_value"), "p")
     groups("partial_p")
     dim, n_rot = groups("partial_nrot")[0]
     assert int(dim) == partial["dim"]
@@ -3862,10 +3923,10 @@ def test_the_paper_states_a_limitations_section() -> None:
     # model anywhere in this work" stopped being true, and asserting it would
     # have meant keeping a claim the repository had already outgrown.
     for label, required in (
-        ("no downstream model", "Neither connects to a task"),
-        ("trained weights acknowledged", "Section~" + chr(92) + "ref{sec:trained} confirms the"),
+        ("no task benchmark", "there is no retrieval benchmark and no accuracy figure"),
+        ("trained weights acknowledged", "Section~" + chr(92) + "ref{sec:trained} uses the three checkpoints"),
         ("no content evaluated on a task", "none of its content"),
-        ("no evaluation", "no retrieval benchmark, no language-modelling evaluation"),
+        ("checkpoints not evaluated on a task", "but are not evaluated on a task"),
         ("sign reversal is synthetic", "property of random directions in a"),
         ("single configuration", "varies the base and the head dimension"),
     ):
@@ -3881,13 +3942,12 @@ def test_the_paper_disclaims_the_three_forbidden_things() -> None:
         "There is no retrieval benchmark and no accuracy measurement",
         "We do not claim any scheme is better in practice",
         "The algebraic conclusions are model-independent by construction",
-        "no retrieval benchmark, no accuracy figure",
+        "there is no retrieval benchmark and no accuracy figure",
         # Section~\ref{sec:trained} now measures on trained weights, so the
         # disclaimer is about what those measurements are *for*, not about their
         # absence. Asserting "we never load a checkpoint" here would have been
         # asserting something the repository had stopped being true of.
-        "Neither connects to a task",
-        "Section~" + chr(92) + "ref{sec:trained} then repeats the central",
+        "Section~" + chr(92) + "ref{sec:trained} repeats the central",
     ):
         assert phrase in disclaimer, f"the paper no longer says: {phrase!r}"
 
@@ -3906,7 +3966,7 @@ def test_the_scope_and_softmax_qualifiers_are_explicit() -> None:
     assert "it grows as the number of keys grows" not in TEX_FLAT
     assert "The algebraic conclusions are model-independent" in TEX_FLAT
     assert "The conclusions are model-independent" not in TEX_FLAT
-    assert "No downstream task, and one model's dictionaries" in TEX_FLAT
+    assert "No task, and one model's dictionaries" in TEX_FLAT
     assert "No downstream task, and no learned features" not in TEX_FLAT
     assert "No downstream model, and no learned features" not in TEX_FLAT
     assert "Computed before rounding, the two differ by $0.14$ points" in TEX_FLAT
@@ -4387,38 +4447,13 @@ def test_the_qk_decomposition_is_exact_on_a_trained_dictionary() -> None:
     )
     assert_paper_sci_matches(qk["ln_residual"], residual, int(residual_exponent), "LN residual")
 
-    # The abstract restates the bucket identity and the dictionary residual;
-    # "exact" is reserved for the identity, and the residual is the real error.
-    thousands, abstract_mantissa, abstract_exponent = groups("qk_intro_dictionary")[0]
-    assert int(thousands) == wide // 1000
+    # The body restates the bucket identity in the same section.
+    intro_mantissa, intro_exponent = groups("qk_intro_dictionary")[0]
     assert_paper_sci_matches(
         qk["aggregate"]["max_relative_exactness_error"],
-        abstract_mantissa,
-        int(abstract_exponent),
-        "abstract bucket identity",
-    )
-    abstract_residual, abstract_residual_exponent = groups("qk_intro_residual")[0]
-    assert_paper_sci_matches(
-        qk["ln_residual"],
-        abstract_residual,
-        int(abstract_residual_exponent),
-        "abstract LN residual",
-    )
-    abstract_rotary, abstract_unrotated, abstract_dim, abstract_total = groups(
-        "qk_intro_flip"
-    )[0]
-    aggregate = qk["aggregate"]
-    assert_paper_number_matches(
-        aggregate["sweep_rotary"]["sign_flip_fraction"] * 100,
-        abstract_rotary,
-        "abstract rotary sweep",
-    )
-    assert int(abstract_unrotated) == qk["head_dim"] - qk["rotary_dim"]
-    assert int(abstract_dim) == qk["head_dim"]
-    assert_paper_number_matches(
-        aggregate["sweep_feature"]["sign_flip_fraction"] * 100,
-        abstract_total,
-        "abstract total sweep",
+        intro_mantissa,
+        int(intro_exponent),
+        "bucket identity",
     )
 
     distances, first, last, pairs = groups("feat_grid")[0]
@@ -4472,10 +4507,10 @@ def test_the_fixed_content_sweep_reverses_where_the_total_profile_does_not() -> 
         sweep_feature * 100, literal("feat_total_table"), "the total table"
     )
     assert_paper_number_matches(
-        sweep_rotary * 100, literal("qk_scope_reversal", 1), "intro rotary restatement"
+        sweep_rotary * 100, literal("qk_scope_reversal", 2), "intro rotary restatement"
     )
     assert_paper_number_matches(
-        sweep_feature * 100, literal("qk_scope_reversal", 2), "intro total restatement"
+        sweep_feature * 100, literal("qk_scope_reversal", 1), "intro total restatement"
     )
 
     per_head = sorted(
@@ -4900,7 +4935,7 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
     total = sum(counts)
     assert total == 44
 
-    for name in ("collapse_bins_abstract", "collapse_bins_body", "collapse_bins_intro"):
+    for name in ("collapse_bins_body",):
         assert int(literal(name)) == total, name
 
     prov = groups("collapse_bins_per_model")[0]
@@ -4918,12 +4953,9 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
             f"{model['model_id']}: conclusion pair-level error",
         )
 
-    for name in ("collapse_unit_abstract", "collapse_unit_body", "collapse_unit_intro"):
+    for name in ("collapse_unit_body",):
         captured = groups(name)[0]
-        if name == "collapse_unit_intro":
-            span, written = int(captured[0]), captured[1]
-        else:
-            written, span = captured[0], int(captured[1])
+        written, span = captured[0], int(captured[1])
         assert span == 4096
         for model in models:
             assert_paper_number_matches(
@@ -4932,7 +4964,7 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
                 f"{model['model_id']}: {name}",
             )
 
-    for name in ("collapse_past_abstract", "collapse_past_body"):
+    for name in ("collapse_past_body",):
         written = groups(name)[0]
         for model, value in zip(models, written, strict=True):
             assert_paper_number_matches(
@@ -4955,7 +4987,6 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
         assert entry["past_threshold_fraction"] == 1.0
 
     for name in (
-        "collapse_score_abstract",
         "collapse_score_body",
     ):
         captured = groups(name)[0]
@@ -4989,7 +5020,7 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
     )
     assert int(literal("collapse_ls_exceed")) == 1
 
-    for name in ("collapse_tail_channels_abstract", "collapse_tail_channels"):
+    for name in ("collapse_tail_channels",):
         unrotated, channels = (int(value) for value in groups(name)[0])
         assert channels == MEASUREMENTS["structural_facts"]["dim"]
         assert unrotated + pythia["rope_dim"] == channels
@@ -5003,7 +5034,7 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
     assert low == math.floor(math.log10(min(e["x_lo"] for m in models for e in m["bins"])))
 
     rate = _artifact(USEFULNESS_PATH)["pooled"]["sign_flip_fraction"] * 100
-    for name in ("collapse_sign_abstract", "collapse_sign_intro", "collapse_sign_error_rate"):
+    for name in ("collapse_sign_error_rate",):
         assert_paper_number_matches(rate, literal(name), f"27.0% restatement ({name})")
 
     # The proposition and its proof are symbols, not measurements, but their
@@ -5016,11 +5047,9 @@ def test_the_threshold_law_numbers_are_the_collapse_artifact() -> None:
     assert tuple(int(v) for v in groups("threshold_bounded")[0]) == (1, 1)
     assert tuple(int(v) for v in groups("threshold_proof_large")[0]) == (2, 2, 2)
     assert int(literal("threshold_proof_collapse")) == 1
-    assert int(literal("threshold_r2_heading")) == 2
     assert int(literal("threshold_amplitude")) == 0
     assert int(literal("threshold_midrange")) == 2
     assert tuple(int(v) for v in groups("threshold_conclusion")[0]) == (1, 2)
-    assert int(literal("threshold_related")) == 2
     assert int(literal("figure_threshold_line")) == 2
     assert total == sum(len(model["bins"]) for model in models)
 
@@ -5050,8 +5079,8 @@ def test_the_yarn_ratio_restated_in_the_abstract_is_the_measured_one() -> None:
     assert len(control) == 1
     assert_paper_number_matches(
         float(ratios[0]) / float(control[0]),
-        literal("yarn_ratio_abstract"),
-        "abstract YaRN/RoPE amplitude-weighted ratio",
+        literal("amp_ratio"),
+        "YaRN/RoPE amplitude-weighted ratio",
     )
 
 
@@ -5068,7 +5097,7 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
     cells = [cell for model in models for cell in model["cells"]]
     assert len(cells) == 96
 
-    for name in ("intervention_abstract", "intervention_intro"):
+    for name in ("intervention_intro",):
         total, differ, reversed_count = (int(v) for v in groups(name)[0])
         assert total == len(cells)
         assert differ == sum(1 for cell in cells if not cell["same_pair"])
@@ -5080,7 +5109,6 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
 
     exact_ratios = {cell["exact"]["suppression_ratio"] for cell in cells}
     assert exact_ratios == {1.0}
-    assert_paper_number_matches(1.0, literal("intervention_oracle_abstract"), "abstract oracle")
     oracle_value, oracle_cells = groups("intervention_oracle")[0]
     assert int(oracle_cells) == len(cells)
     assert_paper_number_matches(1.0, oracle_value, "body oracle")
@@ -5171,9 +5199,6 @@ def test_the_intervention_numbers_are_the_intervention_artifact() -> None:
     assert all(
         cell["surrogate"]["suppression_ratio"] not in (0.0, None) for cell in cells
     ), "a zero ratio would be an arithmetic artifact, not a suppression measurement"
-
-    conclusion = [int(v) for v in groups("intervention_conclusion")[0][:3]]
-    assert conclusion == [25, 7, 96]
 
     prov = groups("prov_collapse_row")[0]
     assert int(prov[0]) == 44
@@ -5429,11 +5454,6 @@ def test_the_measured_extension_cost_matches_its_artifact() -> None:
         "pi": pi["fraction_past_threshold_4096_mean"],
     }
 
-    abstract = groups("extcost_abstract")[0]
-    assert_paper_number_matches(rates["rope"], abstract[0], "abstract plain-RoPE rate")
-    assert_paper_number_matches(rates["yarn"], abstract[1], "abstract YaRN rate")
-    assert_paper_number_matches(rates["pi"], abstract[2], "abstract PI rate")
-
     main = groups("extcost_main")[0]
     assert_paper_number_matches(rates["rope"], main[0], "R3 plain-RoPE rate")
     assert_paper_number_matches(rates["yarn"], main[1], "R3 YaRN rate")
@@ -5573,6 +5593,112 @@ def test_the_spacing_sensitivity_matches_its_artifact() -> None:
     assert_paper_number_matches(rel_uniform, prov[4], "provenance rel error")
 
 
+def test_the_downstream_nll_matches_its_artifacts() -> None:
+    """The NLL paragraph is the two 512-token artifacts, not retyped numbers.
+
+    Mutation verdict: changing 2.46 to 2.40, or swapping the mean and circular
+    rows, fails the per-model comparison; the 128-token artifacts are rejected
+    by the ``max_tokens`` guard, so the paper cannot silently quote the shorter
+    probe while claiming 512.
+    """
+    mean = _artifact(_REPO / "results" / "downstream_512_mean.json")
+    circular = _artifact(_REPO / "results" / "downstream_512_circular.json")
+    for artifact, kernel in ((mean, "mean"), (circular, "circular")):
+        assert artifact["schema"] == "rope_attribution/downstream/v1"
+        assert artifact["max_tokens"] == 512
+        assert artifact["kernel"] == kernel
+    assert [m["model_id"] for m in mean["models"]] == [
+        "EleutherAI/pythia-160m",
+        "JackFram/llama-160m",
+        "HuggingFaceTB/SmolLM-135M",
+    ]
+
+    deltas = [m["mean_delta_nll"] for m in mean["models"]]
+    ratios = [m["mean_perplexity_ratio"] for m in mean["models"]]
+    claimed = groups("nll_main")[0]
+    for actual, written, what in zip(deltas, claimed[:3], ("pythia", "llama", "SmolLM"), strict=True):
+        assert_paper_number_matches(actual, written, f"mean-kernel delta NLL ({what})")
+    for actual, written, what in zip(ratios, claimed[3:], ("pythia", "llama", "SmolLM"), strict=True):
+        assert_paper_number_matches(actual, written, f"mean-kernel NLL ratio ({what})")
+
+    circular_deltas = [m["mean_delta_nll"] for m in circular["models"]]
+    for actual, written, what in zip(
+        circular_deltas, groups("nll_circular")[0], ("pythia", "llama", "SmolLM"), strict=True
+    ):
+        assert_paper_number_matches(actual, written, f"circular-kernel delta NLL ({what})")
+
+    # Every restatement of the range must bracket the artifact's own min and
+    # max at the precision it prints, and must name the 512-token probe.
+    for written in groups("nll_short"):
+        low, high, tokens = float(written[0]), float(written[1]), int(written[2])
+        assert tokens == 512
+        assert low <= round(min(deltas), 1) and high >= round(max(deltas), 1)
+    assert float(literal("nll_position", 1)) <= round(min(deltas), 1)
+    assert float(literal("nll_position", 2)) >= round(max(deltas), 1)
+    assert int(literal("nll_main_setup")) == 512
+    assert int(literal("nll_scope")) == 512
+    assert int(literal("limitations_nll_scope")) == 512
+
+
+def test_the_position_section_restates_the_artifacts() -> None:
+    """Every rate in Section~\\ref{sec:position} is one the artifacts produced.
+
+    Mutation verdict: changing 24.4 to 24.0, 18.3 to 18.0, or 39.8 to 39.0
+    fails the corresponding band comparison; the dictionary rates are checked
+    against the same QK aggregate as Section~\\ref{sec:features}, so the two
+    cannot drift apart.
+    """
+    uncertainty = _artifact(UNCERTAINTY_PATH)
+    spacing = _artifact(_REPO / "results" / "usefulness_spacing.json")
+    grid = _artifact(_REPO / "results" / "usefulness_grid_independence.json")
+    sensitivity = _artifact(_REPO / "results" / "sensitivity.json")
+    qk = _artifact(QK_PATH)
+
+    ci_low, ci_high = groups("position_interval")[0]
+    assert_paper_number_matches(uncertainty["pooled"]["ci_low"], ci_low, "interval low")
+    assert_paper_number_matches(uncertainty["pooled"]["ci_high"], ci_high, "interval high")
+
+    grid_rates = [row["sign_flip_fraction_pooled"] * 100 for row in grid["per_density"].values()]
+    spec_low, spec_high = groups("position_spec_grid")[0]
+    assert_paper_number_matches(min(grid_rates), spec_low, "grid-spec low")
+    assert_paper_number_matches(max(grid_rates), spec_high, "grid-spec high")
+
+    base_low, base_high = (value * 100 for value in sensitivity["base_band_at_dim_64"])
+    written_low, written_high = groups("position_spec_base")[0]
+    assert_paper_number_matches(base_low, written_low, "base-spec low")
+    assert_paper_number_matches(base_high, written_high, "base-spec high")
+
+    weight_low = spacing["pooled"]["log13"] * 100
+    weight_high = spacing["pooled"]["uniform65"] * 100
+    written_low, written_high = groups("position_spec_weight")[0]
+    assert_paper_number_matches(weight_low, written_low, "weighting low")
+    assert_paper_number_matches(weight_high, written_high, "weighting high")
+
+    overall_low, overall_high = groups("position_range_all")[0]
+    assert_paper_number_matches(
+        min(base_low, weight_low, *grid_rates), overall_low, "overall range low"
+    )
+    assert_paper_number_matches(
+        max(base_high, weight_high, *grid_rates), overall_high, "overall range high"
+    )
+
+    total_rate, rotary_rate = groups("position_dictionary")[0]
+    assert_paper_number_matches(
+        qk["aggregate"]["sweep_feature"]["sign_flip_fraction"] * 100,
+        total_rate,
+        "dictionary total rate",
+    )
+    assert_paper_number_matches(
+        qk["aggregate"]["sweep_rotary"]["sign_flip_fraction"] * 100,
+        rotary_rate,
+        "dictionary rotary rate",
+    )
+
+    restated_low, restated_high = groups("position_rate_restate")[0]
+    assert_paper_number_matches(weight_low, restated_low, "restated log-grid rate")
+    assert_paper_number_matches(weight_high, restated_high, "restated uniform rate")
+
+
 def test_the_context_summary_restates_the_spectrum_table() -> None:
     """The compressed context paragraph keeps the table's two exact endpoints.
 
@@ -5633,11 +5759,12 @@ def test_the_claim_registry_is_not_vacuous() -> None:
     # than digits, so there is nothing to capture; all are deliberate.
     no_capture = {
         "sign_cross_all",  # "every one of the eight"
-        "orders_claim_provenance",  # restates a claim captured elsewhere
         "table_d_base",  # "\mathrm{base} = 10^{4}" as written in the table header
         "partial_p",  # a definition, not a measurement
         "fig02_eight_distances",  # "at eight distances"
         "feat_sweep_units",  # a units disclaimer, no number to capture
+        "law_band",  # the band expression; its constants are captured by the
+        # threshold_law_* claims, so capturing them here would duplicate the check
     }
     uncapturing = {entry.name for entry in CLAIMS} - {
         entry.name

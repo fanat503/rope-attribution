@@ -428,11 +428,14 @@ best uniform approximation of a continuous function by a constant is its
 midrange, plus the elementary range of a cosine on an interval; see Rivlin,
 *An Introduction to the Approximation of Functions*, and Powell,
 *Approximation Theory and Methods*. They are **not** claimed as new results of
-this paper. What is claimed is the consequence: the sign-error rate reported in
-Section 5 is a value of this function, the threshold at `theta L = 2 pi` is
-where it saturates, and the ratio between the rotary-pair rate and the
-feature-level rate is the rotary fraction. Those are checkable statements about
-this object, and `results/collapse.json` checks them on three checkpoints.
+this paper. What is claimed is the consequence: the threshold at `theta L = 2 pi`
+is where the minimax error saturates, and the ratio between the rotary-pair
+rate and the feature-level rate is the rotary fraction. The sign-error rate
+reported in Section 5 is a *different* functional --- it counts sign
+disagreements of the least-squares constant on a distance grid, not the minimax
+relative error --- so it is not a value of `E_rel`; its grid and cutoff
+dependence is measured, not assumed. Those are checkable statements about this
+object, and `results/collapse.json` checks them on three checkpoints.
 
 ### 6.1 The same threshold as a design test for context extension
 

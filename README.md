@@ -14,7 +14,8 @@ error of `1.13` against a peak of `1`. That is the pre-registered log-grid value
 and the conservative one: on a uniform 65-point grid over the same range the
 equal-weight rate is **39.8%**, while the median relative error falls to `1.01`.
 The well-posed object is per-feature and per-distance — and it is closed-form, so
-it costs the same as the scalar it replaces.
+the exact table costs one multiply-add per pair and is linear in the window
+length, not quadratic.
 
 That rate is not a constant: it is one value of an exact law. Replacing the
 per-pair sinusoid by the best constant over a window of `L` positions has minimax
@@ -80,7 +81,7 @@ the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1796 tests (CPU-only install)
+pytest -q                                        # 1791 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -276,7 +277,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1796 tests (CPU-only install)
+tests/            1791 tests (CPU-only install)
 figures/          sixteen figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)

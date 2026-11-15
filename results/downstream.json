@@ -1,0 +1,87 @@
+{
+  "schema": "rope_attribution/downstream/v1",
+  "max_tokens": 128,
+  "seed": 0,
+  "kernel": "mean",
+  "surrogate": "position-free rotation per frequency pair over the observed distances; kernel=mean",
+  "models": [
+    {
+      "model_id": "EleutherAI/pythia-160m",
+      "model_class": "GPTNeoXForCausalLM",
+      "head_dim": 64,
+      "rope_theta": 10000.0,
+      "texts": [
+        {
+          "text_index": 0,
+          "n_tokens": 128,
+          "exact_nll": 4.072597503662109,
+          "surrogate_nll": 5.473936557769775,
+          "delta_nll": 1.401339054107666,
+          "perplexity_ratio": 4.060633736261388
+        },
+        {
+          "text_index": 1,
+          "n_tokens": 128,
+          "exact_nll": 1.1271684169769287,
+          "surrogate_nll": 3.4857337474823,
+          "delta_nll": 2.358565330505371,
+          "perplexity_ratio": 10.575767831808884
+        }
+      ],
+      "mean_delta_nll": 1.8799521923065186,
+      "mean_perplexity_ratio": 7.318200784035136
+    },
+    {
+      "model_id": "JackFram/llama-160m",
+      "model_class": "LlamaForCausalLM",
+      "head_dim": 64,
+      "rope_theta": 10000.0,
+      "texts": [
+        {
+          "text_index": 0,
+          "n_tokens": 128,
+          "exact_nll": 4.583640098571777,
+          "surrogate_nll": 6.262742519378662,
+          "delta_nll": 1.6791024208068848,
+          "perplexity_ratio": 5.36074212045209
+        },
+        {
+          "text_index": 1,
+          "n_tokens": 128,
+          "exact_nll": 4.289378643035889,
+          "surrogate_nll": 6.375052452087402,
+          "delta_nll": 2.0856738090515137,
+          "perplexity_ratio": 8.05001382686126
+        }
+      ],
+      "mean_delta_nll": 1.8823881149291992,
+      "mean_perplexity_ratio": 6.705377973656676
+    },
+    {
+      "model_id": "HuggingFaceTB/SmolLM-135M",
+      "model_class": "LlamaForCausalLM",
+      "head_dim": 64,
+      "rope_theta": 10000.0,
+      "texts": [
+        {
+          "text_index": 0,
+          "n_tokens": 128,
+          "exact_nll": 3.7611703872680664,
+          "surrogate_nll": 5.569311141967773,
+          "delta_nll": 1.808140754699707,
+          "perplexity_ratio": 6.0990971662934745
+        },
+        {
+          "text_index": 1,
+          "n_tokens": 128,
+          "exact_nll": 0.3763643503189087,
+          "surrogate_nll": 4.118042945861816,
+          "delta_nll": 3.7416785955429077,
+          "perplexity_ratio": 42.168715006248206
+        }
+      ],
+      "mean_delta_nll": 2.7749096751213074,
+      "mean_perplexity_ratio": 24.13390608627084
+    }
+  ]
+}
