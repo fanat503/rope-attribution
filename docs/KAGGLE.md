@@ -71,6 +71,48 @@ The GPT-2 tokenizer is fetched once and cached by `transformers`; after that the
 job can be rerun with `HF_HUB_OFFLINE=1`. The vocabulary is 50,257 ids, so
 `uint16` is sufficient and halves the bytes moved against `int32`.
 
+## Lane C: gigatoken, for a corpus that is too large for one Python process
+
+`gigatoken` is a Rust tokenizer that reads the files itself and parallelises
+across cores. It is the lane to use when the corpus is tens of GB and the
+Hugging Face tokenizer would spend hours in Python. Install it in the kernel:
+
+```sh
+pip install gigatoken
+```
+
+Then tokenize and import in one command:
+
+```sh
+python -m projects.rope_attribution.gigatoken_prep \
+    --text /kaggle/input/my-text-dataset/corpus.txt \
+    --out /kaggle/working/data/my-corpus \
+    --name my-corpus \
+    --tokenizer openai-community/gpt2 \
+    --separator '<|endoftext|>' \
+    --max-tokens 2000000000
+
+python -m projects.rope_attribution.data check \
+    --out /kaggle/working/data/my-corpus
+```
+
+`--separator` is the document boundary inside the file, not a token added to
+the stream. Pass `--separator ''` to treat the whole file as one document.
+`--max-tokens` truncates the *encoded* stream, which is what the writable-disk
+budget constrains.
+
+The lane does not invent a second format. It flattens the per-document ids and
+hands them to the same importer as Lane A, so the output is `tokens.u16` plus
+the same `manifest.json` with a SHA-256 per file. `check` re-hashes it exactly
+as it does for the other lanes. `pip install gigatoken` is optional for the
+repository and required only for this command; without it the module raises
+with that install line instead of falling back silently.
+
+**Throughput is not a result of this repository.** The published gigatoken
+numbers are GB/s on server CPUs; a Kaggle CPU is slower and the `SentencePiece`
+tokenizers are the slow rows in its own benchmark table. Measure the first
+gigabyte before planning a budget.
+
 ## Size arithmetic
 
 `uint16` is two bytes per token. A 50M-token shard is about 100 MB, and the
@@ -96,8 +138,10 @@ exact byte size; use it rather than this paragraph when planning storage.
 
 * It does not deduplicate, filter for quality, or reweight a mixture beyond what
   the source already did.
-* It does not parallelize tokenization. One process reads, encodes and writes;
-  the design buys a reproducible, resumable artefact, not tokenizer throughput.
+* Lanes A and B do not parallelize tokenization. One process reads, encodes and
+  writes; the design buys a reproducible, resumable artefact, not tokenizer
+  throughput. Lane C delegates the encode to gigatoken's Rust threads and then
+  pays the same import and checksum cost.
 * It does not train. `train.py` refuses a CPU run of the 100M--300M presets
   unless `--force-cpu` is passed, and this document does not ask you to pass it.
 * It does not redistribute a corpus. The stream is built locally from the source

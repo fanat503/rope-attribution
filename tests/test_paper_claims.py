@@ -1695,6 +1695,14 @@ CLAIMS += (
         r"raises it by \$(2\.94)\$, \$(4\.80)\$ and \$(3\.33)\$ nats",
     ),
     Claim(
+        "prov_downstream_mean_row",
+        r"\$(2\.46)\$, \$(2\.71)\$, \$(3\.10)\$; \$(14\.6)\$, \$(15\.7)\$, \$(34\.4)\$",
+    ),
+    Claim(
+        "prov_downstream_circular_row",
+        r"\$(2\.94)\$, \$(4\.80)\$, \$(3\.33)\$",
+    ),
+    Claim(
         "position_interval",
         r"bootstrap interval over heads, \$\[(0\.2676),(0\.2704)\]\$",
     ),
@@ -5626,6 +5634,24 @@ def test_the_downstream_nll_matches_its_artifacts() -> None:
         circular_deltas, groups("nll_circular")[0], ("pythia", "llama", "SmolLM"), strict=True
     ):
         assert_paper_number_matches(actual, written, f"circular-kernel delta NLL ({what})")
+
+    # The provenance row is a second restatement of the same artifact; check it
+    # too, so the table cannot drift away from the paragraph.
+    prov_mean = groups("prov_downstream_mean_row")[0]
+    for actual, written, what in zip(
+        deltas + ratios,
+        prov_mean,
+        ("pythia", "llama", "SmolLM", "pythia ratio", "llama ratio", "SmolLM ratio"),
+        strict=True,
+    ):
+        assert_paper_number_matches(actual, written, f"provenance mean-kernel {what}")
+    prov_circular = groups("prov_downstream_circular_row")[0]
+    for actual, written, what in zip(
+        circular_deltas, prov_circular, ("pythia", "llama", "SmolLM"), strict=True
+    ):
+        assert_paper_number_matches(
+            actual, written, f"provenance circular-kernel delta NLL ({what})"
+        )
 
     # Every restatement of the range must bracket the artifact's own min and
     # max at the precision it prints, and must name the 512-token probe.

@@ -81,7 +81,7 @@ the suite.
 
 ```bash
 pip install -e . && pip install -r requirements-dev.txt
-pytest -q                                        # 1791 tests (CPU-only install)
+pytest -q                                        # 1802 tests (CPU-only install)
 python -m projects.rope_attribution.experiments  # results/measurements.json
 python -m projects.rope_attribution.statistics  # results/statistics.json
 python -m projects.rope_attribution.sensitivity  # results/sensitivity.json
@@ -153,7 +153,10 @@ same object -- a bias-free RMSNorm decoder with a tied head and full RoPE at
 head dimension 64 -- and logs every metric, including the attribution
 diagnostics, at each evaluation. The loader contract --- pre-tokenized shards,
 atomic writes, SHA-256, resume and a `uint16` memmap --- is in `docs/DATA.md`;
-the Kaggle-specific preparation recipe is in `docs/KAGGLE.md`:
+the Kaggle-specific preparation recipe is in `docs/KAGGLE.md` (Lane C uses
+`gigatoken_prep.py` to tokenize at GB/s and then writes the same checksummed
+stream), and the session runbook — timing job first, then a step budget, GPU
+and TPU lanes, what to bring back — is `docs/KAGGLE_TRAIN.md`:
 
 ```bash
 pip install -r train_requirements.txt
@@ -277,7 +280,7 @@ projects/rope_attribution/
   real_model.py   identities re-measured on three trained checkpoints
   figures.py      the figure set, values computed at run time or read from the
                   results/ artifacts
-tests/            1791 tests (CPU-only install)
+tests/            1802 tests (CPU-only install)
 figures/          sixteen figures, each with a CSV sidecar
 results/          measurements.json  (structural facts)
                     statistics.json          (grid-independence, seed spread)
@@ -628,7 +631,9 @@ python -m projects.rope_attribution.usefulness --spacing   # ~8 min, CPU only
   an attention block after it (five dictionaries, layers 0--4, one 320-token
   input and one seed). That is a depth check, not a survey of trained SAEs
   across models, layers or training recipes. Still absent and not measured anywhere here:
-  retrieval or passkey benchmarks, and any accuracy number. Claims of the form
+  retrieval or passkey benchmarks, task accuracy, and any 1B–8B run. The NLL
+  probe in the paper is a loss measurement on 135–160M checkpoints, not a task
+  benchmark; claims of the form
   "the model retrieves the needle with accuracy 0.7" should not be attributed
   to this repository.
 
