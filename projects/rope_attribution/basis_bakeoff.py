@@ -83,6 +83,12 @@ of sums is reported next to the slope but is not the decision variable: it is
 a total-effect ratio, and a per-pair offset can make it negative or huge while
 the slope through the origin stays near one.
 
+The rule is a replacement criterion, not a test of interpretability: a wide
+random basis can satisfy the same slope and base-share bounds. The case for
+neurons therefore also rests on readability and on not training a dictionary,
+which this probe does not measure; the random arm is reported so that gap is
+visible rather than hidden behind a single fidelity number.
+
 The run is staged. Stage 1 is the same command with ``--heads 0,1 --pairs 8
 --no-sweep``; read ``verdict.stage1_kill`` before paying for the sweep. Stage 2
 runs the full heads and sweep only if Stage 1 did not kill the neuron arm.
