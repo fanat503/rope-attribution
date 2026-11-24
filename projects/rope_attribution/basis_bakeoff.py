@@ -1338,7 +1338,12 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--sae",
         type=Path,
         default=None,
-        help="safetensors dictionary for the sae arm; not vendored",
+        help=(
+            "safetensors dictionary for the sae arm; not vendored. The paper used "
+            "ctigges/pythia-70m-deduped__res-sm_processed, 3-res-sm "
+            "(d_sae=32768); download it from the SAE Lens release and pass the "
+            "file here."
+        ),
     )
     parser.add_argument("--sae-layer", type=int, default=Q.DEFAULT_SAE_LAYER)
     parser.add_argument(
