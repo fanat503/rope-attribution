@@ -48,13 +48,14 @@ questions are kept apart:
                      1.0 means the linear prediction has the right scale on
                      average, and a value above 1 means the ablation moves the
                      score more than the linear share predicts.
-* ``stability``    -- whether the *feature-level* sign-flip rate survives the
-                     basis change. The paper's 27.0% headline is a sign-flip
-                     rate over the raw q/k rotary channels and the distance
-                     grid; the basis cannot change those channels, so the
-                     headline is basis-agnostic by construction and is not
-                     re-measured here. What the basis can change is the
-                     feature-level sweep, which is the object of this column.
+* ``stability``    -- whether the *content-averaged feature-level* sign-flip
+                     rate survives the basis change. The paper's 27.0% headline
+                     is a sign-flip rate over the raw q/k rotary channels and
+                     the distance grid; the basis cannot change those channels,
+                     so the headline is basis-agnostic by construction and is
+                     not re-measured here. What the basis can change is the
+                     content-averaged feature-level sweep, which is the object
+                     of this column.
 * ``cost``         -- a dictionary has to be trained, neurons do not.
 
 The arms do not cover the same objects. The SAE reconstructs the residual;
@@ -71,9 +72,11 @@ neuron basis is worse to read.
 Fidelity has a ceiling: LayerNorm renormalises after an ablation, so even a
 perfect basis cannot match the linear prediction exactly. The ceiling is the
 same test with *every* selected feature ablated, and the graded slope is only
-interpretable next to the ceiling slope. For a full basis the full-ablation
-prediction is near zero, so the ceiling slope and ratio are undefined; that is
-expected.
+interpretable next to the ceiling slope. The label refers to the size of the
+ablation, not to a numerical upper bound: the full-ablation slope can fall below
+the graded slope when the renormalisation changes the sign of the response. For
+a full basis the full-ablation prediction is near zero, so the ceiling slope and
+ratio are undefined; that is expected.
 
 The decision rule is fixed before the run, in ``KILL`` and ``DECISION`` below,
 so the result cannot be read backwards into a threshold that happens to fit.
@@ -144,12 +147,12 @@ SCHEMA = "basis-bakeoff/v1"
 BASIS_NAMES: tuple[str, ...] = ("sae", "neurons", "random", "coordinates")
 
 #: The 13-point log grid the paper's sign-flip rate is quoted on. The
-#: bake-off reuses the distances so the feature-level sweep has the same support
-#: as the headline; it does not reproduce the headline itself. The paper's 27.0%
-#: is measured by ``usefulness.py`` over the raw q/k channels and its own prompt
-#: set, while this module sweeps the features of one passage. The sweep column
-#: answers whether the feature-level sign behaviour is basis-dependent, not
-#: whether 27.0% repeats.
+#: bake-off reuses the distances so the content-averaged feature-level sweep has
+#: the same support as the headline; it does not reproduce the headline itself.
+#: The paper's 27.0% is measured by ``usefulness.py`` over the raw q/k channels
+#: and its own prompt set, while this module sweeps the features of one passage.
+#: The sweep column answers whether the feature-level sign behaviour is
+#: basis-dependent, not whether 27.0% repeats.
 SWEEP_DELTAS: tuple[int, ...] = (
     1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
 )
@@ -673,7 +676,10 @@ def _fidelity(
     shares, while the ceiling set is every selected query feature. The graded
     slope is only interpretable next to the ceiling slope, and a complete basis
     makes the ceiling prediction near zero, so both ceiling statistics are
-    undefined there.
+    undefined there. The full-ablation run is called the ceiling because it
+    ablates every selected feature, not because its slope bounds the graded
+    slope from above; it can be lower when the renormalisation changes the sign
+    of the response.
 
     ``slope`` is a calibration coefficient through the origin, not a fraction
     in ``[0, 1]``: 1.0 means the linear prediction has the right scale on
@@ -780,8 +786,9 @@ def measure_basis(
     The realized-distance grid is clipped to the passage: a distance larger
     than ``n_tokens - 1`` cannot be sampled, and keeping it would publish an
     empty bin as if it had been measured. The content-fixed sweep is not
-    clipped, because it evaluates the same content pair at artificial
-    distances rather than sampling tokens that far apart.
+    clipped, because it evaluates the same content pairs at artificial
+    distances, averaged over those pairs, rather than sampling tokens that far
+    apart.
     """
     if int(top_k) < 1:
         raise ValueError("top-k must be positive")
@@ -1404,13 +1411,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     print(
         f"{'basis':<12} {'role':<10} {'features':>8} {'k':>5} {'pairs':>6} "
         f"{'base':>6} {'top-k':>6} {'slope':>7} {'ratio':>7} {'cslope':>7} "
-        f"{'flips':>6}"
+        f"{'flips%':>7}"
     )
     for arm in data["bases"]:
         aggregate = arm["aggregate"]
 
         def show(value: Any) -> str:
             return "  --  " if value is None else f"{float(value):.3f}"
+
+        def show_pct(value: Any) -> str:
+            return "   --  " if value is None else f"{100.0 * float(value):.3f}%"
 
         print(
             f"{arm['name']:<12} {arm['role']:<10} {arm['n_features']:>8} "
@@ -1420,7 +1430,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             f"{show(aggregate['fidelity_slope'])} "
             f"{show(aggregate['fidelity_ratio'])} "
             f"{show(aggregate['ceiling_slope'])} "
-            f"{show(aggregate['sweep_feature_sign_flip_fraction'])}"
+            f"{show_pct(aggregate['sweep_feature_sign_flip_fraction'])}"
         )
     result = data["verdict"]
     if result.get("applicable"):
