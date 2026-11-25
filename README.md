@@ -153,14 +153,13 @@ The measurement suite runs on checkpoints others trained. `train.py` trains the
 same object -- a bias-free RMSNorm decoder with a tied head and full RoPE at
 head dimension 64 -- and logs every metric, including the attribution
 diagnostics, at each evaluation. The loader contract --- pre-tokenized shards,
-atomic writes, SHA-256, resume and a `uint16` memmap --- is in `docs/DATA.md`;
-the Kaggle-specific preparation recipe is in `docs/KAGGLE.md` (Lane C uses
-`gigatoken_prep.py` to tokenize at GB/s and then writes the same checksummed
-stream), and the session runbook — timing job first, then a step budget, GPU
-and TPU lanes, what to bring back — is `docs/KAGGLE_TRAIN.md`:
+atomic writes, SHA-256, resume and a `uint16` memmap --- lives in `data.py`.
+`gigatoken_prep.py` is the fast tokenizer lane: it tokenizes at GB/s and writes
+the same checksummed stream.
 
 ```bash
-pip install -r train_requirements.txt
+pip install torch                      # CPU wheel: follow the PyTorch index
+pip install "transformers>=4.40" "datasets>=2.19"
 # tokenize once, checksum, and mmap the result in every rank
 python -m projects.rope_attribution.data prepare \
     --source wikitext-103 --out data/wikitext103
@@ -188,8 +187,8 @@ python -m projects.rope_attribution.report_run <run-dir> --html <output.html>
 ```
 
 The TPU v5e-8 presets (`tpu_v5e8_102m`, `tpu_v5e8_152m`, `tpu_v5e8_253m`,
-`tpu_v5e8_303m`) and the single-host launcher are documented in
-`docs/TPU_V5E8.md`. The arithmetic is verified; the XLA path is a scaffold and
+`tpu_v5e8_303m`) are defined in `tpu_configs.py`, and the single-host launcher
+is `tpu_launch.py`. The arithmetic is verified; the XLA path is a scaffold and
 has **not** been run on a TPU in this repository.
 
 Each run writes `runs/<name>/metrics.jsonl` -- a leading `run_start` record

@@ -226,7 +226,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     if not XLA_AVAILABLE:
         raise SystemExit(
             "torch_xla is not installed; install the TPU build on the TPU host "
-            "(see docs/TPU_V5E8.md) or use --dry-run to inspect the preset"
+            "or use --dry-run to inspect the preset"
         )
     import torch_xla.distributed.xla_multiprocessing as xmp
 

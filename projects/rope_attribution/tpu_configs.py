@@ -17,7 +17,7 @@ The last one is the point of the module. A preset is a *configuration*, not a
 result: no model in this repository has been trained on a TPU, and nothing here
 is quoted as a measurement. What is verified locally is the arithmetic, the
 parameter counts and the JSON export; what is not verified is an XLA run, which
-needs the TPU host. ``docs/TPU_V5E8.md`` states that boundary.
+needs the TPU host. The module docstring states that boundary.
 
 The token budget is set to roughly 20 tokens per parameter (the Chinchilla
 ratio), because the smallest and largest presets use the same token-per-step

@@ -43,9 +43,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
           # Installs the package and its numpy dependency. The GPU/model
-          # stacks are opt-in via real_model_requirements.txt and
-          # train_requirements.txt and are intentionally NOT installed here:
-          # no GPU, no model downloads, no multi-gigabyte wheels in CI.
+          # stack is opt-in via real_model_requirements.txt and is
+          # intentionally NOT installed here: no GPU, no model downloads,
+          # no multi-gigabyte wheels in CI.
           python -m pip install -e .
 
       - name: Tests

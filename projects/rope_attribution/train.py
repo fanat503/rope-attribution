@@ -45,8 +45,7 @@ a kernel that cannot comply is reported, not silently assumed to be
 reproducible. On TPU (``--device xla``) the trainer is a thin adapter over the
 same loop: it imports ``torch_xla``, builds on the XLA device, all-reduces
 gradients once, clips the reduced gradient, and steps the optimizer once. The
-XLA path is not exercised by CI, which has no TPU; ``docs/TPU_V5E8.md`` says so
-explicitly.
+XLA path is not exercised by CI, which has no TPU.
 """
 
 from __future__ import annotations
@@ -684,7 +683,7 @@ def _check_xla_backend() -> None:
     raise RuntimeError(
         "device 'xla' requested but PJRT_DEVICE="
         f"{os.environ.get('PJRT_DEVICE', '<unset>')!r}; an XLA run must target "
-        "a TPU. Set PJRT_DEVICE=TPU (see docs/TPU_V5E8.md), or set "
+        "a TPU. Set PJRT_DEVICE=TPU, or set "
         "ROPE_ATTRIBUTION_ALLOW_XLA_CPU=1 to run the XLA path on a CPU "
         "backend deliberately."
     )
@@ -701,8 +700,7 @@ def _require_xla():
     if not XLA_AVAILABLE:
         raise RuntimeError(
             "device 'xla' requested but torch_xla is not installed; "
-            "install the TPU build of torch_xla on the TPU host "
-            "(see docs/TPU_V5E8.md)"
+            "install the TPU build of torch_xla on the TPU host"
         )
     _check_xla_backend()
     import torch_xla.core.xla_model as xm
@@ -756,9 +754,8 @@ def _reduce_update(model, opt, xm, grad_clip: float):
 
     ``xm.reduce_gradients`` takes the *optimizer*, not the model: it fetches
     the gradients through ``optimizer.__getstate__()['param_groups']``. It
-    all-reduces with SUM and then scales by ``1 / world_size`` (see
-    docs/TPU_V5E8.md), so what is clipped below is the mean gradient over the
-    data-parallel ranks.
+    all-reduces with SUM and then scales by ``1 / world_size``, so what is
+    clipped below is the mean gradient over the data-parallel ranks.
     """
     import torch
 
@@ -1262,7 +1259,7 @@ def train(
     but needs every rank's own data order to resume.
     """
     if not TORCH_AVAILABLE:
-        raise RuntimeError("torch is not installed; see train_requirements.txt")
+        raise RuntimeError("torch is not installed; install torch")
     import torch
 
     if int(world_size) < 1:
@@ -1761,7 +1758,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     if not TORCH_AVAILABLE:
-        raise SystemExit("torch is not installed; see train_requirements.txt")
+        raise SystemExit("torch is not installed; install torch")
     device = args.device
     if device == "auto":
         import torch
@@ -1816,7 +1813,7 @@ def main() -> None:
         if not TRANSFORMERS_AVAILABLE:
             raise SystemExit(
                 "transformers and datasets are not installed; the wikitext "
-                "path needs train_requirements.txt"
+                "path needs `transformers` and `datasets`"
             )
         tokens = _load_wikitext_tokens()
     summary = train(
@@ -1841,7 +1838,7 @@ def _load_wikitext_tokens() -> np.ndarray:
     corpus in memory, so eight TPU ranks calling it would each pay that cost;
     a real multi-chip run should prepare the stream once with
     ``python -m projects.rope_attribution.data`` and pass ``--data-dir``.
-    Requires train_requirements.txt; the smoke config needs no network at
+    Requires `transformers` and `datasets`; the smoke config needs no network at
     all. Streamed through ``np.fromiter`` so the ~10^8-token corpus is never
     materialized as a Python int list, which would cost gigabytes before
     training starts.

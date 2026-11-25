@@ -23,9 +23,9 @@ license-files = ["LICENSE"]
 authors = [{ name = "Ilya Slyatski" }]
 readme = "README.md"
 
-# The library itself only needs numpy. The GPU/model experiment stacks are
-# opt-in via real_model_requirements.txt and train_requirements.txt and are
-# deliberately not duplicated here.
+# The library itself only needs numpy. The GPU/model experiment stack is
+# opt-in via real_model_requirements.txt; training adds torch, transformers
+# and datasets, which are deliberately not duplicated here.
 dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]

@@ -111,7 +111,7 @@ def encode_text_files(
             raise RuntimeError(
                 "gigatoken is not installed; run `pip install gigatoken` on the "
                 "machine that prepares the stream, or use the Hugging Face lane "
-                "in docs/KAGGLE.md"
+                "in `data.py`"
             ) from exc
         if tokenizer_factory is None:
             tokenizer_factory = gt.Tokenizer

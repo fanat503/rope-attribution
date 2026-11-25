@@ -273,7 +273,7 @@ class HuggingFaceDocuments:
             except Exception as exc:  # pragma: no cover - optional dependency
                 raise SystemExit(
                     "streaming a corpus needs `datasets`; install "
-                    "train_requirements.txt or pass --source text PATH"
+                    "`datasets` or pass --source text PATH"
                 ) from exc
             try:
                 self._dataset = load_dataset(
@@ -982,7 +982,7 @@ def _gpt2_encoder():
         from transformers import GPT2TokenizerFast
     except Exception as exc:  # pragma: no cover - optional dependency
         raise SystemExit(
-            "the gpt2 tokenizer needs `transformers`; install train_requirements.txt"
+            "the gpt2 tokenizer needs `transformers`; install `transformers`"
         ) from exc
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
 
