@@ -36,14 +36,18 @@ loss sees the surrogate through the model's ordinary attention path.
 Scope and honesty
 -----------------
 Supported: full- and partial-rotation attention with separate
-``q_proj``/``k_proj`` or a fused ``query_key_value``, and no QK-normalisation.
-Under partial rotation the surrogate acts on the rotated prefix only; the
-unrotated tail is passed through untouched, so a model such as
-``EleutherAI/pythia-160m`` (``partial_rotary_factor = 0.25``) is measured on
-the tensor it actually rotates. Models with QK-norm are refused rather than
-measured incorrectly. The live run needs torch, transformers and the
-checkpoints; the unit tests use a randomly initialised tiny model, so the
-mathematics is checked without a download.
+``q_proj``/``k_proj`` or a fused ``query_key_value``, with or without per-head
+QK-normalisation (Qwen3, Gemma 3).  Under QK-norm the model's own norm is
+applied inside the projection hook before the surrogate, so the transform acts
+on the vector the model actually rotates; the norm module is neutralised for the
+duration of the context and restored on exit.  Under partial rotation the
+surrogate acts on the rotated prefix only; the unrotated tail is passed through
+untouched, so a model such as ``EleutherAI/pythia-160m``
+(``partial_rotary_factor = 0.25``) is measured on the tensor it actually
+rotates.  Models whose config declares per-layer-type rotary ladders (Gemma 4)
+are refused rather than measured incorrectly.  The live run needs torch,
+transformers and the checkpoints; the unit tests use a randomly initialised tiny
+model, so the mathematics is checked without a download.
 """
 
 from __future__ import annotations
@@ -205,6 +209,24 @@ def torch_cat(parts: tuple[Any, ...]) -> Any:
     return _torch().cat(parts, dim=-1)
 
 
+def _norm_width(norm: Any) -> int | None:
+    """Last-dimension width a QK normalisation expects, if it declares one.
+
+    Qwen3 and Gemma 3 use ``RMSNorm(head_dim)``; a few implementations use a
+    flat normalisation over the whole projection instead.  ``nn.Identity``
+    declares neither and is applied unchanged.
+    """
+    weight = getattr(norm, "weight", None)
+    if weight is not None and hasattr(weight, "shape") and len(weight.shape):
+        return int(weight.shape[-1])
+    shape = getattr(norm, "normalized_shape", None)
+    if shape is not None:
+        if isinstance(shape, (tuple, list)):
+            return int(shape[-1]) if shape else None
+        return int(shape)
+    return None
+
+
 class SurrogateAttention(AbstractContextManager):
     """Context manager that swaps exact RoPE scores for the position-free form.
 
@@ -254,13 +276,6 @@ class SurrogateAttention(AbstractContextManager):
                 "RoPE needs an even rotated width: "
                 f"head_dim={self.head_dim}, factor={factor}"
             )
-        for attn in self.attns:
-            if hasattr(attn, "q_norm") or hasattr(attn, "k_norm"):
-                raise NotImplementedError(
-                    "QK-normalised attention is not supported: a hook on the "
-                    "projection would transform the pre-norm vector, which is "
-                    "not the vector the model rotates"
-                )
         self.deltas = (
             np.asarray(deltas, dtype=np.float64).reshape(-1)
             if deltas is not None
@@ -268,7 +283,8 @@ class SurrogateAttention(AbstractContextManager):
         )
         self._handles: list[Any] = []
         self._tables: dict[tuple[int, str, Any], tuple[Any, Any]] = {}
-        self._kernel: dict[tuple[str, Any], tuple[Any, Any]] = {}
+        self._kernel: dict[tuple[Any, str, Any], tuple[Any, Any]] = {}
+        self._saved_norms: list[tuple[Any, str, Any]] = []
         # The frequency ladder belongs to the rotated prefix only.  Using the
         # full head width here would rotate the unrotated tail with a ladder
         # the model never applies, which is the exact failure the old refusal
@@ -356,6 +372,41 @@ class SurrogateAttention(AbstractContextManager):
     def _hook_k(self, _module: Any, _inputs: Any, output: Any) -> Any:
         return self._transform_k(output)
 
+    def _hook_q_normed(
+        self, norm: Any, _module: Any, _inputs: Any, output: Any
+    ) -> Any:
+        """Normalise first, then feed the model's RoPE the inverse rotation.
+
+        ``norm`` is the module the model would have applied.  It is applied here
+        in the same per-head frame, so ``R(pos)`` in the model's own forward
+        reconstructs exactly the vector the unmodified model would have rotated.
+        """
+        return self._transform_q(self._apply_norm_flat(norm, output))
+
+    def _hook_k_normed(
+        self, norm: Any, _module: Any, _inputs: Any, output: Any
+    ) -> Any:
+        return self._transform_k(self._apply_norm_flat(norm, output))
+
+    def _apply_norm_flat(self, norm: Any, x: Any) -> Any:
+        """Apply a per-head QK norm to a flat ``(B, T, inner)`` tensor."""
+        inner = int(x.shape[-1])
+        if inner % self.head_dim:
+            raise RuntimeError(
+                f"q/k width {inner} is not a multiple of head_dim {self.head_dim}"
+            )
+        heads = inner // self.head_dim
+        width = _norm_width(norm)
+        if width is None or width == inner:
+            return norm(x)
+        if width != self.head_dim:
+            raise RuntimeError(
+                f"QK norm expects width {width}, but head_dim is {self.head_dim} "
+                f"and the projection width is {inner}; refusing to guess"
+            )
+        shaped = x.reshape(*x.shape[:-1], heads, self.head_dim)
+        return norm(shaped).reshape(x.shape)
+
     def _hook_fused(self, attn: Any, _module: Any, _inputs: Any, output: Any) -> Any:
         q, k, v = split_fused_qkv(attn, output)
         return join_fused_qkv(
@@ -368,6 +419,7 @@ class SurrogateAttention(AbstractContextManager):
     # -- lifecycle -------------------------------------------------------
 
     def __enter__(self) -> SurrogateAttention:
+        torch = _torch()
         for attn in self.attns:
             fused = getattr(attn, "query_key_value", None)
             if fused is not None and hasattr(fused, "weight"):
@@ -377,14 +429,45 @@ class SurrogateAttention(AbstractContextManager):
 
                 self._handles.append(fused.register_forward_hook(fused_hook))
             else:
-                self._handles.append(attn.q_proj.register_forward_hook(self._hook_q))
-                self._handles.append(attn.k_proj.register_forward_hook(self._hook_k))
+                q_norm = getattr(attn, "q_norm", None)
+                k_norm = getattr(attn, "k_norm", None)
+                if q_norm is not None:
+                    self._saved_norms.append((attn, "q_norm", q_norm))
+                    attn.q_norm = torch.nn.Identity()
+                    self._handles.append(
+                        attn.q_proj.register_forward_hook(
+                            lambda m, i, o, _n=q_norm: self._hook_q_normed(
+                                _n, m, i, o
+                            )
+                        )
+                    )
+                else:
+                    self._handles.append(
+                        attn.q_proj.register_forward_hook(self._hook_q)
+                    )
+                if k_norm is not None:
+                    self._saved_norms.append((attn, "k_norm", k_norm))
+                    attn.k_norm = torch.nn.Identity()
+                    self._handles.append(
+                        attn.k_proj.register_forward_hook(
+                            lambda m, i, o, _n=k_norm: self._hook_k_normed(
+                                _n, m, i, o
+                            )
+                        )
+                    )
+                else:
+                    self._handles.append(
+                        attn.k_proj.register_forward_hook(self._hook_k)
+                    )
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         for handle in self._handles:
             handle.remove()
         self._handles.clear()
+        for attn, name, module in self._saved_norms:
+            setattr(attn, name, module)
+        self._saved_norms.clear()
 
 
 def _rope_theta(cfg: Any) -> float:

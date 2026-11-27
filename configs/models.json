@@ -1,0 +1,222 @@
+{
+  "schema": "rope_attribution/model_registry/v1",
+  "campaign": {
+    "seed": 20260906,
+    "windows": [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096],
+    "distance_grid": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096],
+    "max_tokens": 512,
+    "prompts": "rope_attribution.real_model.DEFAULT_PROMPTS",
+    "note": "Pre-registered before any new checkpoint was measured. Changing any field is a new campaign version, not an edit."
+  },
+  "models": [
+    {
+      "id": "EleutherAI/pythia-160m",
+      "revision": "50f5173d932e8e61f858120bcb800b97af589f46",
+      "role": "baseline",
+      "family": "gpt_neox",
+      "params_m": 160,
+      "gated": false,
+      "adapter": "flat",
+      "hardware": "cpu",
+      "status": "baseline",
+      "expected": {
+        "model_type": "gpt_neox",
+        "hidden_size": 768,
+        "num_hidden_layers": 12,
+        "num_attention_heads": 12,
+        "num_key_value_heads": 12,
+        "rope_theta": 10000.0,
+        "partial_rotary_factor": 0.25,
+        "qk_norm": false
+      },
+      "notes": "Partial RoPE, GPT-NeoX fused QKV. The paper's dilution reference."
+    },
+    {
+      "id": "JackFram/llama-160m",
+      "revision": "aca9b687d1425f863dcf5de9a4c96e3fe36266dd",
+      "role": "baseline",
+      "family": "llama",
+      "params_m": 160,
+      "gated": false,
+      "adapter": "flat",
+      "hardware": "cpu",
+      "status": "baseline",
+      "expected": {
+        "model_type": "llama",
+        "hidden_size": 768,
+        "num_hidden_layers": 12,
+        "num_attention_heads": 12,
+        "num_key_value_heads": 12,
+        "rope_theta": 10000.0,
+        "partial_rotary_factor": 1.0,
+        "qk_norm": false
+      },
+      "notes": "Full RoPE, separate q_proj/k_proj, no GQA."
+    },
+    {
+      "id": "HuggingFaceTB/SmolLM-135M",
+      "revision": "1d461723eec654e65efdc40cf49301c89c0c92f4",
+      "role": "baseline",
+      "family": "llama",
+      "params_m": 135,
+      "gated": false,
+      "adapter": "flat",
+      "hardware": "cpu",
+      "status": "baseline",
+      "expected": {
+        "model_type": "llama",
+        "hidden_size": 576,
+        "num_hidden_layers": 30,
+        "num_attention_heads": 9,
+        "num_key_value_heads": 3,
+        "rope_theta": 10000.0,
+        "partial_rotary_factor": 1.0,
+        "qk_norm": false
+      },
+      "notes": "Full RoPE with GQA (3 groups); smaller hidden than the other two."
+    },
+    {
+      "id": "EleutherAI/pythia-410m-deduped",
+      "revision": "c4fc8d586d62df497f1f9b69d66d3ca419992d3e",
+      "role": "scale-cheap",
+      "family": "gpt_neox",
+      "params_m": 410,
+      "gated": false,
+      "adapter": "flat",
+      "hardware": "cpu",
+      "status": "planned",
+      "expected": {
+        "model_type": "gpt_neox",
+        "hidden_size": 1024,
+        "num_hidden_layers": 24,
+        "num_attention_heads": 16,
+        "num_key_value_heads": 16,
+        "rope_theta": 10000.0,
+        "partial_rotary_factor": 0.25,
+        "qk_norm": false
+      },
+      "notes": "Cheapest scale point with a public SAE (EleutherAI/sae-pythia-410m-65k)."
+    },
+    {
+      "id": "google/gemma-2-2b",
+      "revision": "c5ebcd40d208330abc697524c919956e692655cf",
+      "role": "gemma-scope",
+      "family": "gemma2",
+      "params_m": 2000,
+      "gated": "manual",
+      "adapter": "flat",
+      "hardware": "cpu",
+      "status": "blocked-gated",
+      "expected": {
+        "model_type": "gemma2",
+        "hidden_size": 2304,
+        "num_hidden_layers": 26,
+        "num_attention_heads": 8,
+        "num_key_value_heads": 4,
+        "head_dim": 256,
+        "rope_theta": 10000.0,
+        "partial_rotary_factor": 1.0,
+        "qk_norm": false,
+        "sliding_window": 4096,
+        "attn_logit_softcapping": 50.0
+      },
+      "notes": "GeGLU, alternating sliding/full attention, softcap 50. Softcap breaks additive log-odds of the logits; the score identities still hold."
+    },
+    {
+      "id": "google/gemma-3-4b-pt",
+      "revision": "cc012e0a6d0787b4adcc0fa2c4da74402494554d",
+      "role": "qk-norm-scale",
+      "family": "gemma3",
+      "params_m": 4000,
+      "gated": "manual",
+      "adapter": "gemma3",
+      "hardware": "tpu",
+      "status": "blocked-adapter",
+      "expected": {
+        "model_type": "gemma3",
+        "hidden_size": 2560,
+        "num_hidden_layers": 34,
+        "num_attention_heads": 8,
+        "num_key_value_heads": 4,
+        "head_dim": 256,
+        "rope_theta": 1000000.0,
+        "rope_local_base_freq": 10000.0,
+        "partial_rotary_factor": 1.0,
+        "qk_norm": true,
+        "sliding_window": 1024,
+        "sliding_window_pattern": 6
+      },
+      "notes": "Nested text_config, dual RoPE bases, linear rope scaling 8.0, QK-norm. The flat adapter refuses it; the gemma3 adapter is the remaining code gap."
+    },
+    {
+      "id": "Qwen/Qwen3-8B-Base",
+      "revision": "49e3418fbbbca6ecbdf9608b4d22e5a407081db4",
+      "role": "qk-norm-scale",
+      "family": "qwen3",
+      "params_m": 8000,
+      "gated": false,
+      "adapter": "flat",
+      "hardware": "tpu",
+      "status": "planned",
+      "expected": {
+        "model_type": "qwen3",
+        "hidden_size": 4096,
+        "num_hidden_layers": 36,
+        "num_attention_heads": 32,
+        "num_key_value_heads": 8,
+        "head_dim": 128,
+        "rope_theta": 1000000.0,
+        "partial_rotary_factor": 1.0,
+        "qk_norm": true,
+        "sliding_window": null
+      },
+      "notes": "Ungated. The live QK-norm test at 8B; requires TPU extraction or sharded bf16."
+    },
+    {
+      "id": "meta-llama/Llama-3.1-8B",
+      "revision": "d04e592bb4f6aa9cfee91e2e20afa771667e1d4b",
+      "role": "scale",
+      "family": "llama",
+      "params_m": 8000,
+      "gated": "manual",
+      "adapter": "flat",
+      "hardware": "tpu",
+      "status": "blocked-gated",
+      "expected": {
+        "model_type": "llama",
+        "hidden_size": 4096,
+        "num_hidden_layers": 32,
+        "num_attention_heads": 32,
+        "num_key_value_heads": 8,
+        "head_dim": 128,
+        "rope_theta": 500000.0,
+        "partial_rotary_factor": 1.0,
+        "qk_norm": false
+      },
+      "notes": "Gated manual. Closest dense 8B to the requested 'Llama 9B'; no QK-norm, so it isolates scale from norm."
+    },
+    {
+      "id": "local:train_303m",
+      "revision": "local",
+      "role": "own-model",
+      "family": "own",
+      "params_m": 303,
+      "gated": false,
+      "adapter": "own",
+      "hardware": "tpu",
+      "status": "blocked-adapter",
+      "expected": {
+        "model_type": "own",
+        "hidden_size": 1024,
+        "num_hidden_layers": 20,
+        "num_attention_heads": 16,
+        "num_key_value_heads": 16,
+        "head_dim": 64,
+        "rope_theta": 10000.0,
+        "partial_rotary_factor": 1.0,
+        "qk_norm": false
+      },
+      "notes": "train.py preset train_303m, ctx 1024, one seed. Not a public checkpoint; the trajectory is the point."
+    }
+  ]
+}

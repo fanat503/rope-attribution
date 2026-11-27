@@ -1053,6 +1053,35 @@ CLAIMS += (
         r"mean of \$(\d+\.\d+)\$--\$(\d+\.\d+)\$ over the rest",
     ),
     Claim("attn_late_max", r"individual later layers reach \$(\d+\.\d+)\$"),
+    # ---- the softmax identities (Sec.~\ref{sec:softmax}) -------------------
+    # The constants are algebra, but the residual ceilings are measurements
+    # from results/softmax_decomposition.json and are recomputed below.
+    Claim("softmax_lipschitz", r"\$(\d+)/(\d+)\$-Lipschitz"),
+    Claim(
+        "softmax_blind_period",
+        r"\\theta_k\(\\delta-\\delta'\) \\in (\d+)\\pi\\mathbb\{Z\}",
+    ),
+    Claim("softmax_pair_period", r"L_k\^\\star=(\d+)\\pi/\\theta_k"),
+    Claim("softmax_norms", r"\\ell_(\d)"),
+    Claim("softmax_score_scale", r"\$(\d+)/\\sqrt d\$"),
+    Claim(
+        "softmax_heads",
+        r"Across all \$(\d+)\$ heads of the three checkpoints",
+    ),
+    Claim(
+        "softmax_logodds_residual",
+        r"largest\s+log-odds residual is \$(\d\.\d+)\\times10\^\{(-?\d+)\}\$",
+    ),
+    Claim(
+        "softmax_contrast_residual",
+        r"contrast and blindness residuals\s+are at most \$(\d\.\d+)\\times10\^\{(-?\d+)\}\$ "
+        r"and \$(\d\.\d+)\\times10\^\{(-?\d+)\}\$",
+    ),
+    Claim(
+        "softmax_centered_residual",
+        r"centred\s+gradient agrees with a finite difference to "
+        r"\$(\d\.\d+)\\times10\^\{(-?\d+)\}\$",
+    ),
     Claim(
         "attn_appendix_prompts",
         r"run on three original passages of \$(\d+)\$--\$(\d+)\$ tokens",
@@ -4274,6 +4303,57 @@ def _checkpoint_sizes(artifact: dict) -> list[int]:
         assert match, f"no size in checkpoint id {row['model_id']!r}"
         sizes.append(int(match.group(1)))
     return sorted(sizes)
+
+
+SOFTMAX_PATH = _REPO / "results" / "softmax_decomposition.json"
+
+
+def _sci(parts) -> str:
+    """``('5.6', '-11')`` -> ``'5.6e-11'``; normalises ``-06`` to ``-6``."""
+    return f"{parts[0]}e{int(parts[1])}"
+
+
+def _fmt_sci(value: float) -> str:
+    mantissa, exponent = f"{value:.1e}".split("e")
+    return f"{mantissa}e{int(exponent)}"
+
+
+def test_the_softmax_identities_are_what_the_artifact_measured() -> None:
+    """The four residual ceilings and the head count are one measurement.
+
+    Mutation verdict: changing ``5.6`` to ``5.7`` in the paper, or dropping a
+    checkpoint from the artifact, fails the corresponding comparison; the
+    centred-gradient ceiling is checked at the finite-difference floor, not as
+    a float64 identity, because that is how it was measured.
+    """
+    artifact = _artifact(SOFTMAX_PATH)
+    assert artifact["schema"] == "rope_attribution/softmax_decomposition/v1"
+    models = artifact["models"]
+    assert len(models) == 3
+    heads = sum(int(model["n_heads_measured"]) for model in models)
+    assert heads == 378
+    assert int(groups("softmax_heads")[0][0]) == heads
+
+    logodds = max(model["log_odds_residual_max"] for model in models)
+    assert _sci(groups("softmax_logodds_residual")[0]) == _fmt_sci(logodds)
+
+    flat = groups("softmax_contrast_residual")[0]
+    assert len(flat) == 4
+    contrast = max(model["contrast_residual_max"] for model in models)
+    blind = max(model["blind_at_period_residual_max"] for model in models)
+    assert _sci((flat[0], flat[1])) == _fmt_sci(contrast)
+    assert _sci((flat[2], flat[3])) == _fmt_sci(blind)
+
+    centered = max(model["centered_gradient_residual_max"] for model in models)
+    assert _sci(groups("softmax_centered_residual")[0]) == _fmt_sci(centered)
+
+    # The norm subscripts and the score scale are the constants the prose
+    # uses; they are not measurements, but they must still be the ones written.
+    assert [capture[0] for capture in groups("softmax_norms")] == ["2", "1"]
+    assert groups("softmax_score_scale")[0][0] == "1"
+    assert groups("softmax_lipschitz")[0] == ("1", "2")
+    assert groups("softmax_blind_period")[0][0] == "2"
+    assert groups("softmax_pair_period")[0][0] == "2"
 
 
 def test_the_attention_cost_headline_is_what_the_three_checkpoints_measured() -> None:

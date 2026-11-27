@@ -255,18 +255,73 @@ jointly additive after division.
 
 The consequence for attribution: a feature's contribution to the \emph{logits}
 is exactly additive and exactly position-conditional, and that is what this
-paper measures; its contribution to the attention \emph{weights} is neither, and
-the error can grow with the number of keys and the logit spread. An additive
-method can be exactly right about the score and still wrong about the weights;
-when the weights are the object, the softmax is a second obstruction that
-amplifies the logit changes RoPE's position-conditionality produces.
+paper measures; its contribution to the absolute attention \emph{weight} is
+neither, and that error can grow with the number of keys and the logit spread.
+An additive method can be exactly right about the score and still wrong about
+the weights; when the weights are the object, the normaliser is a second
+obstruction. The obstruction is narrower than ``softmax breaks additivity'',
+however, and it is worth saying exactly where it starts.
+
+\paragraph{What survives the softmax.}
+For any two keys $n,n'$ the log-normaliser cancels:
+\begin{equation}
+  \log\frac{a_n}{a_{n'}}
+  \;=\; \frac{s(\delta_n)-s(\delta_{n'})}{\sqrt d}.
+  \label{eq:logodds}
+\end{equation}
+The right-hand side is additive in the same features as the score, so
+\emph{relative} attribution --- which key a query prefers, and by how much in
+log-odds --- is exact without any approximation. Equivalently, the odds ratio
+factorises over pairs,
+$a_n/a_{n'} = \prod_k \exp(\Delta_{k,nn'})$, with
+$\Delta_{k,nn'} = (c_k(\delta_n)-c_k(\delta_{n'}))/\sqrt d$. What the softmax
+destroys is the \emph{absolute} weight, which differs from the score by one
+query-level scalar $\log Z$, and the attention \emph{output}, which multiplies
+the weights by values. The softmax is $1/2$-Lipschitz in $\ell_2$ (the
+$1/\sqrt d$ scale only shrinks that constant), so score error is not amplified
+in Euclidean norm; what can grow is the $\ell_1$ mass and the argmax set, which
+is what Appendix~\ref{app:attention} measures.
+
+For one rotary pair, with $c_k(\delta)=\rho_k\cos(\theta_k\delta-\psi_k)$,
+the positional part of the log-odds has a closed form,
+\begin{equation}
+  \Delta_k(\delta,\delta') \;=\; -\frac{2\rho_k}{\sqrt d}
+  \sin\!\Bigl(\theta_k\frac{\delta+\delta'}{2}-\psi_k\Bigr)
+  \sin\!\Bigl(\theta_k\frac{\delta-\delta'}{2}\Bigr).
+  \label{eq:contrast}
+\end{equation}
+It vanishes whenever $\theta_k(\delta-\delta') \in 2\pi\mathbb{Z}$: a pair is
+blind to two placements separated by an integer number of its own periods,
+whatever the content phase. The same length $L_k^\star=2\pi/\theta_k$ that sets
+the collapse threshold of Section~\ref{sec:worth} therefore also sets the first
+blind separation in relative attribution, and the contrast is maximal at half
+that separation. Softmax does not introduce a second scale.
+
+The gradient statement is equally exact. For a scalar that enters every score
+through pair $k$ with coefficient $c_{k,n}$,
+\begin{equation}
+  \frac{\partial a_n}{\partial w}
+  \;=\; \frac{a_n}{\sqrt d}
+  \Bigl(c_{k,n}-\sum_{n'}a_{n'}c_{k,n'}\Bigr),
+  \label{eq:centered}
+\end{equation}
+so the pair's effect on the weights is its contribution centred by its own
+attention-weighted mean. The subtracted term is constant across $n$ for a fixed
+query and pair, and a constant shift is absorbed by the best constant
+surrogate; the relative error of the window law is therefore invariant under
+this centering. Across all $378$ heads of the three checkpoints, the largest
+log-odds residual is $5.6\times10^{-11}$, the contrast and blindness residuals
+are at most $3.8\times10^{-14}$ and $1.1\times10^{-13}$, and the centred
+gradient agrees with a finite difference to $6.7\times10^{-6}$; the per-head
+rows are in \texttt{results/softmax\_decomposition.json}.
 
 We can price that second error, and Appendix~\ref{app:attention} does: across
 every head and prompt of the same three checkpoints, the best position-free
 surrogate of the score changes the argmax key for a large fraction of queries
-and moves a quarter of the attention mass. The mean damage is concentrated in
-the early layers, where logits are least saturated. An additive method can
-therefore be exact about the score and wrong about the weights.
+and moves between a quarter and a third of the attention mass. The mean damage
+is concentrated in the early layers, where logits are least saturated. An
+additive method can therefore be exact about the score and wrong about the
+weights.
 
 \subsection{Exactness, measured}
 \label{sec:exact}

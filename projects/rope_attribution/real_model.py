@@ -338,24 +338,41 @@ def _version(pkg: str) -> str:
 
 @dataclass
 class Loaded:
-    """A loaded checkpoint plus the tokenizer that feeds it."""
+    """A loaded checkpoint plus the tokenizer that feeds it.
+
+    ``revision`` is the Hub commit the weights were actually resolved from.
+    It is ``None`` for a locally constructed model, where no Hub snapshot
+    exists.  Recording it lets a caller compare the loaded snapshot against a
+    pre-registered pin instead of trusting the string it asked for.
+    """
 
     model_id: str
     model: Any
     tokenizer: Any
+    revision: str | None = None
 
     @property
     def config(self) -> Any:
         return self.model.config
 
 
-def load_model(model_id: str = DEFAULT_MODEL_IDS[0], seed: int = DEFAULT_SEED) -> Loaded:
+def load_model(
+    model_id: str = DEFAULT_MODEL_IDS[0],
+    seed: int = DEFAULT_SEED,
+    *,
+    revision: str | None = None,
+) -> Loaded:
     """Load ``model_id`` on CPU in float32 with eager attention.
 
     Eager attention is required because the entropy measurement needs the
     post-softmax attention probabilities, which the fused kernels do not return.
     float32 rather than each checkpoint's native dtype because the residuals
     being checked live near 1e-15 and bfloat16 has an epsilon near 8e-3.
+
+    When ``revision`` is a Hub commit, every fetch is pinned to it and the
+    resolved ``config._commit_hash`` must agree; a checkpoint that moved under
+    the pin is refused rather than measured.  ``revision=None`` keeps the
+    historical ``main`` behaviour for exploratory runs.
     """
     torch = _require_torch()
     if not TRANSFORMERS_AVAILABLE:
@@ -368,19 +385,31 @@ def load_model(model_id: str = DEFAULT_MODEL_IDS[0], seed: int = DEFAULT_SEED) -
 
     from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
+    pin = {"revision": revision} if revision is not None else {}
+
     # Refuse on the config alone, before downloading tens of gigabytes of
     # weights that the adapter would then measure incorrectly.
-    reason = unsupported_architecture(AutoConfig.from_pretrained(model_id))
+    reason = unsupported_architecture(AutoConfig.from_pretrained(model_id, **pin))
     if reason:
         raise NotImplementedError(f"{model_id}: {reason}")
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer = AutoTokenizer.from_pretrained(model_id, **pin)
     model = AutoModelForCausalLM.from_pretrained(
-        model_id, attn_implementation="eager", dtype=torch.float32
+        model_id, attn_implementation="eager", dtype=torch.float32, **pin
     )
     model.eval()
     for prm in model.parameters():
         prm.requires_grad_(False)
-    return Loaded(model_id=model_id, model=model, tokenizer=tokenizer)
+    resolved = getattr(model.config, "_commit_hash", None)
+    if revision is not None and resolved is not None and resolved != revision:
+        raise RuntimeError(
+            f"{model_id}: asked for revision {revision}, loaded {resolved}"
+        )
+    return Loaded(
+        model_id=model_id,
+        model=model,
+        tokenizer=tokenizer,
+        revision=resolved or revision,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -465,6 +494,34 @@ def _qkv_projector(attn: Any) -> Callable[[Any], tuple[Any, Any]] | None:
 
     q_proj, k_proj = getattr(attn, "q_proj", None), getattr(attn, "k_proj", None)
     if q_proj is not None and k_proj is not None:
+        q_norm = getattr(attn, "q_norm", None)
+        k_norm = getattr(attn, "k_norm", None)
+        if q_norm is not None or k_norm is not None:
+            hd = head_dim_of(attn)
+
+            def proj_split_normed(x: Any) -> tuple[Any, Any]:
+                # Qwen3 and Gemma 3 normalise each head *after* the projection
+                # and *before* RoPE.  Reproducing that order is the difference
+                # between measuring the tensor the model rotates and measuring
+                # a plausible-looking tensor it never uses.
+                q, k = q_proj(x), k_proj(x)
+                if q.shape[-1] % hd or k.shape[-1] % hd:
+                    raise RuntimeError(
+                        f"projection widths q={q.shape[-1]} k={k.shape[-1]} are "
+                        f"not multiples of head_dim={hd}"
+                    )
+                n_tokens = int(x.shape[1])
+                if q_norm is not None:
+                    q = _apply_qk_norm(
+                        q_norm, q, n_tokens, q.shape[-1] // hd, hd
+                    )
+                if k_norm is not None:
+                    k = _apply_qk_norm(
+                        k_norm, k, n_tokens, k.shape[-1] // hd, hd
+                    )
+                return q, k
+
+            return proj_split_normed
 
         def proj_split(x: Any) -> tuple[Any, Any]:
             return q_proj(x), k_proj(x)
@@ -561,6 +618,12 @@ class HeadVectors:
     head's key vector is then its own group's key vector, replicated, so the
     arrays here always have ``n_heads`` on the head axis. ``n_kv_heads`` and
     ``n_kv_groups`` record when that happened.
+
+    ``qk_norm`` records whether the checkpoint normalises each head after the
+    projection and before RoPE (Qwen3, Gemma 3).  The arrays are post-norm in
+    that case: the norm is a positive scalar per head, so it folds into the
+    pair amplitude and leaves the window law unchanged, but capturing the
+    pre-norm tensor would measure a vector the model never rotates.
     """
 
     q_hat: np.ndarray
@@ -570,6 +633,7 @@ class HeadVectors:
     n_heads: int
     n_kv_heads: int | None = None
     n_kv_groups: int | None = None
+    qk_norm: bool = False
 
     @property
     def n_tokens(self) -> int:
@@ -617,6 +681,61 @@ def _check_kv_layout(
     return first
 
 
+def _norm_width(norm: Any) -> int | None:
+    """The last-dimension width a normalisation module expects, if known.
+
+    ``q_norm``/``k_norm`` in Qwen3 and Gemma 3 are per-head RMSNorm modules, so
+    their weight has shape ``(head_dim,)``.  A few implementations use a flat
+    ``LayerNorm(n_heads * head_dim)`` instead; the width tells the two apart.
+    ``nn.Identity`` has neither, and is applied to the flat vector unchanged.
+    """
+    weight = getattr(norm, "weight", None)
+    if weight is not None and hasattr(weight, "shape") and len(weight.shape):
+        return int(weight.shape[-1])
+    shape = getattr(norm, "normalized_shape", None)
+    if shape is not None:
+        if isinstance(shape, (tuple, list)):
+            return int(shape[-1]) if shape else None
+        return int(shape)
+    dim = getattr(norm, "dim", None)
+    if isinstance(dim, int) and dim > 0:
+        return int(dim)
+    return None
+
+
+def _apply_qk_norm(
+    norm: Any,
+    x: Any,
+    n_tokens: int,
+    n_heads: int,
+    head_dim: int,
+) -> Any:
+    """Apply a per-head QK normalisation to a flat ``(1, T, H * D)`` tensor.
+
+    The model applies the norm after the projection and *before* RoPE.  Doing
+    the same here keeps the captured ``q_hat``/``k_hat`` in the frame the model
+    actually rotates; a hook on ``q_proj``/``k_proj`` alone would capture the
+    pre-norm vector, which is not the tensor the score is built from.
+
+    The norm is applied per head when its width is ``head_dim``.  A module whose
+    width is the full projection width is applied flat.  Any other width is an
+    adapter error: silently reshaping it would produce finite numbers for a
+    tensor the model never uses.
+    """
+    if norm is None:
+        return x
+    width = _norm_width(norm)
+    if width is None or width == n_heads * head_dim:
+        return norm(x)
+    if width != head_dim:
+        raise RuntimeError(
+            f"QK norm expects width {width}, but head_dim is {head_dim} and the "
+            f"projection width is {n_heads * head_dim}; refusing to guess"
+        )
+    shaped = x.view(1, n_tokens, n_heads, head_dim)
+    return norm(shaped).reshape(1, n_tokens, n_heads * head_dim)
+
+
 def collect_head_vectors(
     model: Any,
     tokenizer: Any,
@@ -640,14 +759,6 @@ def collect_head_vectors(
     attns = attention_modules(model)
     if not attns:
         raise RuntimeError("no attention module with a recognised q/k projection")
-    for idx, attn in enumerate(attns):
-        if hasattr(attn, "q_norm") or hasattr(attn, "k_norm"):
-            raise NotImplementedError(
-                "QK-normalised attention is not supported by collect_head_vectors: "
-                "the q_proj/k_proj outputs are normalised after projection, so a "
-                "hook on the projection would measure a vector the model never "
-                f"rotates (layer {idx})"
-            )
 
     ids = tokenizer(text, return_tensors="pt")["input_ids"]
     if max_tokens is not None and ids.shape[1] > max_tokens:
@@ -667,34 +778,35 @@ def collect_head_vectors(
     n_kv_first: int | None = None
     groups_first: int | None = None
     qs, ks = [], []
-    for idx, attn in enumerate(attns):
-        if idx not in store:
-            raise RuntimeError(f"attention module {idx} was never called")
-        x = store[idx]
-        t = int(x.shape[1])
-        q, k = _qkv_projector(attn)(x)
-        if q.shape[-1] != nh * hd or q.shape[-1] % hd or k.shape[-1] % hd:
-            raise RuntimeError(
-                f"unexpected projection widths: q={q.shape[-1]} k={k.shape[-1]}, "
-                f"head_dim={hd}, n_heads={nh}"
+    with torch.no_grad():
+        for idx, attn in enumerate(attns):
+            if idx not in store:
+                raise RuntimeError(f"attention module {idx} was never called")
+            x = store[idx]
+            t = int(x.shape[1])
+            q, k = _qkv_projector(attn)(x)
+            if q.shape[-1] != nh * hd or q.shape[-1] % hd or k.shape[-1] % hd:
+                raise RuntimeError(
+                    f"unexpected projection widths: q={q.shape[-1]} k={k.shape[-1]}, "
+                    f"head_dim={hd}, n_heads={nh}"
+                )
+            n_kv_heads = k.shape[-1] // hd
+            if n_kv_heads == nh:
+                pass
+            elif nh % n_kv_heads == 0:
+                k = _expand_kv_to_heads(k, t, nh, hd, n_kv_heads)
+            else:
+                raise RuntimeError(
+                    f"n_heads={nh} is not a multiple of the key head count {n_kv_heads}"
+                )
+            n_kv_first, groups_first = _check_kv_layout(
+                idx,
+                n_kv_heads,
+                nh,
+                None if n_kv_first is None else (n_kv_first, groups_first),
             )
-        n_kv_heads = k.shape[-1] // hd
-        if n_kv_heads == nh:
-            pass
-        elif nh % n_kv_heads == 0:
-            k = _expand_kv_to_heads(k, t, nh, hd, n_kv_heads)
-        else:
-            raise RuntimeError(
-                f"n_heads={nh} is not a multiple of the key head count {n_kv_heads}"
-            )
-        n_kv_first, groups_first = _check_kv_layout(
-            idx,
-            n_kv_heads,
-            nh,
-            None if n_kv_first is None else (n_kv_first, groups_first),
-        )
-        qs.append(q.view(1, t, nh, hd).transpose(1, 2))
-        ks.append(k.view(1, t, nh, hd).transpose(1, 2))
+            qs.append(q.view(1, t, nh, hd).transpose(1, 2))
+            ks.append(k.view(1, t, nh, hd).transpose(1, 2))
 
     return HeadVectors(
         q_hat=np.concatenate(qs, axis=0),
@@ -704,6 +816,9 @@ def collect_head_vectors(
         n_heads=nh,
         n_kv_heads=n_kv_first,
         n_kv_groups=groups_first,
+        qk_norm=any(
+            hasattr(attn, "q_norm") or hasattr(attn, "k_norm") for attn in attns
+        ),
     )
 
 

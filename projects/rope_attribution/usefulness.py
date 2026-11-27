@@ -274,9 +274,15 @@ def measure_model(
     prompts: Sequence[str] = RM.DEFAULT_PROMPTS,
     deltas: np.ndarray | None = None,
     n_pairs: int = RM.N_CONTENT_PAIRS,
+    loaded: RM.Loaded | None = None,
 ) -> dict:
-    """The position-free cost, on one trained checkpoint."""
-    loaded = RM.load_model(model_id, seed=seed)
+    """The position-free cost, on one trained checkpoint.
+
+    ``loaded`` lets a caller that already holds the checkpoint reuse it; when it
+    is omitted the checkpoint is loaded here, preserving the existing API.
+    """
+    if loaded is None:
+        loaded = RM.load_model(model_id, seed=seed)
     cfgv = RM.validate_config(loaded.model)
     if not cfgv["checkpoint_inv_freq_found"]:
         raise RuntimeError(f"{model_id} has no rotary module, so it has no rotary pairs")

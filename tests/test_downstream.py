@@ -142,12 +142,99 @@ def test_a_tiny_fused_qkv_model_uses_the_same_path() -> None:
     assert surrogate != exact
 
 
-def test_qk_normalised_attention_is_refused() -> None:
-    model, _cfg = _tiny_llama()
+def _tiny_qwen3(n_tokens: int = 7):
+    transformers = pytest.importorskip("transformers")
+    cfg = transformers.Qwen3Config(
+        vocab_size=64,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=1,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        head_dim=8,
+        max_position_embeddings=64,
+        rope_theta=10000.0,
+    )
+    model = transformers.Qwen3ForCausalLM(cfg).eval()
+    torch.manual_seed(0)
     attn = model.model.layers[0].self_attn
-    attn.q_norm = torch.nn.Identity()
-    with pytest.raises(NotImplementedError, match="QK-normal"):
-        D.SurrogateAttention(model)
+    # A non-unit weight makes double-normalisation detectable: with weight=1,
+    # RMSNorm is idempotent and forgetting to neutralise the module would pass.
+    with torch.no_grad():
+        attn.q_norm.weight.copy_(torch.rand(8) + 0.5)
+        attn.k_norm.weight.copy_(torch.rand(8) + 0.5)
+    ids = torch.randint(0, 64, (1, n_tokens))
+    return model, cfg, attn, ids, n_tokens
+
+
+def test_qk_norm_is_applied_before_the_surrogate() -> None:
+    """The surrogate must act on the post-norm vector the model rotates.
+
+    The model's own norm is applied inside the projection hook and neutralised
+    for the duration of the context.  Reconstructing the model's RoPE around the
+    hook output is the exact check: ``R(pos)`` must return the post-norm vector
+    for ``q`` and the surrogate kernel times the post-norm vector for ``k``.
+
+    Mutation verdict: hooking the projection without the norm fails because the
+    reconstruction returns ``norm(q) == q_post`` only when the norm was applied;
+    applying the norm after ``R(-pos)`` fails because RMSNorm and a rotation do
+    not commute; neglecting to neutralise the norm fails because a non-unit
+    weight makes the second normalisation change the vector.
+    """
+    model, _cfg, attn, ids, n_tokens = _tiny_qwen3()
+    q_norm, k_norm = attn.q_norm, attn.k_norm
+    captured: dict = {}
+
+    def capture_x(module, args, kwargs):
+        x = args[0] if args else kwargs["hidden_states"]
+        captured.setdefault("x", x.detach())
+
+    with D.SurrogateAttention(model, deltas=D.observed_distances(n_tokens)):
+        handles = [
+            attn.register_forward_pre_hook(capture_x, with_kwargs=True),
+            attn.q_proj.register_forward_hook(
+                lambda m, i, o: captured.__setitem__("q", o.detach())
+            ),
+            attn.k_proj.register_forward_hook(
+                lambda m, i, o: captured.__setitem__("k", o.detach())
+            ),
+        ]
+        with torch.no_grad():
+            model(input_ids=ids, use_cache=False)
+        for handle in handles:
+            handle.remove()
+
+    x = captured["x"]
+    with torch.no_grad():
+        q_post = q_norm(attn.q_proj(x).view(1, n_tokens, 4, 8))
+        k_post = k_norm(attn.k_proj(x).view(1, n_tokens, 2, 8))
+
+    freqs = inv_freq(8, 10000.0)
+    positions = np.arange(n_tokens, dtype=np.float64)
+    cos, sin = rope_cos_sin(positions, freqs)
+    cos_t = torch.tensor(cos, dtype=torch.float32)
+    sin_t = torch.tensor(sin, dtype=torch.float32)
+
+    q_fed = captured["q"].view(1, n_tokens, 4, 8)
+    k_fed = captured["k"].view(1, n_tokens, 2, 8)
+    q_back = D.apply_rope_torch(q_fed, cos_t, sin_t)
+    k_back = D.apply_rope_torch(k_fed, cos_t, sin_t)
+
+    cos_mean, sin_mean = D.surrogate_kernel(
+        D.observed_distances(n_tokens), freqs
+    )
+    k_target = D.apply_surrogate_torch(
+        k_post,
+        torch.tensor(cos_mean, dtype=torch.float32),
+        torch.tensor(sin_mean, dtype=torch.float32),
+    )
+
+    torch.testing.assert_close(q_back, q_post)
+    torch.testing.assert_close(k_back, k_target)
+
+    # The context restores the model exactly, including the norm modules.
+    assert attn.q_norm is q_norm and attn.k_norm is k_norm
+    assert torch.equal(attn.q_norm.weight, q_norm.weight)
 
 
 @pytest.mark.parametrize(

@@ -488,8 +488,38 @@ without rerunning the module.
 
 ## 7. What the measurements check, and what they do not
 
+Three exact statements about the softmax belong here, because the paper's
+position depends on saying where additivity stops rather than that it stops
+everywhere:
+
+1. **Log-odds are additive.** For any two keys `j, k`,
+   `log(a_j / a_k) = (s_j - s_k) / sqrt(d)`: the log-normaliser cancels, so the
+   relative attribution is a sum over the same rotary pairs as the score. The
+   odds ratio factorises, `a_j / a_k = prod_p exp(c_{j,p} - c_{k,p})`.
+2. **The positional contrast is closed-form.** For one pair with
+   `c(d) = rho cos(theta d - psi)`, two placements of the same key content give
+   `Delta(d_j, d_k) = -2 rho sin(theta (d_j + d_k)/2 - psi) sin(theta (d_j - d_k)/2)`.
+   It vanishes at every separation `2 pi / theta`, the same length that sets
+   the collapse threshold of Section 6.
+3. **The centred gradient is exact.** For a scalar that enters every score
+   through one pair with coefficient `c_{j,p}`,
+   `d a_j / d w = a_j (c_{j,p} - sum_k a_k c_{k,p}) / sqrt(d)`; the pair's
+   effect is its contribution centred by its own attention-weighted mean.
+
+The no-go is equally exact and narrower than "softmax breaks additivity":
+absolute probabilities have no additive per-pair decomposition. With two keys
+and two pairs, `p_1 = sigmoid(a + b)` has mixed partial
+`sigmoid''(a + b)`, which is nonzero, while any `f(a) + g(b)` has zero mixed
+partial. The obstruction is the normaliser, not the rotary algebra, and it
+applies to the absolute weight and the attention output, not to log-odds.
+
 The paper's numerical checks instantiate the statements above:
 
+- `results/softmax_decomposition.json` checks the three softmax identities on
+  every head of the three baseline checkpoints: the log-odds residual is at
+  most `5.6e-11`, the contrast and blindness residuals at most `3.8e-14` and
+  `1.1e-13`, and the centred gradient agrees with a finite difference to
+  `6.7e-6`.
 - `results/measurements.json` and `figures/fig09_position_conditional_attribution.csv`
   check the per-pair closed form, the relative-position identity, norm
   preservation, bilinearity, and the eight sign changes.
@@ -516,8 +546,10 @@ What the theory does **not** establish:
 2. It does not claim that every feature in a real model changes sign on every
    grid; the theorem is about a nonzero contribution over a full period, and the
    measured 54-point grid is the pre-registered test.
-3. It does not claim that the softmax preserves additivity. The opposite is
-   true and is stated in the paper.
+3. It does not claim that absolute attention weights or the attention output
+   admit an additive per-pair decomposition. The opposite is true for the
+   absolute weight; log-odds and the centred gradient remain exact, as
+   Section 7 states.
 4. It does not turn a finite-grid measurement into a proof. The proofs are
    analytic; the numbers are measurements with their own artifacts and tests.
 

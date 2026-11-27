@@ -1201,25 +1201,187 @@ def test_load_model_refuses_gemma4_before_fetching_weights(
     assert calls == ["google/gemma-4-31B-it"]
 
 
-def test_qk_normalised_checkpoints_are_refused_before_the_forward_pass() -> None:
-    """A pre-norm hook would measure a vector the model never rotates."""
+def test_load_model_pins_every_fetch_to_the_requested_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A registry pin must reach config, tokenizer and weights, not just the log.
+
+    Mutation verdict: dropping ``**pin`` from any of the three fetches makes
+    ``seen`` disagree with the expected list; returning a model whose
+    ``_commit_hash`` differs must raise instead of silently measuring ``main``.
+    """
+    pytest.importorskip("torch")
+    transformers = pytest.importorskip("transformers")
+    pin = "a" * 40
+    seen: list[tuple[str, str | None]] = []
+
+    class FakeModel:
+        def __init__(self, commit: str) -> None:
+            self.config = type("Cfg", (), {"_commit_hash": commit})()
+
+        def eval(self) -> "FakeModel":
+            return self
+
+        def parameters(self) -> list:
+            return []
+
+    def fake_config(model_id, *args, **kwargs):
+        seen.append(("config", kwargs.get("revision")))
+        return {"model_type": "llama"}
+
+    def fake_tokenizer(model_id, *args, **kwargs):
+        seen.append(("tokenizer", kwargs.get("revision")))
+        return object()
+
+    def fake_model(model_id, *args, **kwargs):
+        seen.append(("model", kwargs.get("revision")))
+        return FakeModel(pin)
+
+    monkeypatch.setattr(transformers.AutoConfig, "from_pretrained", fake_config)
+    monkeypatch.setattr(
+        transformers.AutoTokenizer, "from_pretrained", fake_tokenizer
+    )
+    monkeypatch.setattr(
+        transformers.AutoModelForCausalLM, "from_pretrained", fake_model
+    )
+    loaded = RM.load_model("fake/model", revision=pin)
+    assert seen == [("config", pin), ("tokenizer", pin), ("model", pin)]
+    assert loaded.revision == pin
+
+
+def test_load_model_refuses_a_config_that_resolved_off_the_pin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pin is verified against the resolved hash, not assumed.
+
+    Mutation verdict: removing the ``_commit_hash`` comparison returns a model
+    at ``b``*40 while the caller asked for ``a``*40, and this test fails because
+    no exception is raised.
+    """
+    pytest.importorskip("torch")
+    transformers = pytest.importorskip("transformers")
+
+    class Moved:
+        config = type("Cfg", (), {"_commit_hash": "b" * 40})()
+
+        def eval(self):
+            return self
+
+        def parameters(self):
+            return []
+
+    monkeypatch.setattr(
+        transformers.AutoConfig,
+        "from_pretrained",
+        lambda *_a, **_k: {"model_type": "llama"},
+    )
+    monkeypatch.setattr(
+        transformers.AutoTokenizer, "from_pretrained", lambda *_a, **_k: object()
+    )
+    monkeypatch.setattr(
+        transformers.AutoModelForCausalLM,
+        "from_pretrained",
+        lambda *_a, **_k: Moved(),
+    )
+    with pytest.raises(RuntimeError, match="asked for revision"):
+        RM.load_model("fake/model", revision="a" * 40)
+
+
+def test_qk_normalised_checkpoint_captures_the_post_norm_vector() -> None:
+    """Qwen3 normalises each head after the projection and before RoPE.
+
+    The captured tensor must be the one the model actually rotates, so the
+    adapter has to run ``q_proj``, then ``q_norm``, and only then hand the
+    vector to the measurement.  A hook on the projection alone would measure a
+    plainer tensor that the model never uses.
+
+    Mutation verdict: dropping the norm application makes the first assertion
+    fail against ``q_pre``; applying the norm *after* the pair decomposition
+    fails because RMSNorm does not commute with a rotation; capturing the
+    pre-norm vector makes the ``q_hat`` comparison fail on its first element.
+    """
     transformers = pytest.importorskip("transformers")
     torch = pytest.importorskip("torch")
-    cfg = transformers.LlamaConfig(
+    cfg = transformers.Qwen3Config(
+        vocab_size=64,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        head_dim=8,
+        max_position_embeddings=64,
+        rope_theta=10000.0,
+    )
+    model = transformers.Qwen3ForCausalLM(cfg).eval()
+
+    class _Tokenizer:
+        def __call__(self, _text, return_tensors=None):
+            return {"input_ids": torch.tensor([[1, 2, 3, 4, 5]])}
+
+    hv = RM.collect_head_vectors(model, _Tokenizer(), "ignored")
+    assert hv.qk_norm is True
+    assert hv.n_kv_heads == 2 and hv.n_kv_groups == 2
+    assert hv.q_hat.shape == (2, 4, 5, 8)
+
+    attn = model.model.layers[0].self_attn
+    captured: dict = {}
+
+    def capture(module, args, kwargs):
+        x = args[0] if args else kwargs["hidden_states"]
+        captured.setdefault("x", x.detach())
+
+    handle = attn.register_forward_pre_hook(capture, with_kwargs=True)
+    with torch.no_grad():
+        model(input_ids=torch.tensor([[1, 2, 3, 4, 5]]), use_cache=False)
+    handle.remove()
+
+    x = captured["x"]
+    with torch.no_grad():
+        q_pre = attn.q_proj(x).view(1, 5, 4, 8)
+        q_post = attn.q_norm(q_pre)
+        k_post = attn.k_norm(attn.k_proj(x).view(1, 5, 2, 8))
+
+    # The norm is not a no-op on a freshly initialised checkpoint.
+    assert float((q_post - q_pre).abs().max()) > 1e-3
+
+    np.testing.assert_allclose(
+        hv.q_hat[0],
+        q_post[0].transpose(0, 1).double().numpy(),
+        rtol=0,
+        atol=1e-12,
+    )
+    # Grouped keys are replicated block-wise: query head h uses key head h // 2.
+    for head in range(4):
+        np.testing.assert_allclose(
+            hv.k_hat[0, head],
+            k_post[0, :, head // 2].double().numpy(),
+            rtol=0,
+            atol=1e-12,
+        )
+
+
+def test_a_qk_norm_with_an_unexpected_width_is_refused() -> None:
+    """A width the adapter cannot place is an error, not a reshape guess.
+
+    Mutation verdict: replacing the width check with ``norm(x)`` on the flat
+    tensor produces finite numbers and this test fails with "DID NOT RAISE".
+    """
+    transformers = pytest.importorskip("transformers")
+    torch = pytest.importorskip("torch")
+    cfg = transformers.Qwen3Config(
         vocab_size=64,
         hidden_size=32,
         intermediate_size=64,
         num_hidden_layers=1,
         num_attention_heads=4,
-        num_key_value_heads=4,
+        num_key_value_heads=2,
+        head_dim=8,
         max_position_embeddings=64,
     )
-    model = transformers.LlamaForCausalLM(cfg).eval()
-    model.model.layers[0].self_attn.q_norm = torch.nn.Identity()
-
-    class _Tokenizer:
-        def __call__(self, _text, return_tensors=None):
-            return {"input_ids": torch.tensor([[1, 2, 3, 4]])}
-
-    with pytest.raises(NotImplementedError, match="QK-normalised"):
-        RM.collect_head_vectors(model, _Tokenizer(), "ignored")
+    model = transformers.Qwen3ForCausalLM(cfg).eval()
+    model.model.layers[0].self_attn.q_norm = torch.nn.LayerNorm(7)
+    with pytest.raises(RuntimeError, match="QK norm expects width 7"):
+        RM._qkv_projector(model.model.layers[0].self_attn)(
+            torch.zeros(1, 5, 32)
+        )

@@ -240,9 +240,9 @@ def audit_config(config: Mapping[str, Any]) -> dict[str, Any]:
         )
 
     blockers: list[str] = [
-        "Gemma 4 applies q_norm/k_norm after q_proj/k_proj; "
-        "real_model.collect_head_vectors refuses QK-normalised attention, "
-        "because a projection hook would measure a vector the model never rotates"
+        "Gemma 4 applies q_norm/k_norm after q_proj/k_proj; per-head QK-norm "
+        "is supported, but the per-layer-type rotary ladders and head "
+        "dimensions below are not"
     ]
     adapter_reason = unsupported_architecture(config)
     if adapter_reason:
