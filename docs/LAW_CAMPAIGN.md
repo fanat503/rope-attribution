@@ -5,9 +5,10 @@ texts, the windows and the decision rules *before* the campaign is run on the
 new checkpoints. The three baseline rows already exist in
 `results/collapse.json` and `results/usefulness.json`; the campaign re-measures
 them under one provenance block, so a disagreement is a finding about the
-runner, not a licence to pick the older number. No number below is a new
-result, and nothing here enters `paper/main.tex` until the corresponding
-artifact is committed.
+runner, not a licence to pick the older number. The baseline re-measurement is
+recorded in Section 10; the 410M, 2B, 4B and 8B rows are still future work. No
+number below is a new result, and nothing here enters `paper/main.tex` until
+the corresponding artifact is committed.
 
 ## 1. The question
 
@@ -203,3 +204,30 @@ a new campaign version, not an edit, and requires a new artifact path. Adding a
 checkpoint is allowed without a version bump only if its `expected` geometry is
 complete and its status is `planned` or `blocked-*`; promoting it to `baseline`
 is a decision recorded with the artifact that measured it.
+
+## 10. First run: the three baselines
+
+The three baseline rows were measured at commit `50a6a26` with a clean working
+tree; the artifact is `results/law_campaign.json`. All three revisions resolved
+to their registry pins, every geometry check passed, and the run took one
+process per checkpoint.
+
+- **H1 passed on all 44 bins.** Every bin with `x >= 2 pi` reports the minimax
+  error exactly `1` (median and minimum), and every sub-threshold bin lies
+  inside the band. The past-threshold fractions are `0.750`, `0.719`, `0.719`.
+- **H2 passed.** The pooled sign-flip rate is `27.040%`, against the committed
+  `27.042%`: a difference of `0.002` points. Per model the campaign gives
+  `28.416%` (Pythia), `26.292%` (Llama) and `26.413%` (SmolLM); the ordering
+  and the Pythia gap are unchanged.
+- **H5 passed.** The largest log-odds residual is `8.3e-11`, the contrast and
+  blindness residuals are `1.1e-13` and `1.2e-13`, and the centred gradient is
+  `1.9e-6`, all below the pre-registered ceilings.
+
+The rate and the score-level median differ from the committed baselines in the
+fourth decimal (Pythia's score error is `0.0516` here against `0.0522` in
+`results/collapse.json`). The law-level quantities are exact, two consecutive
+runs on this host are bit-identical, and the residual difference is consistent
+with a float32 BLAS reduction order that changed between the hosts that
+produced the two artifacts. The paper keeps the committed canonical values;
+this artifact is a replication, not a replacement. Bit equality would require
+pinning the BLAS and the thread count, which the artifact does not do.
